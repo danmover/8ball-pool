@@ -237,7 +237,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
   socket.on('gameState', (state) => {
     lastState = state;
-    ownedSeat = (['p1', 'p2'] as Seat[]).find((s) => state.players[s].isHost) ?? null;
+    // If the host has claimed both seats (playing solo on one screen), always control
+    // whichever of them is actually up — not just the first one claimed — or the host's
+    // controls would silently stay locked to p1 forever during p2's turn.
+    const hostSeats = (['p1', 'p2'] as Seat[]).filter((s) => state.players[s].isHost);
+    ownedSeat = hostSeats.find((s) => s === state.currentShooter) ?? hostSeats[0] ?? null;
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
     renderSeatSlots(state);
