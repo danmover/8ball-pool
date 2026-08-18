@@ -7,7 +7,10 @@ let socket: GameSocket | null = null;
 
 export function getSocket(): GameSocket {
   if (!socket) {
-    const url = import.meta.env.DEV ? 'http://localhost:8787' : undefined;
+    // In dev, the Vite server and the game server run on different ports; reuse whatever
+    // host the page was loaded from (not a hardcoded "localhost") so this also works when
+    // a phone on the same network opens the dev client via the machine's LAN IP.
+    const url = import.meta.env.DEV ? `http://${window.location.hostname}:8787` : undefined;
     socket = io(url, { transports: ['websocket', 'polling'] });
   }
   return socket;
