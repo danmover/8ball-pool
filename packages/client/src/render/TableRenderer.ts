@@ -142,12 +142,17 @@ function generateFeltCanvas(theme: FeltTheme): HTMLCanvasElement {
 
 interface BallVisual {
   sprite: Sprite;
-  target: { x: number; y: number };
-  prevTarget: { x: number; y: number };
+  serverPos: { x: number; y: number };
+  serverVel: { x: number; y: number };
+  prevServerPos: { x: number; y: number };
+  receivedAt: number;
   potStart: number | null;
   highlightPhase: number;
   highlighted: boolean;
 }
+
+/** Cap how far we'll dead-reckon a ball forward if network updates stall. */
+const MAX_EXTRAPOLATION_S = 0.12;
 
 export class TableRenderer {
   app: Application;
@@ -189,7 +194,7 @@ export class TableRenderer {
     const renderer = new TableRenderer(container, app);
     renderer.buildTable();
     app.stage.addChild(renderer.root);
-    app.ticker.add((ticker) => renderer.tick(ticker.deltaTime, ticker.deltaMS / 1000));
+    app.ticker.add((ticker) => renderer.tick(ticker.deltaMS / 1000));
     return renderer;
   }
 
@@ -324,8 +329,10 @@ export class TableRenderer {
       this.ballLayer.addChild(sprite);
       visual = {
         sprite,
-        target: { x: sprite.x, y: sprite.y },
-        prevTarget: { x: sprite.x, y: sprite.y },
+        serverPos: { x: sprite.x, y: sprite.y },
+        serverVel: { x: 0, y: 0 },
+        prevServerPos: { x: sprite.x, y: sprite.y },
+        receivedAt: performance.now(),
         potStart: null,
         highlightPhase: Math.random() * Math.PI * 2,
         highlighted: false,
@@ -352,14 +359,17 @@ export class TableRenderer {
       // scale 1 means "native texture pixels", not "the ball's actual table-unit size".
       visual.sprite.width = BALL_RADIUS * 2;
       visual.sprite.height = BALL_RADIUS * 2;
-      visual.prevTarget.x = visual.target.x;
-      visual.prevTarget.y = visual.target.y;
-      visual.target.x = ball.pos.x;
-      visual.target.y = ball.pos.y;
+      visual.prevServerPos.x = visual.serverPos.x;
+      visual.prevServerPos.y = visual.serverPos.y;
+      visual.serverPos.x = ball.pos.x;
+      visual.serverPos.y = ball.pos.y;
+      visual.serverVel.x = ball.vel.x;
+      visual.serverVel.y = ball.vel.y;
+      visual.receivedAt = performance.now();
       if (visual.sprite.x === 0 && visual.sprite.y === 0) {
         visual.sprite.position.set(ball.pos.x, ball.pos.y);
-        visual.prevTarget.x = ball.pos.x;
-        visual.prevTarget.y = ball.pos.y;
+        visual.prevServerPos.x = ball.pos.x;
+        visual.prevServerPos.y = ball.pos.y;
       }
     }
   }
@@ -488,12 +498,14 @@ export class TableRenderer {
     requestAnimationFrame(step);
   }
 
-  private tick(deltaFrames: number, deltaSeconds: number): void {
+  private tick(deltaSeconds: number): void {
     this.elapsed += deltaSeconds;
     this.shakeMag *= Math.pow(0.001, deltaSeconds);
     this.layout();
 
-    const lerp = 1 - Math.pow(0.001, deltaFrames / 60);
+    // Snappy correction toward the (moving) predicted point rather than a slow chase of a
+    // stale snapshot — see the extrapolation note above updateBalls/tick.
+    const posLerp = 1 - Math.exp(-deltaSeconds / 0.05);
     this.shadowLayer.clear();
     this.highlightLayer.clear();
 
@@ -513,15 +525,22 @@ export class TableRenderer {
         continue;
       }
 
-      const dx = visual.target.x - visual.prevTarget.x;
-      const dy = visual.target.y - visual.prevTarget.y;
+      // Dead-reckon from the last server snapshot using its velocity, instead of just
+      // lerping toward a position that's already up to a whole network tick stale — that
+      // stale-target lag is what made bounces look like they happened short of the rail.
+      const age = Math.min((performance.now() - visual.receivedAt) / 1000, MAX_EXTRAPOLATION_S);
+      const predictedX = visual.serverPos.x + visual.serverVel.x * age;
+      const predictedY = visual.serverPos.y + visual.serverVel.y * age;
+
+      const dx = visual.serverPos.x - visual.prevServerPos.x;
+      const dy = visual.serverPos.y - visual.prevServerPos.y;
       const rollDist = Math.hypot(dx, dy);
       if (rollDist > 0.02) {
         visual.sprite.rotation += (rollDist / BALL_RADIUS) * Math.sign(dx || dy || 1) * 0.6;
       }
 
-      visual.sprite.x += (visual.target.x - visual.sprite.x) * lerp;
-      visual.sprite.y += (visual.target.y - visual.sprite.y) * lerp;
+      visual.sprite.x += (predictedX - visual.sprite.x) * posLerp;
+      visual.sprite.y += (predictedY - visual.sprite.y) * posLerp;
 
       this.shadowLayer
         .ellipse(visual.sprite.x + 4, visual.sprite.y + 6, BALL_RADIUS * 0.95, BALL_RADIUS * 0.7)
