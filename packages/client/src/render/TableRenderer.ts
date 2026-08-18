@@ -347,7 +347,11 @@ export class TableRenderer {
       visual.potStart = null;
       visual.sprite.visible = true;
       visual.sprite.alpha = 1;
-      visual.sprite.scale.set(1);
+      // Restore full size in case this ball was mid pot-animation shrink (e.g. a rematch
+      // revived it) — use the width/height setters rather than a bare scale.set(1), since
+      // scale 1 means "native texture pixels", not "the ball's actual table-unit size".
+      visual.sprite.width = BALL_RADIUS * 2;
+      visual.sprite.height = BALL_RADIUS * 2;
       visual.prevTarget.x = visual.target.x;
       visual.prevTarget.y = visual.target.y;
       visual.target.x = ball.pos.x;
@@ -500,8 +504,10 @@ export class TableRenderer {
           visual.sprite.visible = false;
           visual.potStart = null;
         } else {
+          const shrink = 1 - t * 0.85;
           visual.sprite.alpha = 1 - t;
-          visual.sprite.scale.set(1 - t * 0.85);
+          visual.sprite.width = BALL_RADIUS * 2 * shrink;
+          visual.sprite.height = BALL_RADIUS * 2 * shrink;
           visual.sprite.rotation += deltaSeconds * 10;
         }
         continue;

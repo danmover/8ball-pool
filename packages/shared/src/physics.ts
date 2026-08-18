@@ -94,7 +94,10 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
 
   const relVel = Vec2.sub(b.vel, a.vel);
   const velAlongNormal = Vec2.dot(relVel, normal);
-  if (velAlongNormal > 0) return; // already separating
+  // Balls resting in contact (e.g. still touching in the rack) have ~0 closing speed;
+  // only a real approach should count as a collision, or every still-touching pair would
+  // fire a "hit" event on every substep for as long as anything else on the table moves.
+  if (velAlongNormal > -REST_EPSILON) return;
 
   const impulse = -(1 + RESTITUTION_BALL) * velAlongNormal * 0.5;
   const impulseVec = Vec2.scale(normal, impulse);
