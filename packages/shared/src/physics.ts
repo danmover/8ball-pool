@@ -38,6 +38,7 @@ function applyFriction(ball: Ball, dt: number): void {
 function resolveCushions(ball: Ball, events: SimEvent[]): void {
   const r = BALL_RADIUS;
   let bounced = false;
+  const speedBefore = Vec2.length(ball.vel);
 
   if (ball.pos.x - r < 0 && ball.vel.x < 0) {
     ball.pos.x = r;
@@ -63,15 +64,16 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
     bounced = true;
   }
 
-  if (bounced) events.push({ type: 'cushion', ballId: ball.id });
+  if (bounced) events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: speedBefore });
 }
 
 function resolvePocket(ball: Ball, events: SimEvent[]): boolean {
   for (const pocket of POCKETS) {
     if (Vec2.distance(ball.pos, pocket) <= pocket.radius) {
+      const pos = { ...ball.pos };
       ball.pocketed = true;
       ball.vel = Vec2.zero();
-      events.push({ type: 'pot', ballId: ball.id });
+      events.push({ type: 'pot', ballId: ball.id, pos });
       return true;
     }
   }
@@ -99,7 +101,8 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
   a.vel = Vec2.sub(a.vel, impulseVec);
   b.vel = Vec2.add(b.vel, impulseVec);
 
-  events.push({ type: 'ballCollision', a: a.id, b: b.id });
+  const contactPoint = Vec2.add(a.pos, Vec2.scale(normal, BALL_RADIUS));
+  events.push({ type: 'ballCollision', a: a.id, b: b.id, pos: contactPoint, impulse: Math.abs(impulse) });
 }
 
 export interface StepResult {

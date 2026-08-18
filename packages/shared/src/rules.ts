@@ -61,6 +61,21 @@ export function isGroupCleared(state: GameState, seat: Seat): boolean {
   return state.balls.filter((b) => b.kind === group).every((b) => b.pocketed);
 }
 
+/** Which balls are currently legal for the shooter to hit first — for UI highlighting only. */
+export function legalTargetBallIds(state: GameState): number[] {
+  if (state.phase !== 'aiming' && state.phase !== 'break') return [];
+  const shooter = state.players[state.currentShooter];
+  const remaining = (kind: 'solid' | 'stripe'): number[] =>
+    state.balls.filter((b) => b.kind === kind && !b.pocketed).map((b) => b.id);
+
+  if (!shooter.group) return [...remaining('solid'), ...remaining('stripe')];
+  if (isGroupCleared(state, state.currentShooter)) {
+    const eight = state.balls.find((b) => b.kind === 'eight' && !b.pocketed);
+    return eight ? [eight.id] : [];
+  }
+  return remaining(shooter.group);
+}
+
 /**
  * Applies 8-ball rules to a settled shot, mutating and returning `state`.
  * `preShotGroupCleared` must be captured by the caller *before* stepping the

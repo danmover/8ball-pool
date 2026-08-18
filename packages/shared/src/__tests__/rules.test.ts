@@ -4,10 +4,11 @@ import type { SimEvent } from '../types.js';
 
 describe('summarizeShot', () => {
   it('extracts first contact, pots, and rail contact after that contact', () => {
+    const pos = { x: 0, y: 0 };
     const events: SimEvent[] = [
-      { type: 'ballCollision', a: 0, b: 3 },
-      { type: 'cushion', ballId: 3 },
-      { type: 'pot', ballId: 3 },
+      { type: 'ballCollision', a: 0, b: 3, pos, impulse: 400 },
+      { type: 'cushion', ballId: 3, pos, speed: 200 },
+      { type: 'pot', ballId: 3, pos },
     ];
     const outcome = summarizeShot(events);
     expect(outcome.firstBallContacted).toBe(3);

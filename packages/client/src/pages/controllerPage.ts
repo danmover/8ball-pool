@@ -1,5 +1,5 @@
-import type { AimInput, GameState, Seat, SimEvent, TrajectoryPreview } from '@8ball/shared';
-import { CUE_BALL_ID, computeTrajectoryPreview } from '@8ball/shared';
+import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview } from '@8ball/shared';
+import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings, saveSession } from '../settings/settingsStore';
 import { TableRenderer } from '../render/TableRenderer';
@@ -109,6 +109,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   function applyState(state: GameState): void {
     lastState = state;
     renderer?.updateBalls(state.balls);
+    renderer?.setLegalTargets(legalTargetBallIds(state));
 
     const myTurn = seat !== null && state.currentShooter === seat;
     const canAim = myTurn && (state.phase === 'aiming' || state.phase === 'break');
@@ -175,6 +176,8 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
 
     renderer = await TableRenderer.create(miniTableEl);
     renderer.setColorblindPatterns(settings.colorblindPatterns);
+    renderer.setFeltTheme(settings.feltTheme);
+    renderer.setEffectsIntensity(settings.effectsIntensity);
     if (lastState) renderer.updateBalls(lastState.balls);
 
     spinPad = createSpinPad();
@@ -187,6 +190,8 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         saveSettings(settings);
         socket.emit('updateSettings', s);
         renderer?.setColorblindPatterns(settings.colorblindPatterns);
+        renderer?.setFeltTheme(settings.feltTheme);
+        renderer?.setEffectsIntensity(settings.effectsIntensity);
         renderPreview(lastAimAngle);
       });
     });
@@ -230,23 +235,25 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       renderer?.setAimVisual(input.angle, 0.3, true);
       renderPreview(input.angle);
     },
-    shotFired: () => {
-      sfx.playCueStrike(settings.soundVolume, 0.6);
+    shotFired: (input: ShootInput) => {
+      if (settings.soundEnabled) sfx.playCueStrike(settings.soundVolume, 0.6);
+      const cuePos = lastState?.balls.find((b) => b.id === CUE_BALL_ID)?.pos;
+      if (cuePos) renderer?.spawnChalkPuff(cuePos, input.angle);
       renderer?.setAimVisual(0, 0, false);
       renderer?.setAimPreview(CUE_BALL_ID, null);
     },
     simEvent: (ev: SimEvent) => {
-      if (!settings.soundEnabled && !settings.hapticsEnabled) return;
       if (ev.type === 'ballCollision') {
-        if (settings.soundEnabled) sfx.playBallClick(settings.soundVolume);
+        if (settings.soundEnabled) sfx.playBallClick(settings.soundVolume, ev.impulse / 1500);
         if (settings.hapticsEnabled) navigator.vibrate?.(8);
-      }
-      if (ev.type === 'cushion' && settings.soundEnabled) sfx.playCushionThud(settings.soundVolume);
-      if (ev.type === 'pot') {
+        renderer?.spawnSparks(ev.pos, ev.impulse);
+      } else if (ev.type === 'cushion') {
+        if (settings.soundEnabled) sfx.playCushionThud(settings.soundVolume);
+        renderer?.spawnCushionDust(ev.pos, ev.speed);
+      } else if (ev.type === 'pot') {
         if (settings.soundEnabled) sfx.playPocketSwish(settings.soundVolume);
         if (settings.hapticsEnabled) navigator.vibrate?.([15, 40, 15]);
-        const pos = lastState?.balls.find((b) => b.id === ev.ballId)?.pos;
-        if (pos) renderer?.spawnPotFlash(pos);
+        renderer?.spawnPotFlash(ev.pos, ev.ballId);
       }
     },
     errorMessage: (msg: string) => {

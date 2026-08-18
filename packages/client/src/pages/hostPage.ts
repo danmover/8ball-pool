@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
-import type { AimInput, GameState, Seat, SimEvent, TrajectoryPreview } from '@8ball/shared';
-import { CUE_BALL_ID, computeTrajectoryPreview } from '@8ball/shared';
+import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview } from '@8ball/shared';
+import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
 import { TableRenderer } from '../render/TableRenderer';
@@ -40,7 +40,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     openSettingsPanel(settings, (s) => {
       Object.assign(settings, s);
       saveSettings(settings);
-      if (renderer) renderer.setColorblindPatterns(settings.colorblindPatterns);
+      renderer?.setColorblindPatterns(settings.colorblindPatterns);
+      renderer?.setFeltTheme(settings.feltTheme);
+      renderer?.setEffectsIntensity(settings.effectsIntensity);
       refreshPreview();
     });
   });
@@ -73,6 +75,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   async function boot(): Promise<void> {
     renderer = await TableRenderer.create(canvasEl);
     renderer.setColorblindPatterns(settings.colorblindPatterns);
+    renderer.setFeltTheme(settings.feltTheme);
+    renderer.setEffectsIntensity(settings.effectsIntensity);
     if (lastState) renderer.updateBalls(lastState.balls);
 
     await renderInvite();
@@ -235,6 +239,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     lastState = state;
     ownedSeat = (['p1', 'p2'] as Seat[]).find((s) => state.players[s].isHost) ?? null;
     renderer?.updateBalls(state.balls);
+    renderer?.setLegalTargets(legalTargetBallIds(state));
     renderSeatSlots(state);
     renderScoreboard(state);
     renderBottomArea(state);
@@ -258,20 +263,25 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderPreview(input.angle);
   });
 
-  socket.on('shotFired', () => {
-    sfx.playCueStrike(settings.soundVolume, 0.6);
+  socket.on('shotFired', (input: ShootInput) => {
+    if (settings.soundEnabled) sfx.playCueStrike(settings.soundVolume, 0.6);
+    const cuePos = lastState?.balls.find((b) => b.id === CUE_BALL_ID)?.pos;
+    if (cuePos) renderer?.spawnChalkPuff(cuePos, input.angle);
     renderer?.setAimVisual(0, 0, false);
     renderer?.setAimPreview(CUE_BALL_ID, null);
   });
 
   socket.on('simEvent', (ev: SimEvent) => {
-    if (!settings.soundEnabled) return;
-    if (ev.type === 'ballCollision') sfx.playBallClick(settings.soundVolume);
-    if (ev.type === 'cushion') sfx.playCushionThud(settings.soundVolume);
-    if (ev.type === 'pot') {
-      sfx.playPocketSwish(settings.soundVolume);
-      const pos = lastState?.balls.find((b) => b.id === ev.ballId)?.pos;
-      if (pos) renderer?.spawnPotFlash(pos);
+    if (ev.type === 'ballCollision') {
+      if (settings.soundEnabled) sfx.playBallClick(settings.soundVolume, ev.impulse / 1500);
+      renderer?.spawnSparks(ev.pos, ev.impulse);
+    } else if (ev.type === 'cushion') {
+      if (settings.soundEnabled) sfx.playCushionThud(settings.soundVolume);
+      renderer?.spawnCushionDust(ev.pos, ev.speed);
+    } else if (ev.type === 'pot') {
+      if (settings.soundEnabled) sfx.playPocketSwish(settings.soundVolume);
+      renderer?.spawnPotFlash(ev.pos, ev.ballId);
+      if (settings.hapticsEnabled) navigator.vibrate?.([15, 40, 15]);
     }
   });
 

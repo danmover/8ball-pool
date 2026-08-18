@@ -55,6 +55,7 @@ export interface BallInHandPlacement {
 }
 
 export type TrajectoryPreviewMode = 'off' | 'basic' | 'full';
+export type FeltTheme = 'green' | 'blue' | 'crimson' | 'midnight';
 
 export interface PlayerSettings {
   trajectoryPreview: TrajectoryPreviewMode;
@@ -63,6 +64,8 @@ export interface PlayerSettings {
   hapticsEnabled: boolean;
   colorblindPatterns: boolean;
   leftHanded: boolean;
+  feltTheme: FeltTheme;
+  effectsIntensity: 'low' | 'high';
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -72,6 +75,8 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   hapticsEnabled: true,
   colorblindPatterns: false,
   leftHanded: false,
+  feltTheme: 'green',
+  effectsIntensity: 'high',
 };
 
 export interface TrajectorySegment {
@@ -123,7 +128,7 @@ export interface RoomStateDTO {
 }
 
 export type SimEvent =
-  | { type: 'pot'; ballId: number }
-  | { type: 'cushion'; ballId: number }
-  | { type: 'ballCollision'; a: number; b: number }
+  | { type: 'pot'; ballId: number; pos: Vec2 }
+  | { type: 'cushion'; ballId: number; pos: Vec2; speed: number }
+  | { type: 'ballCollision'; a: number; b: number; pos: Vec2; impulse: number }
   | { type: 'shotSettled' };

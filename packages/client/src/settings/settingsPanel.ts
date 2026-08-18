@@ -1,4 +1,11 @@
-import type { PlayerSettings, TrajectoryPreviewMode } from '@8ball/shared';
+import type { FeltTheme, PlayerSettings } from '@8ball/shared';
+
+const FELT_SWATCHES: Record<FeltTheme, string> = {
+  green: '#1f8a4c',
+  blue: '#1f6fa8',
+  crimson: '#9c2b3a',
+  midnight: '#2c2f52',
+};
 
 export function openSettingsPanel(current: PlayerSettings, onChange: (settings: PlayerSettings) => void): void {
   const overlay = document.createElement('div');
@@ -15,6 +22,24 @@ export function openSettingsPanel(current: PlayerSettings, onChange: (settings: 
           <button data-value="off">Off</button>
           <button data-value="basic">Basic</button>
           <button data-value="full">Full</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div><div class="label">Table felt</div></div>
+        <div class="swatches" data-key="feltTheme">
+          ${(Object.keys(FELT_SWATCHES) as FeltTheme[])
+            .map((t) => `<button class="swatch" data-value="${t}" style="background:${FELT_SWATCHES[t]}"></button>`)
+            .join('')}
+        </div>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Effects</div>
+          <div class="desc">Sparks, dust, and confetti on hits and pots</div>
+        </div>
+        <div class="segmented" data-key="effectsIntensity">
+          <button data-value="low">Low</button>
+          <button data-value="high">High</button>
         </div>
       </div>
       <div class="settings-row">
@@ -47,7 +72,7 @@ export function openSettingsPanel(current: PlayerSettings, onChange: (settings: 
   const settings: PlayerSettings = { ...current };
 
   function render(): void {
-    overlay.querySelectorAll<HTMLElement>('.segmented').forEach((seg) => {
+    overlay.querySelectorAll<HTMLElement>('.segmented, .swatches').forEach((seg) => {
       const key = seg.dataset.key as keyof PlayerSettings;
       seg.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
         btn.classList.toggle('active', settings[key] === btn.dataset.value);
@@ -59,11 +84,11 @@ export function openSettingsPanel(current: PlayerSettings, onChange: (settings: 
     });
   }
 
-  overlay.querySelectorAll<HTMLButtonElement>('.segmented button').forEach((btn) => {
+  overlay.querySelectorAll<HTMLButtonElement>('.segmented button, .swatches button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const seg = btn.closest('.segmented') as HTMLElement;
-      const key = seg.dataset.key as 'trajectoryPreview';
-      settings[key] = btn.dataset.value as TrajectoryPreviewMode;
+      const seg = btn.closest<HTMLElement>('.segmented, .swatches')!;
+      const key = seg.dataset.key as 'trajectoryPreview' | 'effectsIntensity' | 'feltTheme';
+      (settings as unknown as Record<string, unknown>)[key] = btn.dataset.value;
       render();
       onChange(settings);
     });
