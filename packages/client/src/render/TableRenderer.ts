@@ -67,18 +67,6 @@ function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvas
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
-  if (style.label) {
-    ctx.fillStyle = '#f6f2e6';
-    ctx.beginPath();
-    ctx.arc(r, r, r * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#161616';
-    ctx.font = `800 ${Math.round(r * 0.46)}px 'Segoe UI', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(style.label, r, r + 1);
-  }
-
   // Soft broad highlight for the overall glossy sphere feel.
   const highlight = ctx.createRadialGradient(r * 0.58, r * 0.42, r * 0.05, r * 0.58, r * 0.42, r * 1.25);
   highlight.addColorStop(0, 'rgba(255,255,255,0.85)');
@@ -109,6 +97,44 @@ function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvas
   ctx.fill();
 
   ctx.restore();
+  return canvas;
+}
+
+/**
+ * The number patch is drawn as its own sprite so it can be projected onto the ball's
+ * surface as it rolls (moving across the face, squashing, and hiding round the back)
+ * rather than just spinning flat with the whole ball.
+ */
+function generateNumberCanvas(id: number): HTMLCanvasElement | null {
+  const style = styleForBall(id);
+  const canvas = document.createElement('canvas');
+  const size = 96;
+  canvas.width = size;
+  canvas.height = size;
+  if (!style.label) return null;
+  const ctx = canvas.getContext('2d')!;
+  const r = size / 2;
+
+  ctx.fillStyle = '#f6f2e6';
+  ctx.beginPath();
+  ctx.arc(r, r, r * 0.92, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Slight inner shading so the patch doesn't look like a flat sticker.
+  const patchShade = ctx.createRadialGradient(r * 0.75, r * 0.7, r * 0.1, r, r, r);
+  patchShade.addColorStop(0, 'rgba(0,0,0,0)');
+  patchShade.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = patchShade;
+  ctx.beginPath();
+  ctx.arc(r, r, r * 0.92, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#161616';
+  ctx.font = `800 ${Math.round(r * 1.05)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(style.label, r, r + 2);
+
   return canvas;
 }
 
@@ -158,6 +184,10 @@ function generateFeltCanvas(theme: FeltTheme): HTMLCanvasElement {
 
 interface BallVisual {
   sprite: Sprite;
+  /** Number patch, projected onto the rolling sphere surface. Null for the cue ball. */
+  numberSprite: Sprite | null;
+  /** Accumulated roll as a surface angle vector (radians) — drives the 3D number motion. */
+  surface: { x: number; y: number };
   serverPos: { x: number; y: number };
   serverVel: { x: number; y: number };
   prevServerPos: { x: number; y: number };
@@ -335,6 +365,18 @@ export class TableRenderer {
     return tex;
   }
 
+  private numberTextureFor(id: number): Texture | null {
+    const key = `num:${id}`;
+    let tex = this.textureCache.get(key);
+    if (!tex) {
+      const canvas = generateNumberCanvas(id);
+      if (!canvas) return null;
+      tex = Texture.from(canvas);
+      this.textureCache.set(key, tex);
+    }
+    return tex;
+  }
+
   private ensureVisual(id: number): BallVisual {
     let visual = this.ballVisuals.get(id);
     if (!visual) {
@@ -343,8 +385,19 @@ export class TableRenderer {
       sprite.width = BALL_RADIUS * 2;
       sprite.height = BALL_RADIUS * 2;
       this.ballLayer.addChild(sprite);
+
+      const numTex = this.numberTextureFor(id);
+      let numberSprite: Sprite | null = null;
+      if (numTex) {
+        numberSprite = new Sprite(numTex);
+        numberSprite.anchor.set(0.5);
+        this.ballLayer.addChild(numberSprite);
+      }
+
       visual = {
         sprite,
+        numberSprite,
+        surface: { x: 0, y: 0 },
         serverPos: { x: sprite.x, y: sprite.y },
         serverVel: { x: 0, y: 0 },
         prevServerPos: { x: sprite.x, y: sprite.y },
@@ -538,6 +591,7 @@ export class TableRenderer {
           visual.sprite.height = BALL_RADIUS * 2 * shrink;
           visual.sprite.rotation += deltaSeconds * 10;
         }
+        if (visual.numberSprite) visual.numberSprite.visible = false;
         continue;
       }
 
@@ -548,19 +602,26 @@ export class TableRenderer {
       const predictedX = visual.serverPos.x + visual.serverVel.x * age;
       const predictedY = visual.serverPos.y + visual.serverVel.y * age;
 
-      const dx = visual.serverPos.x - visual.prevServerPos.x;
-      const dy = visual.serverPos.y - visual.prevServerPos.y;
-      const rollDist = Math.hypot(dx, dy);
-      if (rollDist > 0.02) {
-        visual.sprite.rotation += (rollDist / BALL_RADIUS) * Math.sign(dx || dy || 1) * 0.6;
-      }
-
+      const prevX = visual.sprite.x;
+      const prevY = visual.sprite.y;
       visual.sprite.x += (predictedX - visual.sprite.x) * posLerp;
       visual.sprite.y += (predictedY - visual.sprite.y) * posLerp;
+
+      // Roll the ball's surface by however far it actually moved this frame. A rolling
+      // sphere turns by (distance / radius) radians about the axis perpendicular to travel,
+      // so the surface point tracking the number moves opposite the direction of travel.
+      const movedX = visual.sprite.x - prevX;
+      const movedY = visual.sprite.y - prevY;
+      if (Math.hypot(movedX, movedY) > 0.01) {
+        visual.surface.x -= movedX / BALL_RADIUS;
+        visual.surface.y -= movedY / BALL_RADIUS;
+      }
 
       this.shadowLayer
         .ellipse(visual.sprite.x + 4, visual.sprite.y + 6, BALL_RADIUS * 0.95, BALL_RADIUS * 0.7)
         .fill({ color: 0x000000, alpha: 0.3 });
+
+      this.positionNumber(visual);
 
       if (this.legalTargets.has(id)) {
         visual.highlightPhase += deltaSeconds * 3.2;
@@ -573,6 +634,47 @@ export class TableRenderer {
 
     this.particles.update(deltaSeconds);
     this.drawCue();
+  }
+
+  /**
+   * Projects the number patch onto the ball's surface for the current roll state, so the
+   * number slides across the face, foreshortens toward the edge, and disappears round the
+   * back — instead of just spinning flat with the sprite.
+   */
+  private positionNumber(visual: BallVisual): void {
+    const num = visual.numberSprite;
+    if (!num) return;
+
+    const ax = visual.surface.x;
+    const ay = visual.surface.y;
+    const angle = Math.hypot(ax, ay);
+
+    // Surface point on a unit sphere: rotate the "front" pole (0,0,1) by `angle` about the
+    // axis perpendicular to (ax, ay). depth > 0 means it's on the visible near hemisphere.
+    const sinA = Math.sin(angle);
+    const dirX = angle > 1e-6 ? ax / angle : 0;
+    const dirY = angle > 1e-6 ? ay / angle : 0;
+    const offX = dirX * sinA;
+    const offY = dirY * sinA;
+    const depth = Math.cos(angle);
+
+    if (depth <= 0.05) {
+      num.visible = false;
+      return;
+    }
+
+    num.visible = visual.sprite.visible;
+    num.x = visual.sprite.x + offX * BALL_RADIUS;
+    num.y = visual.sprite.y + offY * BALL_RADIUS;
+
+    // Foreshortening: the patch is rotated so its local X axis points radially outward
+    // from the ball's centre, so squashing width by `depth` (and leaving height alone)
+    // gives the correct "lying on a curved surface" compression as it nears the edge.
+    const base = BALL_RADIUS * 0.86;
+    num.rotation = Math.atan2(offY, offX);
+    num.width = base * depth;
+    num.height = base;
+    num.alpha = visual.sprite.alpha * Math.min(1, depth * 4);
   }
 
   private drawCue(): void {
@@ -615,13 +717,18 @@ export class TableRenderer {
     if (p > 0.015) {
       const start = -Math.PI / 2;
       const end = start + Math.PI * 2 * p;
-      glow.arc(cue.sprite.x, cue.sprite.y, ringR, start, end).stroke({
+      // arc() continues the existing path, and on a freshly-cleared Graphics the current
+      // point is (0,0) — the top-left pocket — so it would draw a stray connector line
+      // from the corner to the arc's start. moveTo the arc start first to avoid that.
+      const arcStartX = cue.sprite.x + ringR * Math.cos(start);
+      const arcStartY = cue.sprite.y + ringR * Math.sin(start);
+      glow.moveTo(arcStartX, arcStartY).arc(cue.sprite.x, cue.sprite.y, ringR, start, end).stroke({
         width: ringWidth + 8,
         color: glowColor,
         alpha: 0.55,
         cap: 'round',
       });
-      g.arc(cue.sprite.x, cue.sprite.y, ringR, start, end).stroke({
+      g.moveTo(arcStartX, arcStartY).arc(cue.sprite.x, cue.sprite.y, ringR, start, end).stroke({
         width: ringWidth,
         color: glowColor,
         alpha: 0.95,

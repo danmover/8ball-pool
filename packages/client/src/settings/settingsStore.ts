@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type PlayerSettings } from '@8ball/shared';
+import { DEFAULT_SETTINGS, type PlayerSettings, type Seat } from '@8ball/shared';
 
 const SETTINGS_KEY = '8ball:settings';
 
@@ -18,7 +18,7 @@ export function saveSettings(settings: PlayerSettings): void {
 
 export interface StoredSession {
   token: string;
-  seat?: 'p1' | 'p2';
+  seat?: Seat;
 }
 
 function sessionKey(code: string, role: 'host' | 'player'): string {

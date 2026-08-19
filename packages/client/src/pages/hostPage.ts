@@ -1,5 +1,13 @@
 import QRCode from 'qrcode';
-import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview } from '@8ball/shared';
+import type {
+  AimInput,
+  GameState,
+  RoomStateDTO,
+  Seat,
+  ShootInput,
+  SimEvent,
+  TrajectoryPreview,
+} from '@8ball/shared';
 import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
@@ -8,8 +16,12 @@ import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { openSettingsPanel } from '../settings/settingsPanel';
+import { renderLobby } from './lobbyView';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+
+const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
+const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
 
 export function renderHostPage(root: HTMLElement, code: string): () => void {
   const socket = getSocket();
@@ -18,60 +30,41 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let renderer: TableRenderer | null = null;
   let aimController: AimController | null = null;
   let lastState: GameState | null = null;
+  let lastRoom: RoomStateDTO | null = null;
   let placing = false;
+  let lastAimAngle: number | null = null;
+  let booted = false;
+  let qrDataUrl = '';
+
+  const joinUrl = `${window.location.origin}/play/${code}`;
 
   root.innerHTML = `
-    <div id="tableCanvas" style="position:absolute; inset:0;"></div>
-    <div class="hud">
+    <div id="tableCanvas" style="position:absolute; inset:0; display:none"></div>
+    <div class="hud" id="gameHud" style="display:none">
       <div class="top-bar">
-        <div class="player-panel" id="panelP1">
-          <div class="avatar" id="avatarP1">P1</div>
-          <div class="player-info">
-            <div class="player-name" id="nameP1">Player 1</div>
-            <div class="ball-row" id="ballsP1"></div>
-          </div>
-        </div>
+        <div id="playerPanels" style="display:flex; gap:0.5rem; flex-wrap:wrap; flex:1"></div>
         <button class="icon-btn" id="settingsBtn">⚙</button>
-        <div class="player-panel right" id="panelP2">
-          <div class="player-info">
-            <div class="player-name" id="nameP2">Player 2</div>
-            <div class="ball-row" id="ballsP2"></div>
-          </div>
-          <div class="avatar" id="avatarP2">P2</div>
-        </div>
       </div>
       <div></div>
       <div id="bottomArea"></div>
     </div>
-    <div class="host-power-wrap" id="hostPowerWrap">
+    <div class="pocket-rail" id="pocketRail" style="display:none"></div>
+    <div class="host-power-wrap" id="hostPowerWrap" style="display:none">
       <div class="power-hud" id="powerHud">
         <div class="power-value" id="powerValue">0%</div>
         <div class="power-tier" id="powerTier">DRAG TO AIM</div>
       </div>
       <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
     </div>
-    <div id="joinPanelWrap"></div>
+    <div id="lobbyWrap"></div>
   `;
 
   const canvasEl = root.querySelector<HTMLElement>('#tableCanvas')!;
-  const panelEls: Record<Seat, HTMLElement> = {
-    p1: root.querySelector<HTMLElement>('#panelP1')!,
-    p2: root.querySelector<HTMLElement>('#panelP2')!,
-  };
-  const nameEls: Record<Seat, HTMLElement> = {
-    p1: root.querySelector<HTMLElement>('#nameP1')!,
-    p2: root.querySelector<HTMLElement>('#nameP2')!,
-  };
-  const avatarEls: Record<Seat, HTMLElement> = {
-    p1: root.querySelector<HTMLElement>('#avatarP1')!,
-    p2: root.querySelector<HTMLElement>('#avatarP2')!,
-  };
-  const ballRowEls: Record<Seat, HTMLElement> = {
-    p1: root.querySelector<HTMLElement>('#ballsP1')!,
-    p2: root.querySelector<HTMLElement>('#ballsP2')!,
-  };
+  const gameHud = root.querySelector<HTMLElement>('#gameHud')!;
+  const panelsEl = root.querySelector<HTMLElement>('#playerPanels')!;
   const bottomArea = root.querySelector<HTMLElement>('#bottomArea')!;
-  const joinPanelWrap = root.querySelector<HTMLElement>('#joinPanelWrap')!;
+  const lobbyWrap = root.querySelector<HTMLElement>('#lobbyWrap')!;
+  const pocketRail = root.querySelector<HTMLElement>('#pocketRail')!;
   const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
   const powerFill = root.querySelector<HTMLElement>('#powerFill')!;
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
@@ -97,7 +90,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       renderer?.setColorblindPatterns(settings.colorblindPatterns);
       renderer?.setFeltTheme(settings.feltTheme);
       renderer?.setEffectsIntensity(settings.effectsIntensity);
-      refreshPreview();
+      if (lastAimAngle !== null) renderPreview(lastAimAngle);
     });
   });
 
@@ -118,26 +111,39 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     return () => {};
   }
 
-  socket.emit('hostRejoin', { code, token: hostSession.token }, (res) => {
-    if (!res.ok) {
-      showFatalError('This table has expired.');
-      return;
-    }
-    void boot();
+  void QRCode.toDataURL(joinUrl, { margin: 1, width: 176, color: { dark: '#0a0c11' } }).then((url) => {
+    qrDataUrl = url;
+    if (lastRoom && !lastRoom.started) drawLobby(lastRoom);
   });
 
+  socket.emit('hostRejoin', { code, token: hostSession.token }, (res) => {
+    if (!res.ok) showFatalError('This table has expired.');
+  });
+
+  function drawLobby(room: RoomStateDTO): void {
+    renderLobby(lobbyWrap, room, qrDataUrl, joinUrl.replace(/^https?:\/\//, ''), {
+      onModeChange: (mode) => socket.emit('hostUpdateLobby', { mode }),
+      onSizeChange: (maxPlayers) => socket.emit('hostUpdateLobby', { maxPlayers }),
+      onClaimSeat: (seat) => socket.emit('hostClaimSeat', { seat }),
+      onReleaseSeat: (seat) => socket.emit('hostReleaseSeat', { seat }),
+      onStart: () => socket.emit('hostStartGame'),
+    });
+  }
+
   async function boot(): Promise<void> {
+    if (booted) return;
+    booted = true;
+
+    canvasEl.style.display = '';
+    gameHud.style.display = '';
+    pocketRail.style.display = '';
+    lobbyWrap.style.display = 'none';
+
     renderer = await TableRenderer.create(canvasEl);
     renderer.setColorblindPatterns(settings.colorblindPatterns);
     renderer.setFeltTheme(settings.feltTheme);
     renderer.setEffectsIntensity(settings.effectsIntensity);
     if (lastState) renderer.updateBalls(lastState.balls);
-
-    await renderInvite();
-    if (lastState) {
-      renderSeatSlots(lastState);
-      renderScoreboard(lastState);
-    }
 
     aimController = new AimController(canvasEl, {
       onAimChange: (angle, power) => {
@@ -159,78 +165,79 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     canvasEl.addEventListener('pointerdown', onPlacementPointer);
     canvasEl.addEventListener('pointermove', onPlacementPointer);
     canvasEl.addEventListener('pointerup', onPlacementRelease);
+
+    if (lastState) applyState(lastState);
   }
 
   function onPlacementPointer(e: PointerEvent): void {
     if (!placing || !renderer) return;
-    const pos = renderer.screenToTable(e.clientX, e.clientY);
-    renderer.setPlacementGhost(pos);
+    renderer.setPlacementGhost(renderer.screenToTable(e.clientX, e.clientY));
   }
 
   function onPlacementRelease(e: PointerEvent): void {
     if (!placing || !renderer || !ownedSeat) return;
-    const pos = renderer.screenToTable(e.clientX, e.clientY);
-    socket.emit('placeCueBall', { seat: ownedSeat, pos });
+    socket.emit('placeCueBall', { seat: ownedSeat, pos: renderer.screenToTable(e.clientX, e.clientY) });
   }
 
-  async function renderInvite(): Promise<void> {
-    const joinUrl = `${window.location.origin}/play/${code}`;
-    const qrDataUrl = await QRCode.toDataURL(joinUrl, { margin: 1, width: 176, color: { dark: '#0d1a12' } });
-    joinPanelWrap.innerHTML = `
-      <div class="hud" style="align-items:center; justify-content:center;">
-        <div class="join-panel" id="joinPanel">
-          <div class="room-code">${code}</div>
-          <img src="${qrDataUrl}" width="176" height="176" alt="QR code to join" />
-          <p style="margin:0; opacity:0.7; font-size:0.85rem">Scan to join from your phone</p>
-          <div class="seat-slots" id="seatSlots"></div>
-        </div>
-      </div>`;
+  function groupBadge(state: GameState, seat: Seat): string {
+    const info = state.players[seat];
+    if (state.mode === 'rotation') {
+      return `<span class="score-pill">${info.score} pts</span>`;
+    }
+    if (!info.group) return `<span class="group-badge">OPEN TABLE</span>`;
+    const label = info.group === 'solid' ? 'SOLIDS' : 'STRIPES';
+    return `<span class="group-badge ${info.group}"><i class="swatch-dot"></i>${label}</span>`;
   }
-
-  function renderSeatSlots(state: GameState): void {
-    const slots = joinPanelWrap.querySelector<HTMLElement>('#seatSlots');
-    if (!slots) return;
-    slots.innerHTML = '';
-    (['p1', 'p2'] as Seat[]).forEach((seat) => {
-      const info = state.players[seat];
-      const box = document.createElement('div');
-      box.className = 'seat-slot';
-      if (info.connected) {
-        box.textContent = `${info.name}${info.isHost ? ' (this screen)' : ''}`;
-      } else {
-        box.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.className = 'secondary';
-        btn.textContent = `Play as ${seat === 'p1' ? 'Player 1' : 'Player 2'}`;
-        btn.style.width = '100%';
-        btn.addEventListener('click', () => socket.emit('hostClaimSeat', { seat }));
-        box.appendChild(btn);
-      }
-      slots.appendChild(box);
-    });
-
-    const bothSeated = state.players.p1.connected && state.players.p2.connected;
-    joinPanelWrap.style.display = bothSeated ? 'none' : '';
-  }
-
-  const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
-  const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
 
   function renderScoreboard(state: GameState): void {
-    (['p1', 'p2'] as Seat[]).forEach((seat) => {
-      const info = state.players[seat];
-      const panel = panelEls[seat];
-      panel.classList.toggle('active', state.phase !== 'game_over' && state.currentShooter === seat);
+    const many = state.seatOrder.length > 2;
+    panelsEl.style.justifyContent = many ? 'center' : 'space-between';
 
-      const displayName = info.connected ? info.name : `Seat ${seat === 'p1' ? 1 : 2} open`;
-      nameEls[seat].textContent = displayName;
-      avatarEls[seat].textContent = info.connected ? displayName.slice(0, 2).toUpperCase() : seat.toUpperCase();
+    panelsEl.innerHTML = state.seatOrder
+      .map((seat) => {
+        const info = state.players[seat];
+        const active = state.phase !== 'game_over' && state.currentShooter === seat;
+        const name = info.connected ? info.name : 'Open seat';
+        const initials = info.connected ? name.slice(0, 2).toUpperCase() : seat.toUpperCase();
+        const teamTag =
+          state.mode === 'teams' && info.team
+            ? `<span class="seat-team team-${info.team}">TEAM ${info.team.toUpperCase()}</span>`
+            : '';
 
-      const ids = info.group === 'solid' ? SOLID_IDS : info.group === 'stripe' ? STRIPE_IDS : null;
-      ballRowEls[seat].innerHTML = ids
-        ? ids.map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false)).join('')
-        : Array.from({ length: 7 }, () => placeholderChipHtml()).join('');
-    });
+        // Rotation mode has no per-player group, so show the score instead of a ball row.
+        const ids = info.group === 'solid' ? SOLID_IDS : info.group === 'stripe' ? STRIPE_IDS : null;
+        const ballRow =
+          state.mode === 'rotation'
+            ? ''
+            : `<div class="ball-row">${
+                ids
+                  ? ids
+                      .map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false))
+                      .join('')
+                  : Array.from({ length: 7 }, () => placeholderChipHtml()).join('')
+              }</div>`;
+
+        return `
+          <div class="player-panel${active ? ' active' : ''}">
+            <div class="avatar">${initials}</div>
+            <div class="player-info">
+              <div class="player-name">${name}</div>
+              <div style="display:flex; gap:0.35rem; align-items:center">${groupBadge(state, seat)}${teamTag}</div>
+              ${ballRow}
+            </div>
+          </div>`;
+      })
+      .join('');
+  }
+
+  /** Right-hand rail listing every ball that has gone down, in the order it was potted. */
+  function renderPocketRail(state: GameState): void {
+    const potted = state.balls.filter((b) => b.pocketed && b.id !== CUE_BALL_ID);
+    pocketRail.innerHTML =
+      `<div class="rail-label">POTTED</div>` +
+      (potted.length
+        ? potted.map((b) => ballChipHtml(b.id, false)).join('')
+        : `<div class="rail-empty">none<br>yet</div>`);
   }
 
   function renderBottomArea(state: GameState): void {
@@ -238,24 +245,37 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (state.phase === 'ball_in_hand') {
       const banner = document.createElement('div');
       banner.className = 'turn-banner';
-      banner.style.position = 'static';
-      banner.style.margin = '0 auto';
-      banner.style.width = 'fit-content';
+      banner.style.cssText = 'position:static; margin:0 auto; width:fit-content';
       banner.textContent =
         ownedSeat === state.currentShooter
           ? 'Ball in hand — tap the table to place the cue ball'
           : `${state.players[state.currentShooter].name} is placing the cue ball`;
       bottomArea.appendChild(banner);
     }
+
     if (state.phase === 'game_over') {
       if (root.querySelector('#gameOverOverlay')) return;
       const overlay = document.createElement('div');
       overlay.id = 'gameOverOverlay';
       overlay.className = 'overlay-center';
+      const winnerName = state.winner ? state.players[state.winner].name : null;
+      const headline =
+        state.mode === 'teams' && state.winningTeam
+          ? `Team ${state.winningTeam.toUpperCase()} wins!`
+          : winnerName
+            ? `${winnerName} wins!`
+            : 'Game over';
+      const scores =
+        state.mode === 'rotation'
+          ? `<p style="color:var(--muted); font-size:0.9rem">${state.seatOrder
+              .map((s) => `${state.players[s].name}: ${state.players[s].score}`)
+              .join(' &nbsp;·&nbsp; ')}</p>`
+          : '';
       overlay.innerHTML = `
         <div>
-          <h2>${state.winner ? state.players[state.winner].name + ' wins!' : 'Game over'}</h2>
-          ${state.lastFoulReason ? `<p style="opacity:0.7">${state.lastFoulReason}</p>` : ''}
+          <h2>${headline}</h2>
+          ${scores}
+          ${state.lastFoulReason ? `<p style="color:var(--muted)">${state.lastFoulReason}</p>` : ''}
           <button id="rematchBtn">Rematch</button>
         </div>`;
       root.appendChild(overlay);
@@ -280,40 +300,26 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderer.setAimPreview(CUE_BALL_ID, preview);
   }
 
-  function refreshPreview(): void {
-    if (lastAimAngle !== null) renderPreview(lastAimAngle);
-  }
-
-  let lastAimAngle: number | null = null;
-
-  socket.on('roomState', (rs) => {
-    if (lastState) {
-      // keep local isHost/connected view in sync for the seat slot UI even before gameState arrives
-      (['p1', 'p2'] as Seat[]).forEach((seat) => {
-        if (rs.players[seat]) lastState!.players[seat] = rs.players[seat]!;
-      });
-      renderSeatSlots(lastState);
-      renderScoreboard(lastState);
-    }
-  });
-
-  socket.on('gameState', (state) => {
-    lastState = state;
-    // If the host has claimed both seats (playing solo on one screen), always control
-    // whichever of them is actually up — not just the first one claimed — or the host's
-    // controls would silently stay locked to p1 forever during p2's turn.
-    const hostSeats = (['p1', 'p2'] as Seat[]).filter((s) => state.players[s].isHost);
+  function applyState(state: GameState): void {
+    // If the host has claimed several seats (hotseat on one screen), always control
+    // whichever of them is actually up — not just the first claimed.
+    const hostSeats = state.seatOrder.filter((s) => state.players[s].isHost);
     ownedSeat = hostSeats.find((s) => s === state.currentShooter) ?? hostSeats[0] ?? null;
+
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
-    renderSeatSlots(state);
     renderScoreboard(state);
+    renderPocketRail(state);
     renderBottomArea(state);
 
-    const canAim = ownedSeat !== null && state.currentShooter === ownedSeat && (state.phase === 'aiming' || state.phase === 'break');
+    const canAim =
+      ownedSeat !== null &&
+      state.currentShooter === ownedSeat &&
+      (state.phase === 'aiming' || state.phase === 'break');
     aimController?.setEnabled(canAim);
     hostPowerWrap.style.display = canAim ? '' : 'none';
     if (!canAim) setPowerHud(0);
+
     placing = ownedSeat !== null && state.phase === 'ball_in_hand' && state.currentShooter === ownedSeat;
     if (!placing) renderer?.setPlacementGhost(null);
 
@@ -322,6 +328,17 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       renderer?.setAimPreview(CUE_BALL_ID, null);
       lastAimAngle = null;
     }
+  }
+
+  socket.on('roomState', (rs) => {
+    lastRoom = rs;
+    if (rs.started) void boot();
+    else drawLobby(rs);
+  });
+
+  socket.on('gameState', (state) => {
+    lastState = state;
+    if (booted) applyState(state);
   });
 
   socket.on('aimUpdate', (input: AimInput) => {
@@ -349,7 +366,6 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     } else if (ev.type === 'pot') {
       if (settings.soundEnabled) sfx.playPocketSwish(settings.soundVolume);
       renderer?.spawnPotFlash(ev.pos, ev.ballId);
-      if (settings.hapticsEnabled) navigator.vibrate?.([15, 40, 15]);
     }
   });
 

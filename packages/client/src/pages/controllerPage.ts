@@ -141,11 +141,19 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     }
 
     if (ballRowEl && seat) {
-      const group = state.players[seat].group;
-      const ids = group === 'solid' ? SOLID_IDS : group === 'stripe' ? STRIPE_IDS : null;
-      ballRowEl.innerHTML = ids
-        ? ids.map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false)).join('')
-        : Array.from({ length: 7 }, () => placeholderChipHtml()).join('');
+      const me = state.players[seat];
+      if (state.mode === 'rotation') {
+        // No groups in rotation — show the running score and which ball you must hit next.
+        const targets = legalTargetBallIds(state);
+        ballRowEl.innerHTML =
+          `<span class="score-pill" style="padding:0 6px">${me?.score ?? 0} pts</span>` +
+          (targets.length ? `<span style="font-size:0.62rem;color:var(--muted);padding:0 4px">HIT</span>` + ballChipHtml(targets[0], false) : '');
+      } else {
+        const ids = me?.group === 'solid' ? SOLID_IDS : me?.group === 'stripe' ? STRIPE_IDS : null;
+        ballRowEl.innerHTML = ids
+          ? ids.map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false)).join('')
+          : Array.from({ length: 7 }, () => placeholderChipHtml()).join('');
+      }
     }
 
     showGameOverIfNeeded(state);
@@ -156,11 +164,19 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     const overlay = document.createElement('div');
     overlay.id = 'gameOverOverlay';
     overlay.className = 'overlay-center';
-    const iWon = state.winner === seat;
+    const myTeam = seat ? state.players[seat]?.team : null;
+    const iWon =
+      state.mode === 'teams' && state.winningTeam ? myTeam === state.winningTeam : state.winner === seat;
+    const otherWins =
+      state.mode === 'teams' && state.winningTeam
+        ? `Team ${state.winningTeam.toUpperCase()} wins`
+        : state.winner
+          ? `${state.players[state.winner].name} wins`
+          : 'Game over';
     overlay.innerHTML = `
       <div>
-        <h2>${iWon ? 'You win! 🎉' : state.winner ? `${state.players[state.winner].name} wins` : 'Game over'}</h2>
-        ${state.lastFoulReason ? `<p style="opacity:0.7">${state.lastFoulReason}</p>` : ''}
+        <h2>${iWon ? 'You win! 🎉' : otherWins}</h2>
+        ${state.lastFoulReason ? `<p style="color:var(--muted)">${state.lastFoulReason}</p>` : ''}
         <button id="rematchBtn">Rematch</button>
       </div>`;
     root.appendChild(overlay);

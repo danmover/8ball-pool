@@ -3,7 +3,9 @@ import {
   BALL_RADIUS,
   BROADCAST_HZ,
   CUE_BALL_ID,
+  DEFAULT_LOBBY,
   DEFAULT_SETTINGS,
+  MAX_SEATS,
   MAX_SHOT_SPEED,
   MIN_SHOT_SPEED,
   TABLE_LENGTH,
@@ -11,7 +13,9 @@ import {
   Vec2,
   createInitialGameState,
   isGroupCleared,
+  lowestBallId,
   resolveShot,
+  seatId,
   stepSimulation,
   summarizeShot,
 } from '@8ball/shared';
@@ -20,6 +24,7 @@ import type {
   BallInHandPlacement,
   ClientToServerEvents,
   GameState,
+  LobbySettings,
   PlayerSettings,
   RoomStateDTO,
   Seat,
@@ -42,12 +47,15 @@ export class Room {
   code: string;
   io: IoServer;
   gameState: GameState;
-  connections: Record<Seat, Connection | null> = { p1: null, p2: null };
+  connections = new Map<Seat, Connection>();
+  lobby: LobbySettings = { ...DEFAULT_LOBBY };
+  started = false;
   hostSocketId: string | null = null;
   hostToken: string;
   spectatorSocketIds = new Set<string>();
 
   private preShotGroupCleared = false;
+  private preShotLowestBall: number | null = null;
   private shotEvents: SimEvent[] = [];
   private loopHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -55,18 +63,72 @@ export class Room {
     this.code = code;
     this.io = io;
     this.hostToken = hostToken;
-    this.gameState = createInitialGameState('Player 1', 'Player 2');
+    this.gameState = createInitialGameState(this.lobby.mode, this.defaultNames());
+  }
+
+  private defaultNames(): string[] {
+    return Array.from({ length: this.lobby.maxPlayers }, (_, i) => `Player ${i + 1}`);
+  }
+
+  /** All seat ids this lobby currently allows, whether occupied or not. */
+  seats(): Seat[] {
+    return Array.from({ length: this.lobby.maxPlayers }, (_, i) => seatId(i));
   }
 
   roomStateDTO(): RoomStateDTO {
+    const players: Record<Seat, ReturnType<() => GameState['players'][string]> | null> = {};
+    for (const seat of this.seats()) {
+      players[seat] = this.connections.has(seat) ? this.gameState.players[seat] ?? null : null;
+    }
     return {
       code: this.code,
-      players: {
-        p1: this.connections.p1 ? this.gameState.players.p1 : null,
-        p2: this.connections.p2 ? this.gameState.players.p2 : null,
-      },
+      lobby: { ...this.lobby },
+      started: this.started,
+      players,
       spectatorCount: this.spectatorSocketIds.size,
     };
+  }
+
+  updateLobby(patch: Partial<LobbySettings>): void {
+    if (this.started) return;
+    if (patch.mode) this.lobby.mode = patch.mode;
+    if (patch.maxPlayers !== undefined) {
+      const clamped = Math.max(2, Math.min(MAX_SEATS, Math.round(patch.maxPlayers)));
+      // Never shrink below the seats people have already taken.
+      const occupied = [...this.connections.keys()].length;
+      this.lobby.maxPlayers = Math.max(clamped, occupied);
+    }
+    // Teams mode needs an even split to alternate cleanly around the table.
+    if (this.lobby.mode === 'teams' && this.lobby.maxPlayers % 2 !== 0) {
+      this.lobby.maxPlayers = Math.min(MAX_SEATS, this.lobby.maxPlayers + 1);
+    }
+    this.rebuildGameState();
+    this.broadcastRoomState();
+    this.broadcastGameState();
+  }
+
+  /** Re-creates the game for the current lobby shape, preserving who's connected. */
+  private rebuildGameState(): void {
+    const names = this.seats().map(
+      (seat, i) => this.gameState.players[seat]?.name ?? `Player ${i + 1}`
+    );
+    const next = createInitialGameState(this.lobby.mode, names);
+    for (const seat of next.seatOrder) {
+      const conn = this.connections.get(seat);
+      const prev = this.gameState.players[seat];
+      next.players[seat].connected = Boolean(conn && conn.socketId);
+      next.players[seat].isHost = prev?.isHost ?? false;
+      if (prev?.name) next.players[seat].name = prev.name;
+    }
+    this.gameState = next;
+  }
+
+  startGame(): void {
+    if (this.started) return;
+    this.started = true;
+    this.rebuildGameState();
+    this.broadcastRoomState();
+    this.broadcastGameState();
   }
 
   broadcastRoomState(): void {
@@ -79,38 +141,51 @@ export class Room {
 
   claimSeat(seat: Seat, name: string, socketId: string, isHost: boolean): { token: string } {
     const token = generateToken();
-    this.connections[seat] = { seat, socketId, token, settings: { ...DEFAULT_SETTINGS } };
+    this.connections.set(seat, { seat, socketId, token, settings: { ...DEFAULT_SETTINGS } });
+    const existing = this.gameState.players[seat];
     this.gameState.players[seat] = {
       seat,
       name,
       connected: true,
       isHost,
-      group: this.gameState.players[seat].group,
+      group: existing?.group ?? null,
+      team: existing?.team ?? null,
+      score: existing?.score ?? 0,
     };
     return { token };
   }
 
+  releaseSeat(seat: Seat): void {
+    this.connections.delete(seat);
+    const player = this.gameState.players[seat];
+    if (player) {
+      player.connected = false;
+      player.isHost = false;
+    }
+  }
+
   findSeatByToken(token: string): Seat | null {
-    for (const seat of ['p1', 'p2'] as Seat[]) {
-      if (this.connections[seat]?.token === token) return seat;
+    for (const [seat, conn] of this.connections) {
+      if (conn.token === token) return seat;
     }
     return null;
   }
 
   reconnectSeat(seat: Seat, socketId: string): void {
-    const conn = this.connections[seat];
+    const conn = this.connections.get(seat);
     if (!conn) return;
     conn.socketId = socketId;
-    this.gameState.players[seat].connected = true;
+    const player = this.gameState.players[seat];
+    if (player) player.connected = true;
   }
 
   disconnectSocket(socketId: string): void {
     if (this.hostSocketId === socketId) this.hostSocketId = null;
-    for (const seat of ['p1', 'p2'] as Seat[]) {
-      const conn = this.connections[seat];
-      if (conn?.socketId === socketId) {
+    for (const [seat, conn] of this.connections) {
+      if (conn.socketId === socketId) {
         conn.socketId = null;
-        this.gameState.players[seat].connected = false;
+        const player = this.gameState.players[seat];
+        if (player) player.connected = false;
       }
     }
     this.spectatorSocketIds.delete(socketId);
@@ -118,9 +193,11 @@ export class Room {
   }
 
   openSeat(): Seat | null {
-    if (!this.connections.p1) return 'p1';
-    if (!this.connections.p2) return 'p2';
-    return null;
+    return this.seats().find((seat) => !this.connections.has(seat)) ?? null;
+  }
+
+  seatSettings(seat: Seat): PlayerSettings | undefined {
+    return this.connections.get(seat)?.settings;
   }
 
   canAct(seat: Seat): boolean {
@@ -141,6 +218,7 @@ export class Room {
     if (!cue || cue.pocketed) return;
 
     this.preShotGroupCleared = isGroupCleared(this.gameState, input.seat);
+    this.preShotLowestBall = lowestBallId(this.gameState);
     const power = Math.max(0, Math.min(1, input.power));
     const speed = MIN_SHOT_SPEED + power * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
     cue.vel = Vec2.scale(Vec2.fromAngle(input.angle), speed);
@@ -156,7 +234,7 @@ export class Room {
   handlePlaceCueBall(payload: BallInHandPlacement): void {
     if (this.gameState.phase !== 'ball_in_hand' || this.gameState.currentShooter !== payload.seat) return;
     const { x, y } = payload.pos;
-    const seatSocket = this.connections[payload.seat]?.socketId;
+    const seatSocket = this.connections.get(payload.seat)?.socketId;
 
     if (x < BALL_RADIUS || x > TABLE_LENGTH - BALL_RADIUS || y < BALL_RADIUS || y > TABLE_WIDTH - BALL_RADIUS) {
       if (seatSocket) this.io.to(seatSocket).emit('errorMessage', 'Cue ball must stay on the table.');
@@ -182,12 +260,19 @@ export class Room {
   requestRematch(): void {
     if (this.gameState.phase !== 'game_over') return;
     const prev = this.gameState;
-    const next = createInitialGameState(prev.players.p1.name, prev.players.p2.name);
-    next.players.p1.connected = prev.players.p1.connected;
-    next.players.p2.connected = prev.players.p2.connected;
-    next.players.p1.isHost = prev.players.p1.isHost;
-    next.players.p2.isHost = prev.players.p2.isHost;
-    next.currentShooter = prev.currentShooter === 'p1' ? 'p2' : 'p1'; // alternate the break
+    // Rotate who breaks so the same seat doesn't always open.
+    const nextBreakIndex = (prev.seatOrder.indexOf(prev.currentShooter) + 1) % prev.seatOrder.length;
+    const next = createInitialGameState(
+      this.lobby.mode,
+      prev.seatOrder.map((seat) => prev.players[seat].name),
+      nextBreakIndex
+    );
+    for (const seat of next.seatOrder) {
+      const before = prev.players[seat];
+      if (!before) continue;
+      next.players[seat].connected = before.connected;
+      next.players[seat].isHost = before.isHost;
+    }
     this.gameState = next;
     this.broadcastGameState();
   }
@@ -204,7 +289,7 @@ export class Room {
       if (settled) {
         this.stopSimLoop();
         const outcome = summarizeShot(this.shotEvents);
-        resolveShot(this.gameState, outcome, this.preShotGroupCleared);
+        resolveShot(this.gameState, outcome, this.preShotGroupCleared, this.preShotLowestBall);
         this.broadcastGameState();
       }
     }, 1000 / BROADCAST_HZ);

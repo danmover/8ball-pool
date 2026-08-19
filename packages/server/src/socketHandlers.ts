@@ -72,8 +72,10 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
 
     socket.on('hostClaimSeat', ({ seat }) => {
       const room = rooms.get(socket.data.roomCode);
-      if (!room || room.hostSocketId !== socket.id || room.connections[seat]) return;
-      room.claimSeat(seat, 'Host', socket.id, true);
+      if (!room || room.hostSocketId !== socket.id || room.connections.has(seat)) return;
+      if (!room.seats().includes(seat)) return;
+      const taken = [...room.connections.values()].filter((c) => c.socketId === socket.id).length;
+      room.claimSeat(seat, taken === 0 ? 'Host' : `Host ${taken + 1}`, socket.id, true);
       room.broadcastRoomState();
       room.broadcastGameState();
     });
@@ -81,12 +83,22 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
     socket.on('hostReleaseSeat', ({ seat }) => {
       const room = rooms.get(socket.data.roomCode);
       if (!room || room.hostSocketId !== socket.id) return;
-      if (room.connections[seat]?.socketId !== socket.id) return;
-      room.connections[seat] = null;
-      room.gameState.players[seat].connected = false;
-      room.gameState.players[seat].isHost = false;
+      if (room.connections.get(seat)?.socketId !== socket.id) return;
+      room.releaseSeat(seat);
       room.broadcastRoomState();
       room.broadcastGameState();
+    });
+
+    socket.on('hostUpdateLobby', (patch) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.updateLobby(patch);
+    });
+
+    socket.on('hostStartGame', () => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.startGame();
     });
 
     socket.on('updateAim', (input) => {
@@ -104,8 +116,8 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
     socket.on('updateSettings', (settings) => {
       const room = rooms.get(socket.data.roomCode);
       const seat = socket.data.seat as Seat | undefined;
-      const conn = seat ? room?.connections[seat] : undefined;
-      if (conn) Object.assign(conn.settings, settings);
+      const stored = seat ? room?.seatSettings(seat) : undefined;
+      if (stored) Object.assign(stored, settings);
     });
 
     socket.on('requestRematch', () => {
