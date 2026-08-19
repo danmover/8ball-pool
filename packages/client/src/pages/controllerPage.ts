@@ -2,7 +2,8 @@ import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview
 import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings, saveSession } from '../settings/settingsStore';
-import { TableRenderer } from '../render/TableRenderer';
+import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
+import { powerTierLabel } from '../render/powerTier';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
 import { openSettingsPanel } from '../settings/settingsPanel';
@@ -162,7 +163,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         <div class="mini-table-wrap" id="miniTable"></div>
         <div class="control-area" id="controlArea">
           <div class="turn-banner" id="turnBanner"></div>
-          <div class="hint">Drag to aim &amp; set power, release to shoot</div>
+          <div class="power-hud" id="powerHud">
+            <div class="power-value" id="powerValue">0%</div>
+            <div class="power-tier" id="powerTier">DRAG TO AIM</div>
+          </div>
+          <div class="hint" id="hint">Drag anywhere &amp; pull back like a slingshot, release to shoot</div>
           <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
         </div>
       </div>
@@ -173,6 +178,9 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     const controlArea = root.querySelector<HTMLElement>('#controlArea')!;
     turnBannerEl = root.querySelector<HTMLElement>('#turnBanner')!;
     const powerFill = root.querySelector<HTMLElement>('#powerFill')!;
+    const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
+    const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
+    const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
 
     renderer = await TableRenderer.create(miniTableEl);
     renderer.setColorblindPatterns(settings.colorblindPatterns);
@@ -202,11 +210,23 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       { once: true }
     );
 
+    function setPowerHud(power: number): void {
+      const pct = Math.round(power * 100);
+      const color = powerToCssColor(power);
+      powerFill.style.width = `${pct}%`;
+      powerFill.style.background = color;
+      powerValue.textContent = `${pct}%`;
+      powerValue.style.color = color;
+      powerTier.textContent = powerTierLabel(power);
+      powerHud.classList.toggle('charged', power > 0.02);
+      powerHud.style.setProperty('--power-scale', String(1 + power * 0.18));
+    }
+
     aimController = new AimController(controlArea, {
       onAimChange: (angle, power) => {
         if (!seat) return;
         lastAimAngle = angle;
-        powerFill.style.width = `${Math.round(power * 100)}%`;
+        setPowerHud(power);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
         socket.emit('updateAim', { seat, angle, spin });
         renderer?.setAimVisual(angle, power, true);
@@ -214,7 +234,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       },
       onShoot: (angle, power) => {
         if (!seat) return;
-        powerFill.style.width = '0%';
+        setPowerHud(0);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
         socket.emit('takeShot', { seat, angle, power, spin });
         spinPad?.reset();

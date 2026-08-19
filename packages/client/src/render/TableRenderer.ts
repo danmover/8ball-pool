@@ -590,6 +590,29 @@ export class TableRenderer {
     // Power glow: green at low power, ramping through yellow to red at full power.
     const p = this.aim.power;
     const glowColor = p < 0.5 ? lerpColor(0x4ac26b, 0xffe27a, p / 0.5) : lerpColor(0xffe27a, 0xff4d4d, (p - 0.5) / 0.5);
+
+    // Radial power gauge ring around the cue ball, so power reads clearly on the table
+    // itself — not just on whichever device is holding the phone controller.
+    const ringR = BALL_RADIUS * 2.6;
+    const ringWidth = 6;
+    g.circle(cue.sprite.x, cue.sprite.y, ringR).stroke({ width: ringWidth, color: 0xffffff, alpha: 0.18 });
+    if (p > 0.015) {
+      const start = -Math.PI / 2;
+      const end = start + Math.PI * 2 * p;
+      glow.arc(cue.sprite.x, cue.sprite.y, ringR, start, end).stroke({
+        width: ringWidth + 8,
+        color: glowColor,
+        alpha: 0.55,
+        cap: 'round',
+      });
+      g.arc(cue.sprite.x, cue.sprite.y, ringR, start, end).stroke({
+        width: ringWidth,
+        color: glowColor,
+        alpha: 0.95,
+        cap: 'round',
+      });
+    }
+
     glow.moveTo(buttX, buttY).lineTo(tipX, tipY);
     glow.stroke({ width: 14 + p * 10, color: glowColor, alpha: 0.35 + p * 0.35, cap: 'round' });
 
@@ -606,6 +629,13 @@ export class TableRenderer {
     this.particles.clear();
     this.app.destroy(true, { children: true });
   }
+}
+
+/** Same green -> yellow -> red gradient used for the cue glow/power ring, as a CSS color. */
+export function powerToCssColor(power: number): string {
+  const hex =
+    power < 0.5 ? lerpColor(0x4ac26b, 0xffe27a, power / 0.5) : lerpColor(0xffe27a, 0xff4d4d, (power - 0.5) / 0.5);
+  return `#${hex.toString(16).padStart(6, '0')}`;
 }
 
 function lerpColor(a: number, b: number, t: number): number {

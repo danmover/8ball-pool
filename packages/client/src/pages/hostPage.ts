@@ -3,7 +3,8 @@ import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview
 import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
-import { TableRenderer } from '../render/TableRenderer';
+import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
+import { powerTierLabel } from '../render/powerTier';
 import { AimController } from '../controller/aimController';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import * as sfx from '../render/sfx';
@@ -28,6 +29,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       <div></div>
       <div id="bottomArea"></div>
     </div>
+    <div class="host-power-wrap" id="hostPowerWrap">
+      <div class="power-hud" id="powerHud">
+        <div class="power-value" id="powerValue">0%</div>
+        <div class="power-tier" id="powerTier">DRAG TO AIM</div>
+      </div>
+      <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
+    </div>
     <div id="joinPanelWrap"></div>
   `;
 
@@ -35,6 +43,23 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const scoreboardEl = root.querySelector<HTMLElement>('#scoreboard')!;
   const bottomArea = root.querySelector<HTMLElement>('#bottomArea')!;
   const joinPanelWrap = root.querySelector<HTMLElement>('#joinPanelWrap')!;
+  const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
+  const powerFill = root.querySelector<HTMLElement>('#powerFill')!;
+  const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
+  const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
+  const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
+
+  function setPowerHud(power: number): void {
+    const pct = Math.round(power * 100);
+    const color = powerToCssColor(power);
+    powerFill.style.width = `${pct}%`;
+    powerFill.style.background = color;
+    powerValue.textContent = `${pct}%`;
+    powerValue.style.color = color;
+    powerTier.textContent = powerTierLabel(power);
+    powerHud.classList.toggle('charged', power > 0.02);
+    powerHud.style.setProperty('--power-scale', String(1 + power * 0.18));
+  }
 
   root.querySelector('#settingsBtn')!.addEventListener('click', () => {
     openSettingsPanel(settings, (s) => {
@@ -90,11 +115,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         if (!ownedSeat || !lastState) return;
         lastAimAngle = angle;
         renderer?.setAimVisual(angle, power, true);
+        setPowerHud(power);
         socket.emit('updateAim', { seat: ownedSeat, angle, spin: { x: 0, y: 0 } });
         renderPreview(angle);
       },
       onShoot: (angle, power) => {
         if (!ownedSeat) return;
+        setPowerHud(0);
         socket.emit('takeShot', { seat: ownedSeat, angle, power, spin: { x: 0, y: 0 } });
       },
     });
@@ -250,6 +277,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
     const canAim = ownedSeat !== null && state.currentShooter === ownedSeat && (state.phase === 'aiming' || state.phase === 'break');
     aimController?.setEnabled(canAim);
+    hostPowerWrap.style.display = canAim ? '' : 'none';
+    if (!canAim) setPowerHud(0);
     placing = ownedSeat !== null && state.phase === 'ball_in_hand' && state.currentShooter === ownedSeat;
     if (!placing) renderer?.setPlacementGhost(null);
 
