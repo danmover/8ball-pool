@@ -4,7 +4,7 @@ import { BALL_RADIUS, POCKETS, TABLE_LENGTH, TABLE_WIDTH } from '@8ball/shared';
 import { styleForBall } from './ballStyle';
 import { ParticleSystem } from './Particles';
 
-const TEX_SIZE = 128;
+const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
 
 const FELT_THEMES: Record<FeltTheme, { light: string; dark: string; rail: string; railDark: string }> = {
@@ -58,12 +58,13 @@ function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvas
     ctx.restore();
   }
 
-  // Soft broad highlight for the overall glossy sphere feel.
-  const highlight = ctx.createRadialGradient(r * 0.6, r * 0.46, r * 0.06, r * 0.6, r * 0.46, r * 1.4);
-  highlight.addColorStop(0, 'rgba(255,255,255,0.9)');
-  highlight.addColorStop(0.28, 'rgba(255,255,255,0.16)');
-  highlight.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = highlight;
+  // Sphere shading: darken the lower-right quadrant *before* the highlight goes on, so the
+  // ball reads as a lit 3D sphere rather than a flat tinted disc with a highlight painted on.
+  const shade = ctx.createRadialGradient(r * 1.35, r * 1.4, r * 0.1, r * 0.5, r * 0.5, r * 1.5);
+  shade.addColorStop(0, 'rgba(0,0,0,0.5)');
+  shade.addColorStop(0.55, 'rgba(0,0,0,0.16)');
+  shade.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shade;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
   if (style.label) {
@@ -78,19 +79,34 @@ function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvas
     ctx.fillText(style.label, r, r + 1);
   }
 
+  // Soft broad highlight for the overall glossy sphere feel.
+  const highlight = ctx.createRadialGradient(r * 0.58, r * 0.42, r * 0.05, r * 0.58, r * 0.42, r * 1.25);
+  highlight.addColorStop(0, 'rgba(255,255,255,0.85)');
+  highlight.addColorStop(0.3, 'rgba(255,255,255,0.14)');
+  highlight.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = highlight;
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+
   // Rim shading gives the sphere an edge instead of a flat disc.
-  const rim = ctx.createRadialGradient(r, r, r * 0.7, r, r, r);
+  const rim = ctx.createRadialGradient(r, r, r * 0.68, r, r, r);
   rim.addColorStop(0, 'rgba(0,0,0,0)');
-  rim.addColorStop(1, 'rgba(0,0,0,0.42)');
+  rim.addColorStop(1, 'rgba(0,0,0,0.48)');
   ctx.fillStyle = rim;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
-  // A tight secondary specular dot sells the "wet gloss" look on top of the broad highlight.
-  const spec = ctx.createRadialGradient(r * 0.42, r * 0.34, 0, r * 0.42, r * 0.34, r * 0.22);
-  spec.addColorStop(0, 'rgba(255,255,255,0.95)');
+  // A tight, bright specular dot sells the "wet gloss" look on top of the broad highlight.
+  const spec = ctx.createRadialGradient(r * 0.4, r * 0.3, 0, r * 0.4, r * 0.3, r * 0.2);
+  spec.addColorStop(0, 'rgba(255,255,255,0.98)');
+  spec.addColorStop(0.6, 'rgba(255,255,255,0.35)');
   spec.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = spec;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+
+  // A second, tiny hard-white sparkle for extra "plastic" glint.
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath();
+  ctx.ellipse(r * 0.48, r * 0.36, r * 0.05, r * 0.03, -0.6, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
   return canvas;

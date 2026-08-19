@@ -4,6 +4,7 @@ import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings, saveSession } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
 import { powerTierLabel } from '../render/powerTier';
+import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
 import { openSettingsPanel } from '../settings/settingsPanel';
@@ -23,6 +24,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   let placing = false;
   let lastAimAngle = 0;
   let turnBannerEl: HTMLElement | null = null;
+  let ballRowEl: HTMLElement | null = null;
+
+  const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
+  const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
 
   function showFatal(message: string): void {
     root.innerHTML = `
@@ -135,6 +140,14 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       }
     }
 
+    if (ballRowEl && seat) {
+      const group = state.players[seat].group;
+      const ids = group === 'solid' ? SOLID_IDS : group === 'stripe' ? STRIPE_IDS : null;
+      ballRowEl.innerHTML = ids
+        ? ids.map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false)).join('')
+        : Array.from({ length: 7 }, () => placeholderChipHtml()).join('');
+    }
+
     showGameOverIfNeeded(state);
   }
 
@@ -160,7 +173,9 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   async function boot(): Promise<void> {
     root.innerHTML = `
       <div class="controller-root">
-        <div class="mini-table-wrap" id="miniTable"></div>
+        <div class="mini-table-wrap" id="miniTable">
+          <div class="mini-ball-strip"><div class="ball-row" id="myBalls"></div></div>
+        </div>
         <div class="control-area" id="controlArea">
           <div class="turn-banner" id="turnBanner"></div>
           <div class="power-hud" id="powerHud">
@@ -177,6 +192,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     const miniTableEl = root.querySelector<HTMLElement>('#miniTable')!;
     const controlArea = root.querySelector<HTMLElement>('#controlArea')!;
     turnBannerEl = root.querySelector<HTMLElement>('#turnBanner')!;
+    ballRowEl = root.querySelector<HTMLElement>('#myBalls')!;
     const powerFill = root.querySelector<HTMLElement>('#powerFill')!;
     const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
     const powerTier = root.querySelector<HTMLElement>('#powerTier')!;

@@ -142,46 +142,114 @@ input:focus {
   gap: 0.5rem;
 }
 
-.scoreboard {
-  display: flex;
-  gap: 0.5rem;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: var(--radius);
-  padding: 0.5rem 0.75rem;
-  backdrop-filter: blur(4px);
-}
-
-.player-chip {
-  padding: 0.4rem 0.8rem;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.85rem;
+.player-panel {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  opacity: 0.6;
+  gap: 0.55rem;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.7rem;
+  backdrop-filter: blur(4px);
+  opacity: 0.62;
+  transition:
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+  max-width: 46vw;
 }
 
-.player-chip.active {
+.player-panel.active {
   opacity: 1;
-  background: rgba(224, 184, 75, 0.18);
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 0 18px rgba(224, 184, 75, 0.35);
+}
+
+.player-panel.right {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a8f5c, #0b3d24 75%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--paper);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+}
+
+.player-panel.active .avatar {
   box-shadow: inset 0 0 0 2px var(--gold);
 }
 
-.group-dot {
-  width: 10px;
-  height: 10px;
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.player-panel.right .player-info {
+  align-items: flex-end;
+}
+
+.player-name {
+  font-weight: 700;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 30vw;
+}
+
+.ball-row {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  max-width: 34vw;
+}
+
+.player-panel.right .ball-row {
+  justify-content: flex-end;
+}
+
+.ball-chip {
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
-  background: #999;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.05) 45%, transparent 60%),
+    var(--ball-color, #888);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7.5px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 -2px 3px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+  transition:
+    opacity 0.3s,
+    filter 0.3s;
+  flex-shrink: 0;
 }
 
-.group-dot.solid {
-  background: #d64545;
+.ball-chip.potted {
+  opacity: 0.25;
+  filter: grayscale(0.7);
 }
 
-.group-dot.stripe {
-  background: #fff;
-  box-shadow: inset 0 0 0 2px #d64545;
+.ball-chip.placeholder {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  opacity: 0.5;
 }
 
 .icon-btn {
@@ -356,6 +424,25 @@ input:focus {
 .mini-table-wrap {
   flex: 0 0 42vh;
   position: relative;
+}
+
+.mini-ball-strip {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.mini-ball-strip .ball-row {
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  padding: 5px 8px;
+  backdrop-filter: blur(3px);
+  gap: 4px;
 }
 
 .control-area {

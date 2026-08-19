@@ -5,6 +5,7 @@ import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
 import { powerTierLabel } from '../render/powerTier';
+import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import * as sfx from '../render/sfx';
@@ -23,8 +24,21 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     <div id="tableCanvas" style="position:absolute; inset:0;"></div>
     <div class="hud">
       <div class="top-bar">
-        <div class="scoreboard" id="scoreboard"></div>
+        <div class="player-panel" id="panelP1">
+          <div class="avatar" id="avatarP1">P1</div>
+          <div class="player-info">
+            <div class="player-name" id="nameP1">Player 1</div>
+            <div class="ball-row" id="ballsP1"></div>
+          </div>
+        </div>
         <button class="icon-btn" id="settingsBtn">⚙</button>
+        <div class="player-panel right" id="panelP2">
+          <div class="player-info">
+            <div class="player-name" id="nameP2">Player 2</div>
+            <div class="ball-row" id="ballsP2"></div>
+          </div>
+          <div class="avatar" id="avatarP2">P2</div>
+        </div>
       </div>
       <div></div>
       <div id="bottomArea"></div>
@@ -40,7 +54,22 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   `;
 
   const canvasEl = root.querySelector<HTMLElement>('#tableCanvas')!;
-  const scoreboardEl = root.querySelector<HTMLElement>('#scoreboard')!;
+  const panelEls: Record<Seat, HTMLElement> = {
+    p1: root.querySelector<HTMLElement>('#panelP1')!,
+    p2: root.querySelector<HTMLElement>('#panelP2')!,
+  };
+  const nameEls: Record<Seat, HTMLElement> = {
+    p1: root.querySelector<HTMLElement>('#nameP1')!,
+    p2: root.querySelector<HTMLElement>('#nameP2')!,
+  };
+  const avatarEls: Record<Seat, HTMLElement> = {
+    p1: root.querySelector<HTMLElement>('#avatarP1')!,
+    p2: root.querySelector<HTMLElement>('#avatarP2')!,
+  };
+  const ballRowEls: Record<Seat, HTMLElement> = {
+    p1: root.querySelector<HTMLElement>('#ballsP1')!,
+    p2: root.querySelector<HTMLElement>('#ballsP2')!,
+  };
   const bottomArea = root.querySelector<HTMLElement>('#bottomArea')!;
   const joinPanelWrap = root.querySelector<HTMLElement>('#joinPanelWrap')!;
   const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
@@ -184,17 +213,23 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     joinPanelWrap.style.display = bothSeated ? 'none' : '';
   }
 
+  const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
+  const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
+
   function renderScoreboard(state: GameState): void {
-    scoreboardEl.innerHTML = '';
     (['p1', 'p2'] as Seat[]).forEach((seat) => {
       const info = state.players[seat];
-      const chip = document.createElement('div');
-      chip.className = 'player-chip' + (state.currentShooter === seat ? ' active' : '');
-      const dot = document.createElement('span');
-      dot.className = 'group-dot' + (info.group ? ` ${info.group}` : '');
-      chip.appendChild(dot);
-      chip.appendChild(document.createTextNode(info.connected ? info.name : `Seat ${seat === 'p1' ? 1 : 2} open`));
-      scoreboardEl.appendChild(chip);
+      const panel = panelEls[seat];
+      panel.classList.toggle('active', state.phase !== 'game_over' && state.currentShooter === seat);
+
+      const displayName = info.connected ? info.name : `Seat ${seat === 'p1' ? 1 : 2} open`;
+      nameEls[seat].textContent = displayName;
+      avatarEls[seat].textContent = info.connected ? displayName.slice(0, 2).toUpperCase() : seat.toUpperCase();
+
+      const ids = info.group === 'solid' ? SOLID_IDS : info.group === 'stripe' ? STRIPE_IDS : null;
+      ballRowEls[seat].innerHTML = ids
+        ? ids.map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false)).join('')
+        : Array.from({ length: 7 }, () => placeholderChipHtml()).join('');
     });
   }
 
