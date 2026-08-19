@@ -48,13 +48,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       <div></div>
       <div id="bottomArea"></div>
     </div>
-    <div class="pocket-rail" id="pocketRail" style="display:none"></div>
     <div class="host-power-wrap" id="hostPowerWrap" style="display:none">
       <div class="power-hud" id="powerHud">
         <div class="power-value" id="powerValue">0%</div>
         <div class="power-tier" id="powerTier">DRAG TO AIM</div>
       </div>
-      <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
     </div>
     <div id="lobbyWrap"></div>
   `;
@@ -64,9 +62,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const panelsEl = root.querySelector<HTMLElement>('#playerPanels')!;
   const bottomArea = root.querySelector<HTMLElement>('#bottomArea')!;
   const lobbyWrap = root.querySelector<HTMLElement>('#lobbyWrap')!;
-  const pocketRail = root.querySelector<HTMLElement>('#pocketRail')!;
   const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
-  const powerFill = root.querySelector<HTMLElement>('#powerFill')!;
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
   const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
   const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
@@ -74,8 +70,6 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   function setPowerHud(power: number): void {
     const pct = Math.round(power * 100);
     const color = powerToCssColor(power);
-    powerFill.style.width = `${pct}%`;
-    powerFill.style.background = color;
     powerValue.textContent = `${pct}%`;
     powerValue.style.color = color;
     powerTier.textContent = powerTierLabel(power);
@@ -136,7 +130,6 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
     canvasEl.style.display = '';
     gameHud.style.display = '';
-    pocketRail.style.display = '';
     lobbyWrap.style.display = 'none';
 
     renderer = await TableRenderer.create(canvasEl);
@@ -230,16 +223,6 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       .join('');
   }
 
-  /** Right-hand rail listing every ball that has gone down, in the order it was potted. */
-  function renderPocketRail(state: GameState): void {
-    const potted = state.balls.filter((b) => b.pocketed && b.id !== CUE_BALL_ID);
-    pocketRail.innerHTML =
-      `<div class="rail-label">POTTED</div>` +
-      (potted.length
-        ? potted.map((b) => ballChipHtml(b.id, false)).join('')
-        : `<div class="rail-empty">none<br>yet</div>`);
-  }
-
   function renderBottomArea(state: GameState): void {
     bottomArea.innerHTML = '';
     if (state.phase === 'ball_in_hand') {
@@ -309,7 +292,6 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
     renderScoreboard(state);
-    renderPocketRail(state);
     renderBottomArea(state);
 
     const canAim =

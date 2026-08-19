@@ -4,14 +4,15 @@ export interface BallStyle {
   label: string;
 }
 
+// Bright, saturated pool-hall colours — these read clearly at small sizes on the felt.
 const SOLID_COLORS: Record<number, number> = {
-  1: 0xf4c430,
-  2: 0x1f5fbf,
-  3: 0xd6392e,
-  4: 0x6c3fa6,
-  5: 0xe07a1f,
-  6: 0x1f7a3f,
-  7: 0x7a2e2e,
+  1: 0xffcf2e,
+  2: 0x2a6ee0,
+  3: 0xf03a2e,
+  4: 0x8b4bd8,
+  5: 0xff8a1f,
+  6: 0x17a85a,
+  7: 0x9e3226,
 };
 
 export function styleForBall(id: number): BallStyle {

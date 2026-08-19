@@ -215,6 +215,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
 
     renderer = await TableRenderer.create(miniTableEl);
+    renderer.setChromeless(true); // no chute/power bar on the small phone preview
     renderer.setColorblindPatterns(settings.colorblindPatterns);
     renderer.setFeltTheme(settings.feltTheme);
     renderer.setEffectsIntensity(settings.effectsIntensity);

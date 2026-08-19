@@ -162,53 +162,6 @@ input:focus {
   gap: 0.5rem;
 }
 
-/* --- Potted-ball side rail (right edge of the host screen) --- */
-
-.pocket-rail {
-  position: fixed;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 54px;
-  padding: 12px 0;
-  border-radius: 27px;
-  background: linear-gradient(180deg, var(--bg-2), var(--bg-0));
-  box-shadow:
-    inset 0 0 0 1px var(--stroke),
-    inset 0 6px 18px rgba(0, 0, 0, 0.6),
-    0 10px 30px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  z-index: 4;
-  pointer-events: none;
-}
-
-.pocket-rail .rail-label {
-  font-size: 0.55rem;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  font-weight: 800;
-  writing-mode: horizontal-tb;
-}
-
-.pocket-rail .ball-chip {
-  width: 30px;
-  height: 30px;
-  font-size: 11px;
-  animation: dropIn 0.35s cubic-bezier(0.3, 1.5, 0.6, 1);
-}
-
-.pocket-rail .rail-empty {
-  font-size: 0.6rem;
-  color: var(--muted);
-  opacity: 0.5;
-  padding: 6px 0;
-  text-align: center;
-  line-height: 1.3;
-}
-
 @keyframes dropIn {
   from {
     transform: translateY(-14px) scale(0.5);
@@ -357,65 +310,78 @@ input:focus {
 }
 
 .group-badge {
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--muted);
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.8);
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
 }
 
 .group-badge.solid {
-  background: rgba(255, 201, 77, 0.18);
-  color: var(--gold);
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffd75e;
 }
 
 .group-badge.stripe {
-  background: rgba(74, 168, 255, 0.18);
-  color: var(--accent-2);
+  background: rgba(0, 0, 0, 0.45);
+  color: #8fd0ff;
 }
 
 .group-badge .swatch-dot {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .group-badge.stripe .swatch-dot {
-  background: linear-gradient(180deg, #fff 32%, currentColor 32% 68%, #fff 68%);
+  background: linear-gradient(180deg, #fff 30%, currentColor 30% 70%, #fff 70%);
 }
 
 .score-pill {
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.95rem;
+  font-weight: 900;
   color: var(--gold);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.5);
 }
+
+/* --- Player panels: green-felt cards with a wood trim, matching the table --- */
 
 .player-panel {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  background: rgba(0, 0, 0, 0.45);
-  border-radius: var(--radius);
-  padding: 0.45rem 0.7rem;
-  backdrop-filter: blur(4px);
-  opacity: 0.62;
+  gap: 0.7rem;
+  border-radius: 18px;
+  padding: 0.6rem 0.9rem;
+  min-width: 232px;
+  background:
+    radial-gradient(ellipse 120% 90% at 30% 0%, rgba(255, 255, 255, 0.1), transparent 70%),
+    linear-gradient(180deg, #2c9d5c, #17703d);
+  box-shadow:
+    inset 0 0 0 3px #c99a63,
+    inset 0 0 0 5px #7d5533,
+    0 6px 18px rgba(0, 0, 0, 0.5);
+  opacity: 0.66;
   transition:
     box-shadow 0.2s ease,
-    opacity 0.2s ease;
-  max-width: 46vw;
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .player-panel.active {
   opacity: 1;
+  transform: translateY(2px);
   box-shadow:
-    inset 0 0 0 2px var(--gold),
-    0 0 18px rgba(224, 184, 75, 0.35);
+    inset 0 0 0 3px var(--gold),
+    inset 0 0 0 5px #7d5533,
+    0 0 24px rgba(255, 201, 77, 0.4),
+    0 6px 18px rgba(0, 0, 0, 0.5);
 }
 
 .player-panel.right {
@@ -423,28 +389,34 @@ input:focus {
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #3a8f5c, #0b3d24 75%);
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.1) 42%, transparent 60%),
+    radial-gradient(circle at 50% 50%, #23262f, #0a0c11);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 0.85rem;
+  font-weight: 900;
+  font-size: 1rem;
   color: var(--paper);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.18),
+    0 3px 8px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
 }
 
 .player-panel.active .avatar {
-  box-shadow: inset 0 0 0 2px var(--gold);
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    0 0 14px rgba(255, 201, 77, 0.5);
 }
 
 .player-info {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.32rem;
   min-width: 0;
 }
 
@@ -453,17 +425,18 @@ input:focus {
 }
 
 .player-name {
-  font-weight: 700;
-  font-size: 0.82rem;
+  font-weight: 800;
+  font-size: 1rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 30vw;
+  max-width: 26vw;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.45);
 }
 
 .ball-row {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   flex-wrap: wrap;
   max-width: 34vw;
 }
@@ -473,37 +446,72 @@ input:focus {
 }
 
 .ball-chip {
-  width: 19px;
-  height: 19px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.05) 45%, transparent 60%),
-    var(--ball-color, #888);
+  background: var(--ball-bg, var(--ball-color, #888));
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7.5px;
-  font-weight: 800;
-  color: #fff;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  font-size: 10px;
+  font-weight: 900;
+  color: #1a1a1a;
   box-shadow:
-    inset 0 -2px 3px rgba(0, 0, 0, 0.35),
-    0 1px 2px rgba(0, 0, 0, 0.4);
+    inset 0 -3px 5px rgba(0, 0, 0, 0.32),
+    inset 0 2px 4px rgba(255, 255, 255, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.45);
   transition:
     opacity 0.3s,
     filter 0.3s;
   flex-shrink: 0;
 }
 
+/* White number disc, like the printed patch on a real ball. */
+.ball-chip span {
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  background: #f6f2e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.22);
+}
+
+/* Glossy catchlight. */
+.ball-chip::after {
+  content: '';
+  position: absolute;
+  top: 13%;
+  left: 20%;
+  width: 34%;
+  height: 26%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  filter: blur(1px);
+  pointer-events: none;
+}
+
 .ball-chip.potted {
-  opacity: 0.25;
-  filter: grayscale(0.7);
+  opacity: 0.22;
+  filter: grayscale(0.8);
 }
 
 .ball-chip.placeholder {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  opacity: 0.55;
+}
+
+.ball-chip.placeholder span {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
   box-shadow: none;
-  opacity: 0.5;
+}
+
+.ball-chip.placeholder::after {
+  display: none;
 }
 
 .icon-btn {
@@ -735,26 +743,24 @@ input:focus {
   box-shadow: 0 0 14px currentColor;
 }
 
+/* The host's power readout sits at the bottom-left, beside the in-canvas power bar. */
 .host-power-wrap {
   position: fixed;
-  left: 50%;
-  bottom: 20px;
-  transform: translateX(-50%);
-  width: min(420px, 70vw);
-  height: 150px;
+  left: 18px;
+  bottom: 18px;
   pointer-events: none;
   z-index: 4;
 }
 
 .host-power-wrap .power-hud {
-  top: auto;
-  bottom: 46px;
-  left: 50%;
-  transform: translateX(-50%) scale(var(--power-scale, 1));
+  position: static;
+  transform: scale(var(--power-scale, 1));
+  transform-origin: bottom left;
+  align-items: flex-start;
 }
 
-.host-power-wrap .power-ring {
-  bottom: 16px;
+.host-power-wrap .power-value {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
 }
 
 .power-hud {
