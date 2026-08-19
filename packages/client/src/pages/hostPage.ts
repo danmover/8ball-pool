@@ -8,7 +8,8 @@ import type {
   SimEvent,
   TrajectoryPreview,
 } from '@8ball/shared';
-import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
+import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds, seatIndex } from '@8ball/shared';
+import { avatarSvg } from '../render/avatar';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
@@ -191,7 +192,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         const info = state.players[seat];
         const active = state.phase !== 'game_over' && state.currentShooter === seat;
         const name = info.connected ? info.name : 'Open seat';
-        const initials = info.connected ? name.slice(0, 2).toUpperCase() : seat.toUpperCase();
+        const avatar = avatarSvg(seatIndex(seat), info.connected ? name : '', info.group === 'stripe');
         const teamTag =
           state.mode === 'teams' && info.team
             ? `<span class="seat-team team-${info.team}">TEAM ${info.team.toUpperCase()}</span>`
@@ -212,7 +213,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
         return `
           <div class="player-panel${active ? ' active' : ''}">
-            <div class="avatar">${initials}</div>
+            <div class="avatar" style="background-image:${avatar}"></div>
             <div class="player-info">
               <div class="player-name">${name}</div>
               <div style="display:flex; gap:0.35rem; align-items:center">${groupBadge(state, seat)}${teamTag}</div>

@@ -273,6 +273,8 @@ interface BallVisual {
   surface: { x: number; y: number };
   /** Recent screen positions, newest last, used to draw the speed trail. */
   trail: { x: number; y: number }[];
+  /** Surface pose this ball is easing toward while at rest; re-rolled on each stop. */
+  restTarget: { x: number; y: number } | null;
   serverPos: { x: number; y: number };
   serverVel: { x: number; y: number };
   prevServerPos: { x: number; y: number };
@@ -307,8 +309,16 @@ export class TableRenderer {
   private ballVisuals = new Map<number, BallVisual>();
   private chuteSprites = new Map<
     number,
-    { ball: Sprite; number: Sprite | null; surface: { x: number; y: number } }
+    {
+      ball: Sprite;
+      number: Sprite | null;
+      surface: { x: number; y: number };
+      pos: { x: number; y: number };
+      slot: { x: number; y: number };
+    }
   >();
+  /** Where each ball was last seen dropping, so its chute flight can start there. */
+  private lastPotPos = new Map<number, { x: number; y: number }>();
   private textureCache = new Map<string, Texture>();
   private feltTextureCache = new Map<FeltTheme, Texture>();
   private woodTextureCache = new Map<string, Texture>();
@@ -570,6 +580,7 @@ export class TableRenderer {
         numberSprite,
         surface: { x: 0, y: 0 },
         trail: [],
+        restTarget: null,
         serverPos: { x: sprite.x, y: sprite.y },
         serverVel: { x: 0, y: 0 },
         prevServerPos: { x: sprite.x, y: sprite.y },
@@ -650,8 +661,8 @@ export class TableRenderer {
         ball.anchor.set(0.5);
         this.chuteBallLayer.addChild(ball);
 
-        // Each ball comes to rest at its own random orientation, so the chute doesn't
-        // look like a column of identically-posed stickers.
+        // Each ball settles at its own random orientation, so the chute doesn't look
+        // like a column of identically-posed stickers.
         const angle = Math.random() * 0.85;
         const dir = Math.random() * Math.PI * 2;
         const surface = { x: Math.cos(dir) * angle, y: Math.sin(dir) * angle };
@@ -663,29 +674,58 @@ export class TableRenderer {
           number.anchor.set(0.5);
           this.chuteBallLayer.addChild(number);
         }
-        entry = { ball, number, surface };
+
+        // Start the flight from the pocket it actually dropped into, when we know it.
+        const from = this.lastPotPos.get(id);
+        const pos = { x: from?.x ?? cx, y: from?.y ?? top };
+        ball.position.set(pos.x, pos.y);
+        entry = { ball, number, surface, pos, slot: { x: cx, y: top + i * step } };
         this.chuteSprites.set(id, entry);
       }
 
-      const y = top + i * step;
+      entry.slot.x = cx;
+      entry.slot.y = top + i * step;
       entry.ball.width = size;
       entry.ball.height = size;
-      entry.ball.position.set(cx, y);
+    });
+  }
 
-      if (entry.number) {
-        const r = size / 2;
+  /**
+   * Eases each chute ball toward its slot. Freshly potted balls fly in from the pocket
+   * they dropped into, arcing rather than sliding straight; already-parked ones just
+   * shuffle smoothly when the stack reorders, so nothing ever snaps into place.
+   */
+  private animateChute(deltaSeconds: number): void {
+    const lerp = 1 - Math.exp(-deltaSeconds * 6.5);
+    for (const entry of this.chuteSprites.values()) {
+      const { ball, slot, number, pos } = entry;
+      pos.x += (slot.x - pos.x) * lerp;
+      pos.y += (slot.y - pos.y) * lerp;
+
+      // Hop height falls off as the ball nears its slot, giving a settling arc. `pos` is
+      // the ground-truth track position; the sprite is drawn lifted off it.
+      const remaining = Math.hypot(slot.x - pos.x, slot.y - pos.y);
+      const arc = Math.min(remaining * 0.35, 46);
+      const drawY = pos.y - arc;
+      const spin = remaining > 1 ? this.elapsed * 5 : 0;
+
+      ball.position.set(pos.x, drawY);
+      ball.rotation = spin;
+
+      if (number) {
+        const r = ball.width / 2;
         const a = Math.hypot(entry.surface.x, entry.surface.y);
         const depth = Math.cos(a);
         const sin = Math.sin(a);
         const ux = a > 1e-6 ? entry.surface.x / a : 0;
         const uy = a > 1e-6 ? entry.surface.y / a : 0;
-        entry.number.visible = depth > 0.05;
-        entry.number.position.set(cx + ux * sin * r, y + uy * sin * r);
-        entry.number.rotation = Math.atan2(uy * sin, ux * sin);
-        entry.number.width = r * 0.86 * depth;
-        entry.number.height = r * 0.86;
+        number.visible = depth > 0.05;
+        number.position.set(pos.x + ux * sin * r, drawY + uy * sin * r);
+        number.rotation = Math.atan2(uy * sin, ux * sin) + spin;
+        number.width = r * 0.86 * depth;
+        number.height = r * 0.86;
       }
-    });
+    }
   }
 
   /** Vertical power gauge down the left of the table, chevroned like an arcade meter. */
@@ -824,6 +864,7 @@ export class TableRenderer {
   }
 
   spawnPotFlash(pos: { x: number; y: number }, ballId: number): void {
+    this.lastPotPos.set(ballId, { ...pos });
     const style = styleForBall(ballId);
     this.particles.confetti(pos.x, pos.y, style.base);
     this.shake(5);
@@ -910,12 +951,20 @@ export class TableRenderer {
 
       const speed = Math.hypot(visual.serverVel.x, visual.serverVel.y);
 
-      // Once a ball is nearly stopped, ease its printed number back to facing the camera.
-      // Real balls settle anywhere, but a table full of blank spheres reads as broken.
+      // Once a ball is nearly stopped, ease its number toward a resting pose. Each stop
+      // picks a fresh random-ish pose (biased toward camera so most numbers stay readable)
+      // so a settled table doesn't look like every ball is stamped identically.
       if (speed < 120) {
-        const settle = 1 - Math.exp(-deltaSeconds * 4);
-        visual.surface.x -= visual.surface.x * settle;
-        visual.surface.y -= visual.surface.y * settle;
+        if (visual.restTarget === null) {
+          const angle = Math.random() * 0.7;
+          const dir = Math.random() * Math.PI * 2;
+          visual.restTarget = { x: Math.cos(dir) * angle, y: Math.sin(dir) * angle };
+        }
+        const settle = 1 - Math.exp(-deltaSeconds * 3.5);
+        visual.surface.x += (visual.restTarget.x - visual.surface.x) * settle;
+        visual.surface.y += (visual.restTarget.y - visual.surface.y) * settle;
+      } else {
+        visual.restTarget = null; // moving again: re-roll the pose next time it stops
       }
 
       this.updateTrail(visual, speed);
@@ -936,6 +985,7 @@ export class TableRenderer {
     }
 
     this.particles.update(deltaSeconds);
+    this.animateChute(deltaSeconds);
     this.drawCue();
     this.drawPowerBar();
   }
