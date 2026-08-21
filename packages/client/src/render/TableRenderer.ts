@@ -1215,9 +1215,9 @@ export class TableRenderer {
    * Built from quads because Pixi strokes are constant-width — the taper is the whole point.
    */
   private drawCueStick(g: Graphics, tipX: number, tipY: number, dirX: number, dirY: number): void {
-    const LEN = BALL_RADIUS * 13;
-    const R_TIP = 3.1;
-    const R_BUTT = 8.4;
+    const LEN = BALL_RADIUS * 27;
+    const R_TIP = 4.6;
+    const R_BUTT = 13.5;
     // Perpendicular to the cue, used to fan each segment out to its half-width.
     const nx = -dirY;
     const ny = dirX;
@@ -1258,18 +1258,25 @@ export class TableRenderer {
       s0.y - ny * s0.r + 7,
     ]).fill({ color: 0x000000, alpha: 0.28 });
 
-    seg(stops[0], stops[1], 0x2f6f9e); // leather tip
-    seg(stops[1], stops[2], 0xf4efe2); // ivory ferrule
-    seg(stops[2], stops[3], 0xd8a463); // maple shaft
-    seg(stops[3], stops[4], 0xe8e4da); // joint collar
-    seg(stops[4], stops[5], 0x1d1f26); // joint ring
-    seg(stops[5], stops[6], 0x5c2f1c); // stained forearm
-    seg(stops[6], stops[7], 0x14161c); // grip wrap
-    seg(stops[7], stops[8], 0xc9a227); // brass butt cap
+    // Palette ties the cue to the rest of the game: the table's tan rail wood for the
+    // shaft and forearm, the UI's gold for the collars, and the accent blue for the tip.
+    seg(stops[0], stops[1], 0x4aa8ff); // chalked leather tip (theme accent blue)
+    seg(stops[1], stops[2], 0xeef2f8); // ferrule (theme paper)
+    seg(stops[2], stops[3], 0xc99a63); // shaft, matching the rail wood
+    seg(stops[3], stops[4], 0xffc94d); // joint collar (theme gold)
+    seg(stops[4], stops[5], 0x12151d); // joint ring (theme near-black)
+    seg(stops[5], stops[6], 0x7d5533); // forearm, matching the darker rail wood
+    seg(stops[6], stops[7], 0x1a1f2b); // grip wrap (theme charcoal)
+    seg(stops[7], stops[8], 0xffc94d); // butt cap (theme gold)
+
+    // Thin gold trim rings where the sections meet, like inlay on a real custom cue.
+    for (const f of [0.58, 0.86, 0.94]) {
+      seg(f - 0.008, f + 0.008, 0xffd76b);
+    }
 
     // Rounded-off butt end.
     const b = at(1);
-    g.circle(b.x, b.y, b.r).fill({ color: 0xc9a227 });
+    g.circle(b.x, b.y, b.r).fill({ color: 0xffc94d });
 
     // Specular highlight riding just off-centre along the length.
     const h0 = at(0.06);
