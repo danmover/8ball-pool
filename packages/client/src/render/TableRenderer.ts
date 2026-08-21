@@ -277,6 +277,8 @@ interface BallVisual {
   restTarget: { x: number; y: number } | null;
   /** Mirrors the server's pocketed flag so tick() can skip pocketed balls entirely. */
   pocketed: boolean;
+  /** Active squash-and-stretch from a recent impact, oriented along the contact normal. */
+  squash: { start: number; angle: number; power: number } | null;
   serverPos: { x: number; y: number };
   serverVel: { x: number; y: number };
   prevServerPos: { x: number; y: number };
@@ -642,6 +644,7 @@ export class TableRenderer {
         trail: [],
         restTarget: null,
         pocketed: false,
+        squash: null,
         serverPos: { x: sprite.x, y: sprite.y },
         serverVel: { x: 0, y: 0 },
         prevServerPos: { x: sprite.x, y: sprite.y },
@@ -906,10 +909,74 @@ export class TableRenderer {
     this.shakeMag = Math.max(this.shakeMag, Math.min(strength, 18));
   }
 
-  spawnSparks(pos: { x: number; y: number }, impulse: number): void {
+  /**
+   * Full cartoon impact: sparks, a comic starburst, a shockwave ring, screen shake, and
+   * squash-and-stretch on both balls along the contact normal.
+   */
+  spawnSparks(pos: { x: number; y: number }, impulse: number, aId?: number, bId?: number): void {
     const strength = Math.min(impulse / 2200, 1.4);
     this.particles.sparks(pos.x, pos.y, strength);
     if (strength > 0.35) this.shake(strength * 6);
+    if (strength > 0.12) this.spawnImpactBurst(pos, strength);
+
+    // Squash both balls along the line joining their centres.
+    if (aId !== undefined && bId !== undefined && strength > 0.1) {
+      const a = this.ballVisuals.get(aId);
+      const b = this.ballVisuals.get(bId);
+      if (a && b) {
+        const angle = Math.atan2(b.sprite.y - a.sprite.y, b.sprite.x - a.sprite.x);
+        const power = Math.min(0.34, 0.12 + strength * 0.2);
+        a.squash = { start: performance.now(), angle, power };
+        b.squash = { start: performance.now(), angle, power };
+      }
+    }
+  }
+
+  /** A jagged comic-book starburst plus an expanding ring at the point of contact. */
+  private spawnImpactBurst(pos: { x: number; y: number }, strength: number): void {
+    const spikes = 9;
+    const outer = BALL_RADIUS * (0.85 + strength * 0.9);
+    const inner = outer * 0.45;
+    const pts: number[] = [];
+    for (let i = 0; i < spikes * 2; i++) {
+      // Jitter each spike so the burst looks hand-drawn rather than machined.
+      const r = (i % 2 === 0 ? outer : inner) * (0.82 + Math.random() * 0.36);
+      const a = (i / (spikes * 2)) * Math.PI * 2;
+      pts.push(Math.cos(a) * r, Math.sin(a) * r);
+    }
+
+    const hot = strength > 0.7;
+    const star = new Graphics();
+    star.poly(pts).fill({ color: hot ? 0xffd25e : 0xfff6d8, alpha: 0.95 });
+    star.poly(pts).stroke({ width: 3, color: hot ? 0xff6a2d : 0xffb43d, alpha: 0.9 });
+    star.position.set(pos.x, pos.y);
+    star.rotation = Math.random() * Math.PI;
+    this.fxLayer.addChild(star);
+
+    const ring = new Graphics();
+    ring.circle(0, 0, BALL_RADIUS * 0.8).stroke({ width: 4, color: 0xffffff, alpha: 0.85 });
+    ring.position.set(pos.x, pos.y);
+    this.fxLayer.addChild(ring);
+
+    const life = 240 + strength * 120;
+    const start = performance.now();
+    const step = (): void => {
+      const t = (performance.now() - start) / life;
+      if (t >= 1) {
+        this.fxLayer.removeChild(star, ring);
+        star.destroy();
+        ring.destroy();
+        return;
+      }
+      // Pop out fast, then shrink away — the classic squashy cartoon impact curve.
+      const pop = t < 0.3 ? 0.35 + (t / 0.3) * 0.85 : 1.2 - (t - 0.3) * 0.5;
+      star.scale.set(pop);
+      star.alpha = 1 - t * t;
+      ring.scale.set(1 + t * (2.2 + strength * 2));
+      ring.alpha = (1 - t) * 0.7;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   spawnCushionDust(pos: { x: number; y: number }, speed: number): void {
@@ -1037,6 +1104,7 @@ export class TableRenderer {
         visual.restTarget = null; // moving again: re-roll the pose next time it stops
       }
 
+      this.applySquash(visual);
       this.updateTrail(visual, speed);
 
       this.shadowLayer
@@ -1058,6 +1126,34 @@ export class TableRenderer {
     this.animateChute(deltaSeconds);
     this.drawCue();
     this.drawPowerBar();
+  }
+
+  /** Cartoon squash-and-stretch: compress along the impact normal, bulge across it. */
+  private applySquash(visual: BallVisual): void {
+    const D = BALL_RADIUS * 2;
+    const s = visual.squash;
+    if (!s) {
+      visual.sprite.rotation = 0;
+      visual.sprite.width = D;
+      visual.sprite.height = D;
+      return;
+    }
+
+    const SQUASH_MS = 190;
+    const t = (performance.now() - s.start) / SQUASH_MS;
+    if (t >= 1) {
+      visual.squash = null;
+      visual.sprite.rotation = 0;
+      visual.sprite.width = D;
+      visual.sprite.height = D;
+      return;
+    }
+
+    // Springy release: hard squash on contact, overshoot slightly, then settle.
+    const amount = s.power * Math.cos(t * Math.PI * 1.5) * (1 - t);
+    visual.sprite.rotation = s.angle;
+    visual.sprite.width = D * (1 - amount);
+    visual.sprite.height = D * (1 + amount * 0.65);
   }
 
   /**
@@ -1215,7 +1311,7 @@ export class TableRenderer {
    * Built from quads because Pixi strokes are constant-width — the taper is the whole point.
    */
   private drawCueStick(g: Graphics, tipX: number, tipY: number, dirX: number, dirY: number): void {
-    const LEN = BALL_RADIUS * 27;
+    const LEN = BALL_RADIUS * 23;
     const R_TIP = 4.6;
     const R_BUTT = 13.5;
     // Perpendicular to the cue, used to fan each segment out to its half-width.
@@ -1260,6 +1356,23 @@ export class TableRenderer {
 
     // Palette ties the cue to the rest of the game: the table's tan rail wood for the
     // shaft and forearm, the UI's gold for the collars, and the accent blue for the tip.
+    // Dark silhouette behind the whole stick, so the cue carries the same crisp cartoon
+    // outline as the balls instead of reading as a different art style laid over them.
+    const OUTLINE = 2.6;
+    const o0 = at(0);
+    const o1 = at(1);
+    g.poly([
+      o0.x + nx * (o0.r + OUTLINE),
+      o0.y + ny * (o0.r + OUTLINE),
+      o1.x + nx * (o1.r + OUTLINE),
+      o1.y + ny * (o1.r + OUTLINE),
+      o1.x - nx * (o1.r + OUTLINE),
+      o1.y - ny * (o1.r + OUTLINE),
+      o0.x - nx * (o0.r + OUTLINE),
+      o0.y - ny * (o0.r + OUTLINE),
+    ]).fill({ color: 0x0c0a14, alpha: 0.78 });
+    g.circle(o1.x, o1.y, o1.r + OUTLINE).fill({ color: 0x0c0a14, alpha: 0.78 });
+
     seg(stops[0], stops[1], 0x4aa8ff); // chalked leather tip (theme accent blue)
     seg(stops[1], stops[2], 0xeef2f8); // ferrule (theme paper)
     seg(stops[2], stops[3], 0xc99a63); // shaft, matching the rail wood

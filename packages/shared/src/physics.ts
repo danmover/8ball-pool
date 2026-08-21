@@ -113,13 +113,34 @@ export interface StepResult {
   settled: boolean;
 }
 
-/** Advances the whole table by `dt` seconds using fixed substeps. */
+/** Never let a ball advance more than this per substep, so overlaps stay shallow. */
+const MAX_TRAVEL_PER_STEP = BALL_RADIUS * 0.2;
+/** Floor on substep size, purely as a runaway guard. */
+const MIN_SUBSTEP_DT = 1 / 20000;
+
+/**
+ * Advances the whole table by `dt` seconds.
+ *
+ * Substeps are sized by the fastest ball rather than fixed: positions are integrated
+ * before collisions are resolved, so a ball moving 4200 u/s under a fixed 1/240 step
+ * would jump 17.5 units — nearly 40% of a ball diameter — and could bury itself deep
+ * inside another before the contact pass ran. Resolving from that overlapped state
+ * skews the contact normal, which is what made hard shots visibly miss the line the
+ * aim guide predicted. Capping travel per substep keeps contacts shallow and accurate.
+ */
 export function stepSimulation(balls: Ball[], dt: number): StepResult {
   const events: SimEvent[] = [];
   let remaining = dt;
 
   while (remaining > 1e-9) {
-    const h = Math.min(SUBSTEP_DT, remaining);
+    let maxSpeed = 0;
+    for (const ball of balls) {
+      if (ball.pocketed) continue;
+      const speed = Vec2.length(ball.vel);
+      if (speed > maxSpeed) maxSpeed = speed;
+    }
+    const travelLimited = maxSpeed > 1e-6 ? MAX_TRAVEL_PER_STEP / maxSpeed : SUBSTEP_DT;
+    const h = Math.max(MIN_SUBSTEP_DT, Math.min(SUBSTEP_DT, travelLimited, remaining));
     remaining -= h;
 
     const active = balls.filter((b) => !b.pocketed);

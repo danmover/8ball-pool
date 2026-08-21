@@ -342,7 +342,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   socket.on('simEvent', (ev: SimEvent) => {
     if (ev.type === 'ballCollision') {
       if (settings.soundEnabled) sfx.playBallClick(settings.soundVolume, ev.impulse / 1500);
-      renderer?.spawnSparks(ev.pos, ev.impulse);
+      renderer?.spawnSparks(ev.pos, ev.impulse, ev.a, ev.b);
     } else if (ev.type === 'cushion') {
       if (settings.soundEnabled) sfx.playCushionThud(settings.soundVolume);
       renderer?.spawnCushionDust(ev.pos, ev.speed);
