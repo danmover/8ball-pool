@@ -275,6 +275,8 @@ interface BallVisual {
   trail: { x: number; y: number }[];
   /** Surface pose this ball is easing toward while at rest; re-rolled on each stop. */
   restTarget: { x: number; y: number } | null;
+  /** Mirrors the server's pocketed flag so tick() can skip pocketed balls entirely. */
+  pocketed: boolean;
   serverPos: { x: number; y: number };
   serverVel: { x: number; y: number };
   prevServerPos: { x: number; y: number };
@@ -386,16 +388,7 @@ export class TableRenderer {
     this.feltSprite.width = TABLE_LENGTH;
     this.feltSprite.height = TABLE_WIDTH;
 
-    // --- Pockets: dark throat with a soft rim shadow bleeding onto the cloth ---
-    const pocketGfx = new Graphics();
-    for (const p of POCKETS) {
-      pocketGfx.circle(p.x, p.y, p.radius * 1.5).fill({ color: 0x000000, alpha: 0.22 });
-      pocketGfx.circle(p.x, p.y, p.radius * 1.2).fill({ color: 0x000000, alpha: 0.3 });
-      pocketGfx.circle(p.x, p.y, p.radius).fill({ color: 0x0a0a0c });
-      pocketGfx.circle(p.x, p.y, p.radius).stroke({ width: 3, color: 0xffffff, alpha: 0.1 });
-      pocketGfx.circle(p.x, p.y + p.radius * 0.18, p.radius * 0.62).fill({ color: 0x000000, alpha: 0.75 });
-    }
-
+    const pocketGfx = this.buildPockets(colors);
     this.buildDiamonds();
     this.buildChute();
 
@@ -420,6 +413,73 @@ export class TableRenderer {
     if (!this.cueGlowLayer.filters) {
       this.cueGlowLayer.filters = [new BlurFilter({ strength: 5, quality: 3 })];
     }
+  }
+
+  /**
+   * Pockets drawn the way a real table reads: a dark throat, with the cushions cut back
+   * into angled jaws around each mouth rather than a plain circle punched in the cloth.
+   * The cushion run is drawn as trapezoids whose playing edge (the nose) is the narrowest
+   * point, so each pocket visibly opens up behind the nose like the real thing.
+   */
+  private buildPockets(colors: { light: string; dark: string; rail: string; railDark: string }): Graphics {
+    const g = new Graphics();
+    const CUSH = 30; // cushion depth from the playing edge outward
+    const JAW = 26; // how far each cushion end angles back toward the pocket
+    const cushion = Number('0x' + colors.dark.slice(1));
+    const cornerGap = 62;
+    const sideGap = 54;
+    const midX = TABLE_LENGTH / 2;
+
+    // Throats first, so the cushions overlap their edges.
+    for (const p of POCKETS) {
+      g.circle(p.x, p.y, p.radius * 1.55).fill({ color: 0x000000, alpha: 0.2 });
+      g.circle(p.x, p.y, p.radius * 1.22).fill({ color: 0x08080a, alpha: 0.85 });
+      g.circle(p.x, p.y, p.radius).fill({ color: 0x050507 });
+      g.circle(p.x, p.y + p.radius * 0.2, p.radius * 0.66).fill({ color: 0x000000, alpha: 0.8 });
+    }
+
+    // A cushion run along one edge: `along` walks the rail, `depth` points out of play.
+    const run = (
+      from: number,
+      to: number,
+      axis: 'h' | 'v',
+      side: -1 | 1 // -1 = top/left cushion, 1 = bottom/right
+    ): void => {
+      const base = axis === 'h' ? (side < 0 ? 0 : TABLE_WIDTH) : side < 0 ? 0 : TABLE_LENGTH;
+      const nose = base;
+      const back = base + CUSH * side;
+      const pt = (along: number, d: number): [number, number] =>
+        axis === 'h' ? [along, d] : [d, along];
+
+      g.poly([
+        ...pt(from, nose),
+        ...pt(to, nose),
+        ...pt(to - JAW, back),
+        ...pt(from + JAW, back),
+      ]).fill({ color: cushion });
+
+      // Lit nose edge and a shadow where the cushion meets the cloth.
+      g.moveTo(...pt(from, nose)).lineTo(...pt(to, nose));
+      g.stroke({ width: 3, color: 0xffffff, alpha: 0.18 });
+      g.moveTo(...pt(from, nose + 3 * side)).lineTo(...pt(to, nose + 3 * side));
+      g.stroke({ width: 5, color: 0x000000, alpha: 0.16 });
+    };
+
+    // Long rails are split either side of the middle pocket; short rails run uninterrupted.
+    run(cornerGap, midX - sideGap, 'h', -1);
+    run(midX + sideGap, TABLE_LENGTH - cornerGap, 'h', -1);
+    run(cornerGap, midX - sideGap, 'h', 1);
+    run(midX + sideGap, TABLE_LENGTH - cornerGap, 'h', 1);
+    run(cornerGap, TABLE_WIDTH - cornerGap, 'v', -1);
+    run(cornerGap, TABLE_WIDTH - cornerGap, 'v', 1);
+
+    // Chrome pocket collars, like the plates on a real table.
+    for (const p of POCKETS) {
+      g.circle(p.x, p.y, p.radius * 1.24).stroke({ width: 4, color: 0xd8dbe2, alpha: 0.22 });
+      g.circle(p.x, p.y, p.radius * 1.24).stroke({ width: 1.5, color: 0x000000, alpha: 0.35 });
+    }
+
+    return g;
   }
 
   /** The ball-return track down the right-hand side that collects potted balls. */
@@ -581,6 +641,7 @@ export class TableRenderer {
         surface: { x: 0, y: 0 },
         trail: [],
         restTarget: null,
+        pocketed: false,
         serverPos: { x: sprite.x, y: sprite.y },
         serverVel: { x: 0, y: 0 },
         prevServerPos: { x: sprite.x, y: sprite.y },
@@ -598,6 +659,7 @@ export class TableRenderer {
     this.updateChute(balls);
     for (const ball of balls) {
       const visual = this.ensureVisual(ball.id);
+      visual.pocketed = ball.pocketed;
       if (ball.pocketed) {
         if (visual.potStart === null && visual.sprite.visible) {
           visual.potStart = performance.now();
@@ -910,20 +972,28 @@ export class TableRenderer {
     this.trailLayer.clear();
 
     for (const [id, visual] of this.ballVisuals) {
-      if (visual.potStart !== null) {
+      // A pocketed ball is skipped outright once its drop animation finishes — otherwise
+      // it keeps falling through to the normal path below and goes on painting a shadow
+      // and a trail at its last table position forever.
+      if (visual.pocketed) {
         visual.trail.length = 0;
-        const t = (performance.now() - visual.potStart) / POT_ANIM_MS;
-        if (t >= 1) {
-          visual.sprite.visible = false;
-          visual.potStart = null;
-        } else {
-          const shrink = 1 - t * 0.85;
-          visual.sprite.alpha = 1 - t;
-          visual.sprite.width = BALL_RADIUS * 2 * shrink;
-          visual.sprite.height = BALL_RADIUS * 2 * shrink;
-          visual.sprite.rotation += deltaSeconds * 10;
-        }
         if (visual.numberSprite) visual.numberSprite.visible = false;
+
+        if (visual.potStart !== null) {
+          const t = (performance.now() - visual.potStart) / POT_ANIM_MS;
+          if (t >= 1) {
+            visual.sprite.visible = false;
+            visual.potStart = null;
+          } else {
+            const shrink = 1 - t * 0.85;
+            visual.sprite.alpha = 1 - t;
+            visual.sprite.width = BALL_RADIUS * 2 * shrink;
+            visual.sprite.height = BALL_RADIUS * 2 * shrink;
+            visual.sprite.rotation += deltaSeconds * 10;
+          }
+        } else {
+          visual.sprite.visible = false;
+        }
         continue;
       }
 
@@ -1134,13 +1204,98 @@ export class TableRenderer {
     glow.moveTo(buttX, buttY).lineTo(tipX, tipY);
     glow.stroke({ width: 14 + p * 10, color: glowColor, alpha: 0.35 + p * 0.35, cap: 'round' });
 
-    g.moveTo(buttX, buttY).lineTo(tipX, tipY);
-    g.stroke({ width: 9, color: 0xd9b98a, alpha: 0.95, cap: 'round' });
-    g.moveTo(buttX, buttY).lineTo(buttX + dirX * BALL_RADIUS * 2.4, buttY + dirY * BALL_RADIUS * 2.4);
-    g.stroke({ width: 9, color: 0x3a2413, alpha: 0.9, cap: 'round' });
+    this.drawCueStick(g, tipX, tipY, dirX, dirY);
+  }
 
-    // Chalk-tip accent.
-    g.circle(tipX, tipY, 5).fill({ color: 0x6d9dc9, alpha: 0.9 });
+  /**
+   * A proper two-piece cue rather than a coloured line: tapered from a slim ferrule up to
+   * the butt, with a leather tip, joint collar, wrap section and butt cap, plus a specular
+   * line along the top edge to give it roundness.
+   *
+   * Built from quads because Pixi strokes are constant-width — the taper is the whole point.
+   */
+  private drawCueStick(g: Graphics, tipX: number, tipY: number, dirX: number, dirY: number): void {
+    const LEN = BALL_RADIUS * 13;
+    const R_TIP = 3.1;
+    const R_BUTT = 8.4;
+    // Perpendicular to the cue, used to fan each segment out to its half-width.
+    const nx = -dirY;
+    const ny = dirX;
+
+    // Distance from the tip, as a fraction of total length, for each construction point.
+    const stops = [0, 0.018, 0.05, 0.5, 0.545, 0.58, 0.86, 0.94, 1];
+    const at = (f: number): { x: number; y: number; r: number } => ({
+      x: tipX - dirX * LEN * f,
+      y: tipY - dirY * LEN * f,
+      r: R_TIP + (R_BUTT - R_TIP) * Math.pow(f, 0.72),
+    });
+    const seg = (f0: number, f1: number, color: number, alpha = 1): void => {
+      const a = at(f0);
+      const b = at(f1);
+      g.poly([
+        a.x + nx * a.r,
+        a.y + ny * a.r,
+        b.x + nx * b.r,
+        b.y + ny * b.r,
+        b.x - nx * b.r,
+        b.y - ny * b.r,
+        a.x - nx * a.r,
+        a.y - ny * a.r,
+      ]).fill({ color, alpha });
+    };
+
+    // Soft drop shadow, offset down-right like the ball shadows.
+    const s0 = at(0);
+    const s1 = at(1);
+    g.poly([
+      s0.x + nx * s0.r + 5,
+      s0.y + ny * s0.r + 7,
+      s1.x + nx * s1.r + 5,
+      s1.y + ny * s1.r + 7,
+      s1.x - nx * s1.r + 5,
+      s1.y - ny * s1.r + 7,
+      s0.x - nx * s0.r + 5,
+      s0.y - ny * s0.r + 7,
+    ]).fill({ color: 0x000000, alpha: 0.28 });
+
+    seg(stops[0], stops[1], 0x2f6f9e); // leather tip
+    seg(stops[1], stops[2], 0xf4efe2); // ivory ferrule
+    seg(stops[2], stops[3], 0xd8a463); // maple shaft
+    seg(stops[3], stops[4], 0xe8e4da); // joint collar
+    seg(stops[4], stops[5], 0x1d1f26); // joint ring
+    seg(stops[5], stops[6], 0x5c2f1c); // stained forearm
+    seg(stops[6], stops[7], 0x14161c); // grip wrap
+    seg(stops[7], stops[8], 0xc9a227); // brass butt cap
+
+    // Rounded-off butt end.
+    const b = at(1);
+    g.circle(b.x, b.y, b.r).fill({ color: 0xc9a227 });
+
+    // Specular highlight riding just off-centre along the length.
+    const h0 = at(0.06);
+    const h1 = at(0.97);
+    g.poly([
+      h0.x + nx * h0.r * 0.42,
+      h0.y + ny * h0.r * 0.42,
+      h1.x + nx * h1.r * 0.42,
+      h1.y + ny * h1.r * 0.42,
+      h1.x + nx * h1.r * 0.05,
+      h1.y + ny * h1.r * 0.05,
+      h0.x + nx * h0.r * 0.05,
+      h0.y + ny * h0.r * 0.05,
+    ]).fill({ color: 0xffffff, alpha: 0.22 });
+
+    // Shaded underside edge to round the silhouette off.
+    g.poly([
+      h0.x - nx * h0.r,
+      h0.y - ny * h0.r,
+      h1.x - nx * h1.r,
+      h1.y - ny * h1.r,
+      h1.x - nx * h1.r * 0.55,
+      h1.y - ny * h1.r * 0.55,
+      h0.x - nx * h0.r * 0.55,
+      h0.y - ny * h0.r * 0.55,
+    ]).fill({ color: 0x000000, alpha: 0.22 });
   }
 
   destroy(): void {
