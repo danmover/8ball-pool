@@ -1,4 +1,5 @@
 import type { FeltTheme, PlayerSettings } from '@8ball/shared';
+import { navigate } from '../router';
 
 const FELT_SWATCHES: Record<FeltTheme, string> = {
   green: '#1f8a4c',
@@ -64,6 +65,13 @@ export function openSettingsPanel(current: PlayerSettings, onChange: (settings: 
         <div><div class="label">Left-handed layout</div></div>
         <div class="toggle" data-key="leftHanded"></div>
       </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Locker</div>
+          <div class="desc">Cues, ball sets, trails, banners and the prize wheel</div>
+        </div>
+        <button id="openLocker" class="mini">Open</button>
+      </div>
       <button id="closeSettings" class="secondary" style="width:100%;margin-top:1rem">Done</button>
     </div>
   `;
@@ -101,6 +109,11 @@ export function openSettingsPanel(current: PlayerSettings, onChange: (settings: 
       render();
       onChange(settings);
     });
+  });
+
+  overlay.querySelector('#openLocker')!.addEventListener('click', () => {
+    overlay.remove();
+    navigate('/profile');
   });
 
   overlay.querySelector('#closeSettings')!.addEventListener('click', () => overlay.remove());

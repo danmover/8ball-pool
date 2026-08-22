@@ -12,6 +12,10 @@ export function renderLanding(root: HTMLElement): void {
         <button id="hostBtn">Host a Table</button>
       </div>
       <div class="card">
+        <h2>Your locker</h2>
+        <button id="profileBtn" class="secondary">🎡 Cosmetics &amp; Prize Wheel</button>
+      </div>
+      <div class="card">
         <h2>Join a table</h2>
         <input id="codeInput" maxlength="4" placeholder="ROOM CODE" autocapitalize="characters" autocomplete="off" />
         <button id="joinBtn" class="secondary">Join</button>
@@ -24,6 +28,8 @@ export function renderLanding(root: HTMLElement): void {
   const codeInput = root.querySelector<HTMLInputElement>('#codeInput')!;
   const joinBtn = root.querySelector<HTMLButtonElement>('#joinBtn')!;
   const joinError = root.querySelector<HTMLElement>('#joinError')!;
+
+  root.querySelector('#profileBtn')!.addEventListener('click', () => navigate('/profile'));
 
   hostBtn.addEventListener('click', () => {
     hostBtn.disabled = true;

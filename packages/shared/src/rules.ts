@@ -34,6 +34,7 @@ export function createInitialGameState(
       group: null,
       team: mode === 'teams' ? teamForIndex(i) : null,
       score: 0,
+      loadout: {},
     };
   });
 

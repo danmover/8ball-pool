@@ -1,4 +1,5 @@
 import type { Vec2 } from './vector.js';
+import type { Loadout } from './cosmetics.js';
 
 export type BallGroup = 'solid' | 'stripe';
 export type BallKind = 'cue' | 'eight' | BallGroup;
@@ -50,6 +51,8 @@ export interface PlayerInfo {
   group: BallGroup | null; // assigned after first legal pot post-break (classic/teams)
   team: Team | null; // teams mode only
   score: number; // rotation mode only
+  /** Cosmetics this player has equipped; rides along in state so the host can render them. */
+  loadout: Loadout;
 }
 
 export type TurnPhase =
@@ -143,10 +146,11 @@ export interface ClientToServerEvents {
     cb: (res: { ok: boolean }) => void
   ) => void;
   joinRoom: (
-    payload: { code: string; name: string; token?: string },
+    payload: { code: string; name: string; token?: string; loadout?: Loadout },
     cb: (res: { ok: true; seat: Seat; token: string } | { ok: false; error: string }) => void
   ) => void;
-  hostClaimSeat: (payload: { seat: Seat }) => void;
+  hostClaimSeat: (payload: { seat: Seat; loadout?: Loadout; name?: string }) => void;
+  setLoadout: (payload: { loadout: Loadout }) => void;
   hostReleaseSeat: (payload: { seat: Seat }) => void;
   hostUpdateLobby: (payload: Partial<LobbySettings>) => void;
   hostStartGame: () => void;

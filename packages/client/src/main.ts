@@ -1,8 +1,10 @@
 import './style.css';
+import './cosmetics.css';
 import { startRouter, setCleanup } from './router';
 import { renderLanding } from './pages/landing';
 import { renderHostPage } from './pages/hostPage';
 import { renderControllerPage } from './pages/controllerPage';
+import { renderProfilePage } from './pages/profilePage';
 
 const app = document.getElementById('app')!;
 
@@ -14,6 +16,8 @@ startRouter(app, (path) => {
     setCleanup(renderHostPage(app, tableMatch[1].toUpperCase()));
   } else if (playMatch) {
     setCleanup(renderControllerPage(app, playMatch[1].toUpperCase()));
+  } else if (path === '/profile') {
+    setCleanup(renderProfilePage(app));
   } else {
     renderLanding(app);
   }

@@ -1,5 +1,14 @@
 import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview } from '@8ball/shared';
-import { CUE_BALL_ID, computeTrajectoryPreview, legalTargetBallIds } from '@8ball/shared';
+import {
+  CUE_BALL_ID,
+  computeTrajectoryPreview,
+  legalTargetBallIds,
+  levelProgress,
+  xpForResult,
+} from '@8ball/shared';
+import { PotCelebrator } from '../render/potCelebration';
+import { equippedLoadout, getProfile, grantXp, recordStats, setDisplayName } from '../profile/profile';
+import { openWheel } from '../profile/wheel';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings, saveSession } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
@@ -25,6 +34,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   let lastAimAngle = 0;
   let turnBannerEl: HTMLElement | null = null;
   let ballRowEl: HTMLElement | null = null;
+  let celebrator: PotCelebrator | null = null;
+  let shotSeat: Seat | null = null;
+  let streak = 0;
+  let rewardsShown = false;
 
   const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
   const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
@@ -46,8 +59,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         <h1>🎱 Join Table</h1>
         <div class="room-code">${code}</div>
         <div class="card">
-          <input id="nameInput" placeholder="Your name" maxlength="20" autocomplete="off" />
+          <input id="nameInput" placeholder="Your name" maxlength="20" autocomplete="off"
+                 value="${getProfile().displayName.replace(/"/g, '&quot;')}" />
           <button id="joinBtn">Join Game</button>
+          <button id="lockerBtn" class="secondary">🎡 Locker &amp; Wheel</button>
           <p id="joinError" class="error">${errorMsg ?? ''}</p>
         </div>
       </div>`;
@@ -55,10 +70,13 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     const joinBtn = root.querySelector<HTMLButtonElement>('#joinBtn')!;
     const joinError = root.querySelector<HTMLElement>('#joinError')!;
 
+    root.querySelector('#lockerBtn')!.addEventListener('click', () => navigate('/profile'));
+
     joinBtn.addEventListener('click', () => {
       sfx.unlockAudio();
       const name = nameInput.value.trim() || 'Player';
-      socket.emit('joinRoom', { code, name }, (res) => {
+      setDisplayName(name);
+      socket.emit('joinRoom', { code, name, loadout: equippedLoadout() }, (res) => {
         if (!res.ok) {
           joinError.textContent = res.error;
           return;
@@ -78,7 +96,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       showNameEntry();
       return;
     }
-    socket.emit('joinRoom', { code, name: '', token: existing.token }, (res) => {
+    socket.emit('joinRoom', { code, name: '', token: existing.token, loadout: equippedLoadout() }, (res) => {
       if (!res.ok) {
         showNameEntry(res.error);
         return;
@@ -159,6 +177,22 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     showGameOverIfNeeded(state);
   }
 
+  /** End of a shot: bank this player's streak and XP if the shot was theirs. */
+  function onShotSettled(): void {
+    const summary = celebrator?.onShotSettled();
+    if (!summary || !shotSeat) return;
+
+    if (shotSeat === seat) {
+      streak = summary.pots > 0 ? streak + 1 : 0;
+      if (summary.pots > 0) {
+        grantXp(summary.xp);
+        recordStats({ pots: summary.pots, bestCombo: summary.bestCombo });
+      }
+    }
+    renderer?.setStreakFire(shotSeat === seat && streak >= 2);
+    shotSeat = null;
+  }
+
   function showGameOverIfNeeded(state: GameState): void {
     if (state.phase !== 'game_over' || root.querySelector('#gameOverOverlay')) return;
     const overlay = document.createElement('div');
@@ -177,13 +211,57 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       <div>
         <h2>${iWon ? 'You win! 🎉' : otherWins}</h2>
         ${state.lastFoulReason ? `<p style="color:var(--muted)">${state.lastFoulReason}</p>` : ''}
+        <div id="rewardSlot"></div>
         <button id="rematchBtn">Rematch</button>
       </div>`;
     root.appendChild(overlay);
+    renderRewards(iWon, overlay.querySelector<HTMLElement>('#rewardSlot')!);
     overlay.querySelector('#rematchBtn')!.addEventListener('click', () => {
       socket.emit('requestRematch');
+      rewardsShown = false;
+      streak = 0;
       overlay.remove();
     });
+  }
+
+  /**
+   * The phone is where a player actually wants to spin, so the full reward summary lives
+   * here as well as on the host screen. XP is banked once per match.
+   */
+  function renderRewards(iWon: boolean, slot: HTMLElement): void {
+    let award = { xp: 0, levelsGained: 0, levelAfter: getProfile().level };
+    if (!rewardsShown) {
+      rewardsShown = true;
+      award = grantXp(xpForResult(iWon));
+      recordStats({ games: 1, wins: iWon ? 1 : 0 });
+      if (award.levelsGained > 0 && settings.soundEnabled) sfx.playLevelUp(settings.soundVolume);
+    }
+
+    const profile = getProfile();
+    const progress = levelProgress(profile.xp);
+    slot.innerHTML = `
+      <div class="reward-panel">
+        <div class="reward-line"><span>${iWon ? 'Win bonus' : 'Match played'}</span><b>+${
+          award.xp
+        } XP</b></div>
+        ${award.levelsGained > 0 ? `<div class="level-up">LEVEL ${award.levelAfter}!</div>` : ''}
+        <div class="xp-bar">
+          <div class="xp-fill" style="width:${Math.round(progress.ratio * 100)}%"></div>
+          <span class="xp-label">Level ${progress.level} · ${progress.into} / ${progress.span} XP</span>
+        </div>
+        <div class="reward-line"><span>Spins available</span><b>${profile.spins}</b></div>
+        ${profile.spins > 0 ? '<button id="spinNow">SPIN THE WHEEL</button>' : ''}
+        <button id="lockerBtn" class="secondary">Open locker</button>
+      </div>`;
+
+    slot.querySelector('#spinNow')?.addEventListener('click', () => {
+      void openWheel(root).then(() => {
+        socket.emit('setLoadout', { loadout: equippedLoadout() });
+        renderer?.setBallSet(equippedLoadout().ballSet);
+        renderRewards(iWon, slot);
+      });
+    });
+    slot.querySelector('#lockerBtn')?.addEventListener('click', () => navigate('/profile'));
   }
 
   async function boot(): Promise<void> {
@@ -219,6 +297,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     renderer.setColorblindPatterns(settings.colorblindPatterns);
     renderer.setFeltTheme(settings.feltTheme);
     renderer.setEffectsIntensity(settings.effectsIntensity);
+    // This preview is the player's own screen, so it shows their own ball set — the shared
+    // table on the host screen is the one that follows the host's set.
+    renderer.setBallSet(equippedLoadout().ballSet);
+    document.body.classList.toggle('fx-low', settings.effectsIntensity === 'low');
+    celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
     spinPad = createSpinPad();
@@ -289,6 +372,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       renderPreview(input.angle);
     },
     shotFired: (input: ShootInput) => {
+      shotSeat = input.seat;
       if (settings.soundEnabled) sfx.playCueStrike(settings.soundVolume, 0.6);
       const cuePos = lastState?.balls.find((b) => b.id === CUE_BALL_ID)?.pos;
       if (cuePos) renderer?.spawnChalkPuff(cuePos, input.angle);
@@ -304,9 +388,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         if (settings.soundEnabled) sfx.playCushionThud(settings.soundVolume);
         renderer?.spawnCushionDust(ev.pos, ev.speed);
       } else if (ev.type === 'pot') {
-        if (settings.soundEnabled) sfx.playPocketSwish(settings.soundVolume);
-        if (settings.hapticsEnabled) navigator.vibrate?.([15, 40, 15]);
-        renderer?.spawnPotFlash(ev.pos, ev.ballId);
+        const combo = celebrator?.onPot(ev.pos, ev.ballId) ?? 0;
+        // Longer buzz the deeper into a combo you get.
+        if (settings.hapticsEnabled) navigator.vibrate?.([15, 40, 15 + combo * 25]);
+      } else if (ev.type === 'shotSettled') {
+        onShotSettled();
       }
     },
     errorMessage: (msg: string) => {

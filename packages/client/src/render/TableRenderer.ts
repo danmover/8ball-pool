@@ -1,8 +1,11 @@
 import { Application, BlurFilter, Container, Graphics, Sprite, Texture } from 'pixi.js';
-import type { Ball, FeltTheme, TrajectoryPreview } from '@8ball/shared';
-import { BALL_RADIUS, POCKETS, TABLE_LENGTH, TABLE_WIDTH } from '@8ball/shared';
+import type { Ball, FeltTheme, Loadout, TrajectoryPreview } from '@8ball/shared';
+import { BALL_RADIUS, DEFAULT_LOADOUT, POCKETS, TABLE_LENGTH, TABLE_WIDTH, resolveLoadout } from '@8ball/shared';
 import { styleForBall } from './ballStyle';
 import { ParticleSystem } from './Particles';
+import { ballSetFor, styleForBallInSet, type BallSet } from './cosmetics/ballSets';
+import { cueSkinFor, type CueSkin } from './cosmetics/cueSkins';
+import { sampleRamp, trailStyleFor, type TrailStyle } from './cosmetics/trailStyles';
 
 const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
@@ -36,13 +39,26 @@ function hexToCss(hex: number): string {
   return `#${hex.toString(16).padStart(6, '0')}`;
 }
 
-function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvasElement {
-  const style = styleForBall(id);
+function generateBallCanvas(
+  id: number,
+  colorblindPatterns: boolean,
+  set: BallSet
+): HTMLCanvasElement {
+  const style = styleForBallInSet(id, set);
   const canvas = document.createElement('canvas');
   canvas.width = TEX_SIZE;
   canvas.height = TEX_SIZE;
   const ctx = canvas.getContext('2d')!;
   const r = TEX_SIZE / 2;
+
+  // A neon set is lit from within: lay a colour halo down before the ball itself.
+  if (set.finish === 'neon') {
+    const halo = ctx.createRadialGradient(r, r, r * 0.6, r, r, r);
+    halo.addColorStop(0, `${hexToCss(style.base)}cc`);
+    halo.addColorStop(1, `${hexToCss(style.base)}00`);
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  }
 
   ctx.save();
   ctx.beginPath();
@@ -50,7 +66,7 @@ function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvas
   ctx.clip();
 
   if (style.stripe) {
-    ctx.fillStyle = '#f6f2e6';
+    ctx.fillStyle = hexToCss(set.backing);
     ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
     ctx.fillStyle = hexToCss(style.base);
     ctx.fillRect(0, r - TEX_SIZE * 0.29, TEX_SIZE, TEX_SIZE * 0.58);
@@ -78,41 +94,59 @@ function generateBallCanvas(id: number, colorblindPatterns: boolean): HTMLCanvas
 
   // Cartoon shading: one soft crescent of shadow low-right rather than a smooth falloff,
   // which keeps the fill flat and saturated the way stylised game art does.
+  const shadeStrength = set.finish === 'matte' ? 0.3 : set.finish === 'metallic' ? 0.55 : 0.42;
   const shade = ctx.createRadialGradient(r * 1.3, r * 1.34, r * 0.35, r * 0.62, r * 0.6, r * 1.42);
-  shade.addColorStop(0, 'rgba(20,10,30,0.42)');
-  shade.addColorStop(0.45, 'rgba(20,10,30,0.14)');
+  shade.addColorStop(0, `rgba(20,10,30,${shadeStrength})`);
+  shade.addColorStop(0.45, `rgba(20,10,30,${shadeStrength * 0.33})`);
   shade.addColorStop(1, 'rgba(20,10,30,0)');
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
+  // A metallic ball gets a hard horizon band instead of a soft sheen — that abrupt
+  // light/dark split across the middle is what reads as polished metal.
+  if (set.finish === 'metallic') {
+    const band = ctx.createLinearGradient(0, r * 0.55, 0, r * 1.5);
+    band.addColorStop(0, 'rgba(255,255,255,0.55)');
+    band.addColorStop(0.48, 'rgba(255,255,255,0.05)');
+    band.addColorStop(0.52, 'rgba(0,0,0,0.28)');
+    band.addColorStop(1, 'rgba(255,255,255,0.22)');
+    ctx.fillStyle = band;
+    ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  }
+
   // Broad soft sheen across the upper-left.
+  const sheen = set.finish === 'matte' ? 0.3 : 0.6;
   const highlight = ctx.createRadialGradient(r * 0.56, r * 0.4, r * 0.05, r * 0.56, r * 0.4, r * 1.05);
-  highlight.addColorStop(0, 'rgba(255,255,255,0.6)');
+  highlight.addColorStop(0, `rgba(255,255,255,${sheen})`);
   highlight.addColorStop(0.35, 'rgba(255,255,255,0.1)');
   highlight.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = highlight;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
   // Bold, well-defined cartoon catchlight — a big soft blob plus a small hard dot.
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  // Matte cloth-finish balls skip the hard dot; they scatter light instead of mirroring it.
+  const catchlight = set.finish === 'matte' ? 0.4 : 0.92;
+  ctx.fillStyle = `rgba(255,255,255,${catchlight})`;
   ctx.beginPath();
   ctx.ellipse(r * 0.6, r * 0.44, r * 0.26, r * 0.19, -0.7, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.99)';
-  ctx.beginPath();
-  ctx.ellipse(r * 1.36, r * 1.3, r * 0.16, r * 0.09, -0.7, 0, Math.PI * 2);
-  ctx.fill();
+  if (set.finish !== 'matte') {
+    ctx.fillStyle = 'rgba(255,255,255,0.99)';
+    ctx.beginPath();
+    ctx.ellipse(r * 1.36, r * 1.3, r * 0.16, r * 0.09, -0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Rim shading, then a crisp dark outline — the outline is what really sells "cartoon".
   const rim = ctx.createRadialGradient(r, r, r * 0.74, r, r, r);
   rim.addColorStop(0, 'rgba(0,0,0,0)');
-  rim.addColorStop(1, 'rgba(0,0,0,0.42)');
+  rim.addColorStop(1, set.finish === 'neon' ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.42)');
   ctx.fillStyle = rim;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
   ctx.restore();
 
-  ctx.strokeStyle = 'rgba(12,10,20,0.75)';
+  ctx.strokeStyle = `${hexToCss(set.outline)}bf`;
   ctx.lineWidth = TEX_SIZE * 0.045;
   ctx.beginPath();
   ctx.arc(r, r, r - ctx.lineWidth / 2 - 1, 0, Math.PI * 2);
@@ -319,6 +353,12 @@ export class TableRenderer {
       surface: { x: number; y: number };
       pos: { x: number; y: number };
       slot: { x: number; y: number };
+      /** Has this ball finished its flight and slammed into the track yet? */
+      landed: boolean;
+      /** Timestamp of the landing impact, driving the squash-and-settle bounce. */
+      landedAt: number;
+      /** Vertical nudge from a neighbour landing, springing back to zero. */
+      jostle: number;
     }
   >();
   /** Where each ball was last seen dropping, so its chute flight can start there. */
@@ -331,6 +371,13 @@ export class TableRenderer {
   private placementGhost: { x: number; y: number } | null = null;
   private colorblind = false;
   private feltTheme: FeltTheme = 'green';
+  /** Table-wide ball art (the host's set) and the current shooter's cue/trail. */
+  private ballSetId: string = DEFAULT_LOADOUT.ballSet;
+  private ballSet: BallSet = ballSetFor(undefined);
+  private cueSkin: CueSkin = cueSkinFor(undefined);
+  private trailStyle: TrailStyle = trailStyleFor(undefined);
+  /** Shooter is on a scoring streak: their trail burns regardless of what's equipped. */
+  private streakFire = false;
   private legalTargets: Set<number> = new Set();
   private shakeMag = 0;
   private elapsed = 0;
@@ -598,11 +645,35 @@ export class TableRenderer {
     }
   }
 
+  /**
+   * The ball set is table furniture, so it comes from one place (the host's loadout) rather
+   * than swapping per shooter — re-skinning all 16 balls mid-frame would be disorienting.
+   */
+  setBallSet(id: string | undefined): void {
+    const next = id ?? DEFAULT_LOADOUT.ballSet;
+    if (next === this.ballSetId) return;
+    this.ballSetId = next;
+    this.ballSet = ballSetFor(next);
+    for (const [ballId, visual] of this.ballVisuals) visual.sprite.texture = this.textureFor(ballId);
+    for (const [ballId, entry] of this.chuteSprites) entry.ball.texture = this.textureFor(ballId);
+  }
+
+  /** Cue and trail follow whoever is shooting, so a turn change visibly changes the kit. */
+  setShooterLoadout(loadout: Loadout | undefined): void {
+    const resolved = resolveLoadout(loadout);
+    this.cueSkin = cueSkinFor(resolved.cue);
+    this.trailStyle = trailStyleFor(resolved.trail);
+  }
+
+  setStreakFire(onFire: boolean): void {
+    this.streakFire = onFire;
+  }
+
   private textureFor(id: number): Texture {
-    const key = `${id}:${this.colorblind}`;
+    const key = `${this.ballSetId}:${id}:${this.colorblind}`;
     let tex = this.textureCache.get(key);
     if (!tex) {
-      tex = Texture.from(generateBallCanvas(id, this.colorblind));
+      tex = Texture.from(generateBallCanvas(id, this.colorblind, this.ballSet));
       this.textureCache.set(key, tex);
     }
     return tex;
@@ -724,6 +795,8 @@ export class TableRenderer {
       if (!entry) {
         const ball = new Sprite(this.textureFor(id));
         ball.anchor.set(0.5);
+        ball.width = size;
+        ball.height = size;
         this.chuteBallLayer.addChild(ball);
 
         // Each ball settles at its own random orientation, so the chute doesn't look
@@ -744,14 +817,24 @@ export class TableRenderer {
         const from = this.lastPotPos.get(id);
         const pos = { x: from?.x ?? cx, y: from?.y ?? top };
         ball.position.set(pos.x, pos.y);
-        entry = { ball, number, surface, pos, slot: { x: cx, y: top + i * step } };
+        entry = {
+          ball,
+          number,
+          surface,
+          pos,
+          slot: { x: cx, y: top + i * step },
+          // A ball that was already potted before this renderer existed (a reconnect, say)
+          // shouldn't replay its landing — only ones we actually saw drop do.
+          landed: !from,
+          landedAt: 0,
+          jostle: 0,
+        };
         this.chuteSprites.set(id, entry);
       }
 
       entry.slot.x = cx;
       entry.slot.y = top + i * step;
-      entry.ball.width = size;
-      entry.ball.height = size;
+      // Size is owned by animateChute (it squashes on landing), so don't reset it here.
     });
   }
 
@@ -762,6 +845,9 @@ export class TableRenderer {
    */
   private animateChute(deltaSeconds: number): void {
     const lerp = 1 - Math.exp(-deltaSeconds * 6.5);
+    const now = performance.now();
+    const SLAM_MS = 420;
+
     for (const entry of this.chuteSprites.values()) {
       const { ball, slot, number, pos } = entry;
       pos.x += (slot.x - pos.x) * lerp;
@@ -771,11 +857,36 @@ export class TableRenderer {
       // the ground-truth track position; the sprite is drawn lifted off it.
       const remaining = Math.hypot(slot.x - pos.x, slot.y - pos.y);
       const arc = Math.min(remaining * 0.35, 46);
-      const drawY = pos.y - arc;
+
+      // Touchdown: the ball slams into the track, squashes, and knocks the stack below it.
+      if (!entry.landed && remaining < 4) {
+        entry.landed = true;
+        entry.landedAt = now;
+        entry.jostle = 0;
+        for (const other of this.chuteSprites.values()) {
+          if (other === entry) continue;
+          if (other.slot.y > entry.slot.y) other.jostle += 5;
+        }
+        this.shake(2.5);
+      }
+
+      // Springy decay on the jostle so neighbours rattle rather than slide.
+      entry.jostle += (0 - entry.jostle) * (1 - Math.exp(-deltaSeconds * 11));
+
+      let squash = 0;
+      if (entry.landed && entry.landedAt) {
+        const t = (now - entry.landedAt) / SLAM_MS;
+        if (t < 1) squash = 0.38 * Math.cos(t * Math.PI * 1.5) * (1 - t);
+        else entry.landedAt = 0;
+      }
+
+      const drawY = pos.y - arc + entry.jostle;
       const spin = remaining > 1 ? this.elapsed * 5 : 0;
 
       ball.position.set(pos.x, drawY);
       ball.rotation = spin;
+      ball.width = CHUTE_BALL * (1 + squash * 0.55);
+      ball.height = CHUTE_BALL * (1 - squash);
 
       if (number) {
         const r = ball.width / 2;
@@ -900,6 +1011,15 @@ export class TableRenderer {
     };
   }
 
+  /** Inverse of screenToTable — used to fly DOM effects (XP toasts) off a table position. */
+  tableToScreen(x: number, y: number): { x: number; y: number } {
+    const rect = this.app.canvas.getBoundingClientRect();
+    return {
+      x: rect.left + this.root.position.x + x * this.scale,
+      y: rect.top + this.root.position.y + y * this.scale,
+    };
+  }
+
   setPlacementGhost(pos: { x: number; y: number } | null): void {
     this.placementGhost = pos;
   }
@@ -992,35 +1112,52 @@ export class TableRenderer {
     this.particles.chalkPuff(pos.x, pos.y, angle + Math.PI);
   }
 
-  spawnPotFlash(pos: { x: number; y: number }, ballId: number): void {
+  /**
+   * The drop moment: a flash and shockwave tinted in the ball's own colour, a wide ripple
+   * running out across the cloth, and confetti. `combo` (0 for the first ball on a shot)
+   * scales the whole thing up so a multi-ball shot escalates visibly.
+   */
+  spawnPotFlash(pos: { x: number; y: number }, ballId: number, combo = 0): void {
     this.lastPotPos.set(ballId, { ...pos });
-    const style = styleForBall(ballId);
+    const style = styleForBallInSet(ballId, this.ballSet);
+    const boost = 1 + Math.min(combo, 4) * 0.28;
+
     this.particles.confetti(pos.x, pos.y, style.base);
-    this.shake(5);
+    this.shake(5 * boost);
 
     const flash = new Graphics();
     flash.circle(0, 0, BALL_RADIUS * 1.6).fill({ color: 0xfff2c0, alpha: 0.9 });
     flash.position.set(pos.x, pos.y);
     this.fxLayer.addChild(flash);
 
+    // Shockwave in the potted ball's colour, so a red ball drops with a red bang.
     const ring = new Graphics();
-    ring.circle(0, 0, BALL_RADIUS).stroke({ width: 5, color: 0xffe27a, alpha: 0.9 });
+    ring.circle(0, 0, BALL_RADIUS).stroke({ width: 5 * boost, color: style.base, alpha: 0.95 });
     ring.position.set(pos.x, pos.y);
     this.fxLayer.addChild(ring);
 
+    // Wide, slower ripple across the cloth — reads as the table itself reacting.
+    const ripple = new Graphics();
+    ripple.circle(0, 0, BALL_RADIUS * 1.4).stroke({ width: 3, color: 0xffffff, alpha: 0.5 });
+    ripple.position.set(pos.x, pos.y);
+    this.fxLayer.addChild(ripple);
+
     const start = performance.now();
     const step = (): void => {
-      const t = (performance.now() - start) / 480;
+      const t = (performance.now() - start) / (480 + combo * 90);
       if (t >= 1) {
-        this.fxLayer.removeChild(flash, ring);
+        this.fxLayer.removeChild(flash, ring, ripple);
         flash.destroy();
         ring.destroy();
+        ripple.destroy();
         return;
       }
-      flash.scale.set(1 + t * 1.4);
+      flash.scale.set(1 + t * 1.4 * boost);
       flash.alpha = (1 - t) * 0.9;
-      ring.scale.set(1 + t * 4);
+      ring.scale.set(1 + t * 4 * boost);
       ring.alpha = 1 - t;
+      ripple.scale.set(1 + Math.pow(t, 0.6) * 7 * boost);
+      ripple.alpha = (1 - t) * 0.45;
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -1173,27 +1310,54 @@ export class TableRenderer {
       visual.trail.push({ x: visual.sprite.x, y: visual.sprite.y });
     }
 
+    // A scoring streak overrides the equipped style — the table should show you're hot.
+    const style = this.streakFire ? trailStyleFor('trail.fire') : this.trailStyle;
+
     // Curve the ramp so slow rolls still show a visible (if cool-toned) tail.
     const raw = Math.min(1, Math.max(0, (speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)));
     const t = Math.pow(raw, 0.65);
-    const maxPoints = Math.round(4 + t * 16);
+    const maxPoints = Math.round((4 + t * 16) * style.length);
     while (visual.trail.length > maxPoints) visual.trail.shift();
     if (visual.trail.length < 2) return;
 
-    const color = t < 0.5 ? lerpColor(0xfff6d8, 0xffb43d, t / 0.5) : lerpColor(0xffb43d, 0xff2d1f, (t - 0.5) / 0.5);
-
+    const color = sampleRamp(style.ramp, t);
     const g = this.trailLayer;
+
     for (let i = 1; i < visual.trail.length; i++) {
       const a = visual.trail[i - 1];
       const b = visual.trail[i];
       const frac = i / visual.trail.length; // 0 at the tail, 1 at the ball
+      // A comet tapers hard toward the tail; fire flares wide and wobbles.
+      const shapeWidth =
+        style.shape === 'comet'
+          ? Math.pow(frac, 1.7)
+          : style.shape === 'fire'
+            ? frac * (0.8 + 0.35 * Math.sin(this.elapsed * 22 + i))
+            : frac;
+      const width = BALL_RADIUS * 1.6 * shapeWidth * (0.45 + t * 0.55) * style.width;
+
+      if (style.glow) {
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+        g.stroke({ width: width * 2.1, color, alpha: frac * 0.18 * style.alpha, cap: 'round' });
+      }
+
       g.moveTo(a.x, a.y).lineTo(b.x, b.y);
       g.stroke({
-        width: BALL_RADIUS * 1.6 * frac * (0.45 + t * 0.55),
+        width,
         color,
-        alpha: frac * (0.25 + t * 0.5),
+        alpha: frac * (0.25 + t * 0.5) * style.alpha,
         cap: 'round',
       });
+
+      // Stardust scatters bright motes along the path rather than a continuous ribbon.
+      if (style.shape === 'sparkle' && i % 2 === 0) {
+        const jx = (Math.random() - 0.5) * BALL_RADIUS * 1.6;
+        const jy = (Math.random() - 0.5) * BALL_RADIUS * 1.6;
+        g.circle(b.x + jx, b.y + jy, 1.6 + frac * 2.4).fill({
+          color: 0xffffff,
+          alpha: frac * 0.7 * style.alpha,
+        });
+      }
     }
   }
 
@@ -1300,6 +1464,24 @@ export class TableRenderer {
     glow.moveTo(buttX, buttY).lineTo(tipX, tipY);
     glow.stroke({ width: 14 + p * 10, color: glowColor, alpha: 0.35 + p * 0.35, cap: 'round' });
 
+    // Cue-skin aura sits under the power glow, so a legendary cue reads as lit even at rest.
+    const skin = this.cueSkin;
+    if (skin.aura) {
+      const tailX = tipX - dirX * BALL_RADIUS * 23;
+      const tailY = tipY - dirY * BALL_RADIUS * 23;
+      glow.moveTo(tailX, tailY).lineTo(tipX, tipY);
+      glow.stroke({ width: 30, color: skin.aura, alpha: 0.22, cap: 'round' });
+    }
+
+    // Inferno's embers drift off the shaft while you're lining up.
+    if (skin.embers && Math.random() < 0.35) {
+      const f = 0.15 + Math.random() * 0.7;
+      this.particles.embers(
+        tipX - dirX * BALL_RADIUS * 23 * f,
+        tipY - dirY * BALL_RADIUS * 23 * f
+      );
+    }
+
     this.drawCueStick(g, tipX, tipY, dirX, dirY);
   }
 
@@ -1373,23 +1555,29 @@ export class TableRenderer {
     ]).fill({ color: 0x0c0a14, alpha: 0.78 });
     g.circle(o1.x, o1.y, o1.r + OUTLINE).fill({ color: 0x0c0a14, alpha: 0.78 });
 
-    seg(stops[0], stops[1], 0x4aa8ff); // chalked leather tip (theme accent blue)
-    seg(stops[1], stops[2], 0xeef2f8); // ferrule (theme paper)
-    seg(stops[2], stops[3], 0xc99a63); // shaft, matching the rail wood
-    seg(stops[3], stops[4], 0xffc94d); // joint collar (theme gold)
-    seg(stops[4], stops[5], 0x12151d); // joint ring (theme near-black)
-    seg(stops[5], stops[6], 0x7d5533); // forearm, matching the darker rail wood
-    seg(stops[6], stops[7], 0x1a1f2b); // grip wrap (theme charcoal)
-    seg(stops[7], stops[8], 0xffc94d); // butt cap (theme gold)
+    // Section colours come from the equipped cue skin; the default is the house cue, whose
+    // palette ties back to the table (rail wood shaft, UI gold collars, accent blue tip).
+    const skin = this.cueSkin;
+    // Aurora-style skins drift their shaft hue while you line the shot up.
+    const shaft = skin.shimmer ? hueShift(skin.shaft, this.elapsed * 0.35) : skin.shaft;
 
-    // Thin gold trim rings where the sections meet, like inlay on a real custom cue.
+    seg(stops[0], stops[1], skin.tip);
+    seg(stops[1], stops[2], skin.ferrule);
+    seg(stops[2], stops[3], shaft);
+    seg(stops[3], stops[4], skin.collar);
+    seg(stops[4], stops[5], skin.ring);
+    seg(stops[5], stops[6], skin.forearm);
+    seg(stops[6], stops[7], skin.wrap);
+    seg(stops[7], stops[8], skin.butt);
+
+    // Thin trim rings where the sections meet, like inlay on a real custom cue.
     for (const f of [0.58, 0.86, 0.94]) {
-      seg(f - 0.008, f + 0.008, 0xffd76b);
+      seg(f - 0.008, f + 0.008, skin.inlay);
     }
 
     // Rounded-off butt end.
     const b = at(1);
-    g.circle(b.x, b.y, b.r).fill({ color: 0xffc94d });
+    g.circle(b.x, b.y, b.r).fill({ color: skin.butt });
 
     // Specular highlight riding just off-centre along the length.
     const h0 = at(0.06);
@@ -1429,6 +1617,34 @@ export function powerToCssColor(power: number): string {
   const hex =
     power < 0.5 ? lerpColor(0x4ac26b, 0xffe27a, power / 0.5) : lerpColor(0xffe27a, 0xff4d4d, (power - 0.5) / 0.5);
   return `#${hex.toString(16).padStart(6, '0')}`;
+}
+
+/** Rotates a colour's hue by `turns` (1 = full circle). Used by shimmering cue skins. */
+function hueShift(color: number, turns: number): number {
+  const r = ((color >> 16) & 0xff) / 255;
+  const g = ((color >> 8) & 0xff) / 255;
+  const b = (color & 0xff) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return color;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h =
+    max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = ((h / 6 + turns) % 1 + 1) % 1;
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t: number): number => {
+    let v = ((t % 1) + 1) % 1;
+    if (v < 1 / 6) v = p + (q - p) * 6 * v;
+    else if (v < 1 / 2) v = q;
+    else if (v < 2 / 3) v = p + (q - p) * (2 / 3 - v) * 6;
+    else v = p;
+    return Math.round(v * 255);
+  };
+  return (channel(h + 1 / 3) << 16) | (channel(h) << 8) | channel(h - 1 / 3);
 }
 
 function lerpColor(a: number, b: number, t: number): number {

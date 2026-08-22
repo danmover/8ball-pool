@@ -30,7 +30,7 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       room.broadcastGameState();
     });
 
-    socket.on('joinRoom', ({ code, name, token }, cb) => {
+    socket.on('joinRoom', ({ code, name, token, loadout }, cb) => {
       const room = rooms.get(code.toUpperCase());
       if (!room) {
         cb({ ok: false, error: 'Room not found' });
@@ -41,6 +41,7 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
         const seat = room.findSeatByToken(token);
         if (seat) {
           room.reconnectSeat(seat, socket.id);
+          if (loadout) room.setLoadout(seat, loadout);
           socket.data.roomCode = room.code;
           socket.data.seat = seat;
           socket.join(room.code);
@@ -61,7 +62,13 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
         return;
       }
 
-      const { token: newToken } = room.claimSeat(seat, name || `Player ${seat === 'p1' ? 1 : 2}`, socket.id, false);
+      const { token: newToken } = room.claimSeat(
+        seat,
+        name || `Player ${seat === 'p1' ? 1 : 2}`,
+        socket.id,
+        false,
+        loadout
+      );
       socket.data.roomCode = room.code;
       socket.data.seat = seat;
       socket.join(room.code);
@@ -70,14 +77,27 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       room.broadcastGameState();
     });
 
-    socket.on('hostClaimSeat', ({ seat }) => {
+    socket.on('hostClaimSeat', ({ seat, loadout, name }) => {
       const room = rooms.get(socket.data.roomCode);
       if (!room || room.hostSocketId !== socket.id || room.connections.has(seat)) return;
       if (!room.seats().includes(seat)) return;
       const taken = [...room.connections.values()].filter((c) => c.socketId === socket.id).length;
-      room.claimSeat(seat, taken === 0 ? 'Host' : `Host ${taken + 1}`, socket.id, true);
+      // The host's profile name, numbered when they're playing more than one seat hotseat.
+      const base = (name ?? '').trim() || 'Host';
+      room.claimSeat(seat, taken === 0 ? base : `${base} ${taken + 1}`, socket.id, true, loadout);
       room.broadcastRoomState();
       room.broadcastGameState();
+    });
+
+    socket.on('setLoadout', ({ loadout }) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room) return;
+      // A host holding several seats updates all of them; a phone owns exactly one.
+      const seats =
+        room.hostSocketId === socket.id
+          ? [...room.connections.values()].filter((c) => c.socketId === socket.id).map((c) => c.seat)
+          : [socket.data.seat as Seat].filter(Boolean);
+      for (const seat of seats) room.setLoadout(seat, loadout);
     });
 
     socket.on('hostReleaseSeat', ({ seat }) => {

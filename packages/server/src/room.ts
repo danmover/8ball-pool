@@ -24,6 +24,7 @@ import type {
   BallInHandPlacement,
   ClientToServerEvents,
   GameState,
+  Loadout,
   LobbySettings,
   PlayerSettings,
   RoomStateDTO,
@@ -41,6 +42,8 @@ export interface Connection {
   socketId: string | null;
   token: string;
   settings: PlayerSettings;
+  /** Cosmetics this player brought with them; mirrored into PlayerInfo for broadcast. */
+  loadout: Loadout;
 }
 
 export class Room {
@@ -119,6 +122,7 @@ export class Room {
       next.players[seat].connected = Boolean(conn && conn.socketId);
       next.players[seat].isHost = prev?.isHost ?? false;
       if (prev?.name) next.players[seat].name = prev.name;
+      next.players[seat].loadout = { ...(conn?.loadout ?? prev?.loadout ?? {}) };
     }
     this.gameState = next;
   }
@@ -139,9 +143,21 @@ export class Room {
     this.io.to(this.code).emit('gameState', this.gameState);
   }
 
-  claimSeat(seat: Seat, name: string, socketId: string, isHost: boolean): { token: string } {
+  claimSeat(
+    seat: Seat,
+    name: string,
+    socketId: string,
+    isHost: boolean,
+    loadout: Loadout = {}
+  ): { token: string } {
     const token = generateToken();
-    this.connections.set(seat, { seat, socketId, token, settings: { ...DEFAULT_SETTINGS } });
+    this.connections.set(seat, {
+      seat,
+      socketId,
+      token,
+      settings: { ...DEFAULT_SETTINGS },
+      loadout: { ...loadout },
+    });
     const existing = this.gameState.players[seat];
     this.gameState.players[seat] = {
       seat,
@@ -151,8 +167,20 @@ export class Room {
       group: existing?.group ?? null,
       team: existing?.team ?? null,
       score: existing?.score ?? 0,
+      loadout: { ...loadout },
     };
     return { token };
+  }
+
+  /** A player changed cosmetics mid-session; push it straight out to the table. */
+  setLoadout(seat: Seat, loadout: Loadout): void {
+    const conn = this.connections.get(seat);
+    if (!conn) return;
+    conn.loadout = { ...loadout };
+    const player = this.gameState.players[seat];
+    if (player) player.loadout = { ...loadout };
+    this.broadcastRoomState();
+    this.broadcastGameState();
   }
 
   releaseSeat(seat: Seat): void {
@@ -272,6 +300,7 @@ export class Room {
       if (!before) continue;
       next.players[seat].connected = before.connected;
       next.players[seat].isHost = before.isHost;
+      next.players[seat].loadout = { ...before.loadout };
     }
     this.gameState = next;
     this.broadcastGameState();

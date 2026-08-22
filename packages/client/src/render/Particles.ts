@@ -111,6 +111,20 @@ export class ParticleSystem {
     }
   }
 
+  /** Slow rising embers, used by the legendary cue skins and the on-fire streak state. */
+  embers(x: number, y: number, color = 0xff8a1f): void {
+    if (this.intensity === 'low') return;
+    const g = new Graphics();
+    g.circle(0, 0, rand(1.5, 3.2)).fill({ color, alpha: 0.9 });
+    this.spawnOne(x, y, g, {
+      vx: rand(-30, 30),
+      vy: rand(-90, -40),
+      gravity: -30,
+      drag: 0.97,
+      life: rand(0.5, 0.95),
+    });
+  }
+
   /** Small chalky puff at the cue tip when a shot fires. */
   chalkPuff(x: number, y: number, angleAwayFrom: number): void {
     const n = this.countFor(6);

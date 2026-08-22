@@ -1,5 +1,6 @@
 import type { GameMode, RoomStateDTO, Seat } from '@8ball/shared';
-import { MAX_SEATS, seatId, seatIndex } from '@8ball/shared';
+import { MAX_SEATS, resolveLoadout, seatId, seatIndex } from '@8ball/shared';
+import { avatarSvg } from '../render/avatar';
 
 const MODES: { id: GameMode; name: string; desc: string }[] = [
   { id: 'classic', name: 'Classic 8-Ball', desc: '1 v 1. Solids vs stripes, pot the 8 last to win.' },
@@ -81,8 +82,19 @@ export function renderLobby(
                 ? `<span class="seat-team team-${teamClass}">TEAM ${teamClass.toUpperCase()}</span>`
                 : '';
               if (p) {
+                // Show the equipped avatar here so a player's cosmetics read before the
+                // game even starts.
+                const avatar = avatarSvg(
+                  seatIndex(seat),
+                  p.name,
+                  false,
+                  resolveLoadout(p.loadout).avatar
+                );
                 return `<div class="seat-card">
-                  <span>${p.isHost ? '🖥️' : '📱'}</span>
+                  <span class="seat-avatar" style="background-image:${avatar}"></span>
+                  <span title="${p.isHost ? 'Playing from the host screen' : 'Playing from a phone'}">${
+                    p.isHost ? '🖥️' : '📱'
+                  }</span>
                   <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${p.name}</span>
                   ${teamBadge}
                 </div>`;

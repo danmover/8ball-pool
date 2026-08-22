@@ -1,5 +1,7 @@
 export * from './vector.js';
 export * from './constants.js';
+export * from './cosmetics.js';
+export * from './progression.js';
 export * from './types.js';
 export * from './physics.js';
 export * from './trajectory.js';
