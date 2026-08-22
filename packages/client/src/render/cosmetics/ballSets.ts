@@ -75,6 +75,46 @@ const SETS: Record<string, BallSet> = {
     finish: 'metallic',
     outline: 0x2a1a4a,
   },
+  'balls.pastel': {
+    colors: [0xf7e08a, 0xa8c8f0, 0xf2a8b8, 0xcbb2ea, 0xf5c49a, 0xa8dfc0, 0xd8a894],
+    cue: 0xfffaf2,
+    eight: 0x4a4458,
+    backing: 0xfffaf2,
+    finish: 'matte',
+    outline: 0x5a5266,
+  },
+  'balls.marble': {
+    colors: [0xe8dfc8, 0xb8c6d8, 0xd8bcbc, 0xcabcd8, 0xe0cbb0, 0xb8d8c4, 0xc4b0a8],
+    cue: 0xf8f4ec,
+    eight: 0x2a2a30,
+    backing: 0xf2ece0,
+    finish: 'glossy',
+    outline: 0x3a3742,
+  },
+  'balls.wood': {
+    colors: [0xd8a860, 0x8a6a48, 0xa8623c, 0x7a5a70, 0xc48a4a, 0x6f8a5c, 0x8a5a3c],
+    cue: 0xe8d8b8,
+    eight: 0x2e2118,
+    backing: 0xe8d8b8,
+    finish: 'matte',
+    outline: 0x33240f,
+  },
+  'balls.glass': {
+    colors: [0xfff0a0, 0x9fe0ff, 0xffa8bc, 0xd8b0ff, 0xffc89a, 0xa8f0cc, 0xffb0a8],
+    cue: 0xf4fcff,
+    eight: 0x1a2030,
+    backing: 0xf4fcff,
+    finish: 'glossy',
+    outline: 0x2a3550,
+  },
+  'balls.gold': {
+    colors: [0xffd76b, 0xd8b04a, 0xffc94d, 0xe8bf5a, 0xffe08a, 0xc9a23a, 0xd8ab42],
+    cue: 0xfff6d8,
+    eight: 0x4a3410,
+    backing: 0xfff6d8,
+    finish: 'metallic',
+    outline: 0x4a3410,
+  },
 };
 
 export function ballSetFor(id: string | undefined): BallSet {

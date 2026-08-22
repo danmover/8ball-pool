@@ -1,0 +1,568 @@
+/* ==========================================================================
+   The arcade shell: home screen, mode tiles, shot clock, emotes and the
+   extra lobby controls.
+   ========================================================================== */
+
+.home {
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* A live table runs behind the menu — pushed back with blur and low opacity so it
+   reads as atmosphere rather than competing with the buttons. */
+.home-backdrop {
+  position: fixed;
+  inset: -4% -4% -4% -4%;
+  z-index: 0;
+  opacity: 0.6;
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+.home-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(10, 12, 17, 0.55), transparent 70%),
+    linear-gradient(180deg, rgba(10, 12, 17, 0.82) 0%, rgba(10, 12, 17, 0.6) 45%, rgba(10, 12, 17, 0.92) 100%);
+}
+
+.home-content {
+  position: relative;
+  z-index: 2;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.6rem 1.2rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.home-title {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.home-logo {
+  font-size: 2.6rem;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+}
+
+.home-title h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  letter-spacing: -0.01em;
+}
+
+.home-title .tagline {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.home-player {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.home-player .player-banner {
+  opacity: 1;
+}
+
+.xp-bar.mini {
+  height: 8px;
+  width: 150px;
+  margin-top: 0.3rem;
+}
+
+.edit-name {
+  width: 34px;
+  height: 34px;
+  font-size: 0.9rem;
+}
+
+/* --- Mode carousel --- */
+
+.mode-rail {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.mode-tile {
+  scroll-snap-align: start;
+  flex: 0 0 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+  padding: 0.75rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(28, 33, 45, 0.92), rgba(14, 17, 24, 0.92));
+  box-shadow:
+    inset 0 0 0 1px var(--stroke),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--paper);
+  font-weight: 600;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.mode-tile:hover:not(.active) {
+  transform: translateY(-3px);
+}
+
+.mode-tile.active {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 0 26px rgba(255, 201, 77, 0.28),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.mode-art {
+  display: block;
+  height: 86px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mode-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+.mode-blurb {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.35;
+  min-height: 2.6em;
+}
+
+.mode-meta {
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+/* Rules stay visible on every tile — hiding them for all but the selected mode left the
+   row a patchwork of different heights and made the unselected cards look empty. */
+.mode-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 500;
+  border-top: 1px solid var(--stroke);
+  padding-top: 0.4rem;
+}
+
+.mode-rules span::before {
+  content: '• ';
+  color: var(--gold);
+}
+
+.mode-tile.active .mode-rules {
+  color: var(--ink);
+}
+
+/* --- Actions --- */
+
+.home-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.play-btn {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: flex-start;
+  padding: 0.9rem 1.2rem;
+  border-radius: 16px;
+}
+
+.play-main {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.play-sub {
+  font-size: 0.74rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.play-btn.secondary-play {
+  background: linear-gradient(180deg, var(--bg-2), #141822);
+  color: var(--paper);
+  box-shadow:
+    inset 0 0 0 1px var(--stroke),
+    0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.join-box {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.join-box input {
+  width: 130px;
+  text-align: center;
+  letter-spacing: 0.22em;
+  font-weight: 800;
+  font-family: 'Baloo 2', sans-serif;
+}
+
+.home-actions + .error {
+  margin-top: -0.6rem;
+}
+
+/* --- Footer tiles --- */
+
+.home-footer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.7rem;
+}
+
+.tile-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(28, 33, 45, 0.9), rgba(14, 17, 24, 0.9));
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.tile-btn.has-reward {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 0 22px rgba(255, 201, 77, 0.3);
+}
+
+.tile-icon {
+  font-size: 1.3rem;
+}
+
+.tile-label {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+}
+
+.tile-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.tile-reward {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+/* --- Shot clock --- */
+
+.top-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shot-clock {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 1.25rem;
+  color: var(--paper);
+  background:
+    conic-gradient(var(--accent) calc(var(--clock, 1) * 360deg), rgba(255, 255, 255, 0.08) 0);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  position: relative;
+  /* The text node paints after ::before, so the number sits over the punched-out middle. */
+  isolation: isolate;
+}
+
+/* The dial is a ring, so punch the middle out and sit the number in the hole. The negative
+   z-index is load-bearing: absolutely-positioned children paint after in-flow text, so
+   without it this disc covers the number it's meant to sit behind. */
+.shot-clock::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--bg-1);
+}
+
+.shot-clock[data-urgent='true'] {
+  background: conic-gradient(var(--danger) calc(var(--clock, 1) * 360deg), rgba(255, 255, 255, 0.08) 0);
+  color: var(--danger);
+  animation: clockPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes clockPulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.09);
+  }
+}
+
+/* --- Killer lives / series --- */
+
+.lives {
+  display: inline-flex;
+  gap: 2px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.life {
+  color: #ff5c5c;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.life.spent {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.series-pill {
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.group-badge.out {
+  background: rgba(255, 92, 92, 0.2);
+  color: var(--danger);
+}
+
+/* --- Emotes --- */
+
+.emote-bar {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.6rem calc(env(safe-area-inset-bottom, 8px) + 0.5rem);
+  background: rgba(10, 12, 17, 0.7);
+  flex: 0 0 auto;
+}
+
+.emote-bar.cooling {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.emote-btn {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  font-size: 1.35rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--bg-2), #141822);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+}
+
+.emote-pop {
+  position: fixed;
+  z-index: 40;
+  /* Explicit emoji stack — without it some platforms fall back to a narrow tofu glyph. */
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: 3.2rem;
+  line-height: 1;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  animation: emoteFloat 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.75));
+}
+
+/* Starts fully opaque: a fade-in wastes the first fifth of a reaction that's only on
+   screen for two seconds. */
+@keyframes emoteFloat {
+  0% {
+    transform: translate(-50%, 0) scale(0.5);
+    opacity: 1;
+  }
+  16% {
+    transform: translate(-50%, -18px) scale(1.3);
+    opacity: 1;
+  }
+  30% {
+    transform: translate(-50%, -26px) scale(1);
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -120px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* --- Extra lobby controls --- */
+
+.lobby-options {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.option-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.option-block h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.mode-card-art {
+  display: block;
+  height: 62px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.35rem;
+}
+
+.seat-card.bot {
+  position: relative;
+}
+
+.bot-tag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent-2);
+  text-transform: uppercase;
+}
+
+.seat-x {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  background: rgba(255, 92, 92, 0.18);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px rgba(255, 92, 92, 0.35);
+}
+
+/* --- Tabbed settings --- */
+
+.settings-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 0.5em 0.4em;
+  font-size: 0.82rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--bg-2), #141822);
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+}
+
+.settings-tab.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, #ffd76b, var(--gold));
+}
+
+.settings-body {
+  min-height: 250px;
+}
+
+.slider {
+  width: 130px;
+  accent-color: var(--gold);
+}
+
+/* Reduce motion stills everything decorative, not just the banner layers. */
+body.reduce-motion .home-backdrop {
+  display: none;
+}
+
+body.reduce-motion .combo-callout,
+body.reduce-motion .emote-pop,
+body.reduce-motion .bn-champion,
+body.reduce-motion .shot-clock {
+  animation: none !important;
+}
+
+@media (max-width: 700px) {
+  .home-content {
+    padding: 1rem 0.9rem 2.5rem;
+  }
+
+  .mode-tile {
+    flex-basis: 190px;
+  }
+
+  .join-box {
+    flex: 1 1 100%;
+  }
+
+  .join-box input {
+    flex: 1;
+    width: auto;
+  }
+}

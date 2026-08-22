@@ -1,7 +1,10 @@
 import './style.css';
 import './cosmetics.css';
+import './home.css';
+// Last, so it re-skins components built against the old dark palette.
+import './theme.css';
 import { startRouter, setCleanup } from './router';
-import { renderLanding } from './pages/landing';
+import { renderHomePage } from './pages/homePage';
 import { renderHostPage } from './pages/hostPage';
 import { renderControllerPage } from './pages/controllerPage';
 import { renderProfilePage } from './pages/profilePage';
@@ -19,6 +22,6 @@ startRouter(app, (path) => {
   } else if (path === '/profile') {
     setCleanup(renderProfilePage(app));
   } else {
-    renderLanding(app);
+    setCleanup(renderHomePage(app));
   }
 });

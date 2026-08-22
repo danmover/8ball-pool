@@ -16,6 +16,8 @@ export interface Profile {
   loadout: Loadout;
   /** Lifetime stats, shown on the profile card. */
   stats: { pots: number; wins: number; games: number; bestCombo: number };
+  /** Today's daily-challenge progress, stamped with the day so it self-resets. */
+  daily?: { date: string; value: number; completed: boolean; claimed: boolean };
 }
 
 export interface ProfileStore {

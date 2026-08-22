@@ -5,7 +5,11 @@ import {
   CUE_BALL_ID,
   DEFAULT_LOBBY,
   DEFAULT_SETTINGS,
+  EMOTES,
+  EMOTE_COOLDOWN_MS,
   MAX_SEATS,
+  clampPlayerCount,
+  modeDescriptor,
   MAX_SHOT_SPEED,
   MIN_SHOT_SPEED,
   TABLE_LENGTH,
@@ -22,6 +26,7 @@ import {
 import type {
   AimInput,
   BallInHandPlacement,
+  BotDifficulty,
   ClientToServerEvents,
   GameState,
   Loadout,
@@ -34,6 +39,7 @@ import type {
   SimEvent,
 } from '@8ball/shared';
 import { generateToken } from './roomCode.js';
+import { BotPlayer } from './bot.js';
 
 type IoServer = Server<ClientToServerEvents, ServerToClientEvents>;
 
@@ -44,6 +50,8 @@ export interface Connection {
   settings: PlayerSettings;
   /** Cosmetics this player brought with them; mirrored into PlayerInfo for broadcast. */
   loadout: Loadout;
+  /** Present when this seat is played by the computer. */
+  bot?: BotPlayer;
 }
 
 export class Room {
@@ -61,6 +69,11 @@ export class Room {
   private preShotLowestBall: number | null = null;
   private shotEvents: SimEvent[] = [];
   private loopHandle: ReturnType<typeof setInterval> | null = null;
+  private shotClockHandle: ReturnType<typeof setTimeout> | null = null;
+  private botHandle: ReturnType<typeof setTimeout> | null = null;
+  /** Spectator sockets in arrival order, so the longest waiting is seated first. */
+  private spectatorQueue: string[] = [];
+  private lastEmoteAt = new Map<Seat, number>();
 
   constructor(code: string, io: IoServer, hostToken: string) {
     this.code = code;
@@ -95,35 +108,62 @@ export class Room {
   updateLobby(patch: Partial<LobbySettings>): void {
     if (this.started) return;
     if (patch.mode) this.lobby.mode = patch.mode;
+    if (patch.shotClockSeconds !== undefined) {
+      this.lobby.shotClockSeconds =
+        patch.shotClockSeconds === null
+          ? null
+          : Math.max(5, Math.min(120, Math.round(patch.shotClockSeconds)));
+    }
+    if (patch.seriesTarget !== undefined) {
+      this.lobby.seriesTarget = Math.max(1, Math.min(9, Math.round(patch.seriesTarget)));
+    }
     if (patch.maxPlayers !== undefined) {
       const clamped = Math.max(2, Math.min(MAX_SEATS, Math.round(patch.maxPlayers)));
       // Never shrink below the seats people have already taken.
       const occupied = [...this.connections.keys()].length;
       this.lobby.maxPlayers = Math.max(clamped, occupied);
     }
+    // Each mode seats a different range — cutthroat tops out at 5, classic is strictly 1v1.
+    this.lobby.maxPlayers = Math.max(
+      clampPlayerCount(this.lobby.mode, this.lobby.maxPlayers),
+      Math.min(MAX_SEATS, this.connections.size)
+    );
     // Teams mode needs an even split to alternate cleanly around the table.
     if (this.lobby.mode === 'teams' && this.lobby.maxPlayers % 2 !== 0) {
       this.lobby.maxPlayers = Math.min(MAX_SEATS, this.lobby.maxPlayers + 1);
     }
+    // A mode with no shot clock support can't carry one.
+    if (!modeDescriptor(this.lobby.mode).supportsShotClock) this.lobby.shotClockSeconds = null;
     this.rebuildGameState();
     this.broadcastRoomState();
     this.broadcastGameState();
   }
 
-  /** Re-creates the game for the current lobby shape, preserving who's connected. */
-  private rebuildGameState(): void {
+  /**
+   * Re-creates the game for the current lobby shape, preserving who's connected. Carries the
+   * series across, since changing the rack shouldn't wipe the running match score.
+   */
+  private rebuildGameState(startingIndex = 0): void {
     const names = this.seats().map(
       (seat, i) => this.gameState.players[seat]?.name ?? `Player ${i + 1}`
     );
-    const next = createInitialGameState(this.lobby.mode, names);
+    const series = this.gameState.series;
+    const next = createInitialGameState(this.lobby.mode, names, startingIndex);
     for (const seat of next.seatOrder) {
       const conn = this.connections.get(seat);
       const prev = this.gameState.players[seat];
-      next.players[seat].connected = Boolean(conn && conn.socketId);
+      next.players[seat].connected = Boolean(conn && (conn.socketId || conn.bot));
       next.players[seat].isHost = prev?.isHost ?? false;
       if (prev?.name) next.players[seat].name = prev.name;
       next.players[seat].loadout = { ...(conn?.loadout ?? prev?.loadout ?? {}) };
+      next.players[seat].isBot = Boolean(conn?.bot);
+      next.players[seat].botDifficulty = conn?.bot?.difficulty ?? null;
     }
+    next.series =
+      this.lobby.seriesTarget > 1
+        ? series ?? { target: this.lobby.seriesTarget, frame: 1, wins: {} }
+        : null;
+    if (next.series) next.series.target = this.lobby.seriesTarget;
     this.gameState = next;
   }
 
@@ -133,6 +173,7 @@ export class Room {
     this.rebuildGameState();
     this.broadcastRoomState();
     this.broadcastGameState();
+    this.onTurnReady();
   }
 
   broadcastRoomState(): void {
@@ -168,8 +209,57 @@ export class Room {
       team: existing?.team ?? null,
       score: existing?.score ?? 0,
       loadout: { ...loadout },
+      lives: existing?.lives ?? null,
+      ownedBalls: existing?.ownedBalls ?? [],
+      eliminated: existing?.eliminated ?? false,
+      isBot: false,
+      botDifficulty: null,
     };
     return { token };
+  }
+
+  /**
+   * Seats a bot. It takes an ordinary `Connection` with a null socket, so seat logic, turn
+   * order, loadouts and the scoreboard need no special-casing anywhere else.
+   */
+  addBot(seat: Seat, difficulty: BotDifficulty): void {
+    if (this.connections.has(seat) || !this.seats().includes(seat)) return;
+    const takenNames = [...this.connections.keys()].map((s) => this.gameState.players[s]?.name ?? '');
+    const bot = new BotPlayer(difficulty, takenNames);
+    this.connections.set(seat, {
+      seat,
+      socketId: null,
+      token: generateToken(),
+      settings: { ...DEFAULT_SETTINGS },
+      loadout: bot.loadout,
+      bot,
+    });
+    const existing = this.gameState.players[seat];
+    this.gameState.players[seat] = {
+      seat,
+      name: bot.name,
+      connected: true,
+      isHost: false,
+      group: existing?.group ?? null,
+      team: existing?.team ?? null,
+      score: 0,
+      loadout: bot.loadout,
+      lives: existing?.lives ?? null,
+      ownedBalls: existing?.ownedBalls ?? [],
+      eliminated: false,
+      isBot: true,
+      botDifficulty: difficulty,
+    };
+    this.broadcastRoomState();
+    this.broadcastGameState();
+    this.onTurnReady();
+  }
+
+  removeBot(seat: Seat): void {
+    if (!this.connections.get(seat)?.bot) return;
+    this.releaseSeat(seat);
+    this.broadcastRoomState();
+    this.broadcastGameState();
   }
 
   /** A player changed cosmetics mid-session; push it straight out to the table. */
@@ -217,7 +307,9 @@ export class Room {
       }
     }
     this.spectatorSocketIds.delete(socketId);
+    this.spectatorQueue = this.spectatorQueue.filter((id) => id !== socketId);
     this.broadcastRoomState();
+    this.offerSeatToSpectator();
   }
 
   openSeat(): Seat | null {
@@ -245,6 +337,8 @@ export class Room {
     const cue = this.gameState.balls.find((b) => b.id === CUE_BALL_ID);
     if (!cue || cue.pocketed) return;
 
+    this.clearShotClock();
+    this.clearBotTimer();
     this.preShotGroupCleared = isGroupCleared(this.gameState, input.seat);
     this.preShotLowestBall = lowestBallId(this.gameState);
     const power = Math.max(0, Math.min(1, input.power));
@@ -283,11 +377,17 @@ export class Room {
     cue.pocketed = false;
     this.gameState.phase = 'aiming';
     this.broadcastGameState();
+    this.onTurnReady();
   }
 
   requestRematch(): void {
     if (this.gameState.phase !== 'game_over') return;
     const prev = this.gameState;
+    // A finished series has to be reset explicitly rather than rolling into frame 9 of 5.
+    const seriesOver =
+      prev.series !== null &&
+      Object.values(prev.series.wins).some((w) => w >= prev.series!.target);
+
     // Rotate who breaks so the same seat doesn't always open.
     const nextBreakIndex = (prev.seatOrder.indexOf(prev.currentShooter) + 1) % prev.seatOrder.length;
     const next = createInitialGameState(
@@ -301,9 +401,136 @@ export class Room {
       next.players[seat].connected = before.connected;
       next.players[seat].isHost = before.isHost;
       next.players[seat].loadout = { ...before.loadout };
+      next.players[seat].isBot = before.isBot;
+      next.players[seat].botDifficulty = before.botDifficulty;
     }
+
+    if (prev.series && !seriesOver) {
+      next.series = { ...prev.series, frame: prev.series.frame + 1, wins: { ...prev.series.wins } };
+    } else if (this.lobby.seriesTarget > 1) {
+      next.series = { target: this.lobby.seriesTarget, frame: 1, wins: {} };
+    }
+
     this.gameState = next;
     this.broadcastGameState();
+    this.onTurnReady();
+  }
+
+  // ---- Shot clock ----
+
+  /**
+   * Called whenever the table becomes someone's to shoot at. Starts (or restarts) the clock
+   * and, if that someone is a bot, schedules its shot. One entry point means the two can
+   * never disagree about whose turn it is.
+   */
+  private onTurnReady(): void {
+    this.clearShotClock();
+    this.clearBotTimer();
+    if (!this.started) return;
+
+    const { phase, currentShooter } = this.gameState;
+    if (phase !== 'aiming' && phase !== 'break' && phase !== 'ball_in_hand') return;
+
+    const seconds = this.lobby.shotClockSeconds;
+    if (seconds && modeDescriptor(this.gameState.mode).supportsShotClock) {
+      this.gameState.shotClock = { endsAt: Date.now() + seconds * 1000, seconds };
+      this.shotClockHandle = setTimeout(() => this.onShotClockExpired(), seconds * 1000);
+      this.broadcastGameState();
+    } else {
+      this.gameState.shotClock = null;
+    }
+
+    const bot = this.connections.get(currentShooter)?.bot;
+    if (bot) this.scheduleBotTurn(bot, currentShooter);
+  }
+
+  private onShotClockExpired(): void {
+    this.shotClockHandle = null;
+    const { phase } = this.gameState;
+    if (phase !== 'aiming' && phase !== 'break' && phase !== 'ball_in_hand') return;
+
+    // Time-out is a foul: resolve it as a shot that never touched anything.
+    this.gameState.shotClock = null;
+    resolveShot(
+      this.gameState,
+      {
+        potted: [],
+        cueBallPocketed: false,
+        eightBallPocketed: false,
+        firstBallContacted: null,
+        anyCushionAfterContact: false,
+      },
+      isGroupCleared(this.gameState, this.gameState.currentShooter),
+      lowestBallId(this.gameState),
+      true
+    );
+    this.io.to(this.code).emit('simEvent', { type: 'shotSettled' });
+    this.broadcastGameState();
+    this.onTurnReady();
+  }
+
+  private clearShotClock(): void {
+    if (this.shotClockHandle) {
+      clearTimeout(this.shotClockHandle);
+      this.shotClockHandle = null;
+    }
+    this.gameState.shotClock = null;
+  }
+
+  // ---- Bots ----
+
+  private scheduleBotTurn(bot: BotPlayer, seat: Seat): void {
+    const delay = bot.thinkingTimeMs();
+    this.botHandle = setTimeout(() => {
+      this.botHandle = null;
+      if (this.gameState.currentShooter !== seat) return;
+
+      if (this.gameState.phase === 'ball_in_hand') {
+        const pos = bot.chooseCueBallPlacement(this.gameState);
+        this.handlePlaceCueBall({ seat, pos });
+        return; // handlePlaceCueBall re-enters onTurnReady, which schedules the shot
+      }
+
+      const shot = bot.chooseShot(this.gameState, seat);
+      // Stream the aim first so the table shows the bot lining up, exactly like a human.
+      this.handleAim({ seat, angle: shot.angle, spin: { x: 0, y: 0 } });
+      setTimeout(() => this.handleShoot({ seat, ...shot, spin: { x: 0, y: 0 } }), 450);
+    }, delay);
+  }
+
+  private clearBotTimer(): void {
+    if (this.botHandle) {
+      clearTimeout(this.botHandle);
+      this.botHandle = null;
+    }
+  }
+
+  // ---- Emotes ----
+
+  /** Relays a reaction to the room, rate-limited so it can't be spammed over the table. */
+  handleEmote(seat: Seat, emote: string): void {
+    if (!(EMOTES as readonly string[]).includes(emote)) return;
+    const now = Date.now();
+    if (now - (this.lastEmoteAt.get(seat) ?? 0) < EMOTE_COOLDOWN_MS) return;
+    this.lastEmoteAt.set(seat, now);
+    this.io.to(this.code).emit('emote', { seat, emote });
+  }
+
+  // ---- Spectators ----
+
+  addSpectator(socketId: string): void {
+    this.spectatorSocketIds.add(socketId);
+    if (!this.spectatorQueue.includes(socketId)) this.spectatorQueue.push(socketId);
+    this.broadcastRoomState();
+  }
+
+  /** Offers a freed seat to the spectator who has been waiting longest. */
+  private offerSeatToSpectator(): void {
+    const seat = this.openSeat();
+    if (!seat) return;
+    const next = this.spectatorQueue.find((id) => this.spectatorSocketIds.has(id));
+    if (!next) return;
+    this.io.to(next).emit('seatAvailable', { seat });
   }
 
   private startSimLoop(): void {
@@ -319,9 +546,18 @@ export class Room {
         this.stopSimLoop();
         const outcome = summarizeShot(this.shotEvents);
         resolveShot(this.gameState, outcome, this.preShotGroupCleared, this.preShotLowestBall);
+        if (this.gameState.phase === 'game_over') this.recordFrameResult();
         this.broadcastGameState();
+        this.onTurnReady();
       }
     }, 1000 / BROADCAST_HZ);
+  }
+
+  /** Banks a frame win into the running series, if there is one. */
+  private recordFrameResult(): void {
+    const { series, winner } = this.gameState;
+    if (!series || !winner) return;
+    series.wins[winner] = (series.wins[winner] ?? 0) + 1;
   }
 
   private stopSimLoop(): void {
@@ -333,5 +569,7 @@ export class Room {
 
   destroy(): void {
     this.stopSimLoop();
+    this.clearShotClock();
+    this.clearBotTimer();
   }
 }

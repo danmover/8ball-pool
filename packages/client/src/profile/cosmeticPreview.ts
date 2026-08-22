@@ -4,6 +4,7 @@ import { bannerClassFor, bannerEffectClassFor, bannerEffectHtml } from '../rende
 import { ballSetFor, styleForBallInSet } from '../render/cosmetics/ballSets';
 import { cueSkinFor } from '../render/cosmetics/cueSkins';
 import { trailStyleFor } from '../render/cosmetics/trailStyles';
+import { hitEffectFor } from '../render/cosmetics/hitEffects';
 
 /**
  * Small inline previews for the item grid and the wheel reveal, drawn from the same data the
@@ -115,10 +116,74 @@ function bannerPreview(item: CosmeticItem, size: number): string {
   </div>`;
 }
 
+/** Two balls at the moment of contact, with the effect's own burst between them. */
+function hitPreview(id: string, size: number): string {
+  const fx = hitEffectFor(id);
+  const [core, mid, outer] = fx.colors;
+  const cx = 50;
+  const cy = 50;
+  const r = fx.scale * 26;
+
+  let burst = '';
+  if (fx.shape === 'ring') {
+    burst = `<circle cx="${cx}" cy="${cy}" r="${r * 0.75}" fill="none" stroke="${css(mid)}" stroke-width="4"/>
+             <circle cx="${cx}" cy="${cy}" r="${r * 0.4}" fill="${css(core)}"/>`;
+  } else if (fx.shape === 'confetti') {
+    burst = Array.from({ length: 10 }, (_, i) => {
+      const a = (i / 10) * Math.PI * 2;
+      const d = r * 0.75;
+      return `<rect x="${cx + Math.cos(a) * d - 3}" y="${cy + Math.sin(a) * d - 1.5}" width="6" height="3"
+                    fill="${css([core, mid, outer][i % 3])}" transform="rotate(${(a * 180) / Math.PI} ${
+                      cx + Math.cos(a) * d
+                    } ${cy + Math.sin(a) * d})"/>`;
+    }).join('');
+  } else if (fx.shape === 'bolt') {
+    burst = Array.from({ length: 5 }, (_, i) => {
+      const a = (i / 5) * Math.PI * 2;
+      const p = [1, 2, 3].map((s) => {
+        const rr = (r * 1.3 * s) / 3;
+        const jitter = ((i * 37) % 10) / 12 - 0.4;
+        return `${cx + Math.cos(a + jitter * (s / 3)) * rr},${cy + Math.sin(a + jitter * (s / 3)) * rr}`;
+      });
+      return `<polyline points="${cx},${cy} ${p.join(' ')}" fill="none" stroke="${css(
+        i % 2 ? core : mid
+      )}" stroke-width="2.4" stroke-linejoin="round"/>`;
+    }).join('');
+  } else if (fx.shape === 'puff' || fx.shape === 'splat') {
+    burst = Array.from({ length: 7 }, (_, i) => {
+      const a = (i / 7) * Math.PI * 2;
+      const d = r * (fx.shape === 'puff' ? 0.45 : 0.75);
+      return `<circle cx="${cx + Math.cos(a) * d}" cy="${cy + Math.sin(a) * d}" r="${
+        r * (fx.shape === 'puff' ? 0.3 : 0.16)
+      }" fill="${css(i % 2 ? core : mid)}" opacity="${fx.shape === 'puff' ? 0.6 : 0.9}"/>`;
+    }).join(`<circle cx="${cx}" cy="${cy}" r="${r * 0.4}" fill="${css(core)}"/>`);
+  } else {
+    // Star-like shapes: pow, spark, shard, nova.
+    const count = fx.shape === 'nova' ? 14 : fx.shape === 'shard' ? 7 : 9;
+    const innerRatio = fx.shape === 'nova' ? 0.24 : 0.42;
+    const pts = Array.from({ length: count * 2 }, (_, i) => {
+      const rr = i % 2 === 0 ? r : r * innerRatio;
+      const a = (i / (count * 2)) * Math.PI * 2;
+      return `${cx + Math.cos(a) * rr},${cy + Math.sin(a) * rr}`;
+    }).join(' ');
+    burst =
+      (fx.outlined ? `<polygon points="${pts}" fill="none" stroke="#140f22" stroke-width="7"/>` : '') +
+      `<polygon points="${pts}" fill="${css(core)}" stroke="${css(mid)}" stroke-width="2.5"/>`;
+  }
+
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">
+    <circle cx="24" cy="62" r="13" fill="#f6f2e6" stroke="rgba(10,10,18,0.65)" stroke-width="3"/>
+    <circle cx="76" cy="40" r="13" fill="#f03a2e" stroke="rgba(10,10,18,0.65)" stroke-width="3"/>
+    ${burst}
+  </svg>`;
+}
+
 export function cosmeticPreviewHtml(item: CosmeticItem, size = 88): string {
   switch (item.slot) {
     case 'cue':
       return cuePreview(item.id, size);
+    case 'hitEffect':
+      return hitPreview(item.id, size);
     case 'ballSet':
       return ballPreview(item.id, size);
     case 'trail':

@@ -13,6 +13,11 @@ const BANNER_CLASSES: Record<string, string> = {
   'banner.carbon': 'bn-carbon',
   'banner.gold': 'bn-gold',
   'banner.champion': 'bn-champion',
+  'banner.chalkboard': 'bn-chalkboard',
+  'banner.copper': 'bn-copper',
+  'banner.marble': 'bn-marble',
+  'banner.circuit': 'bn-circuit',
+  'banner.royal': 'bn-royal',
 };
 
 const EFFECT_CLASSES: Record<string, string> = {
@@ -23,6 +28,10 @@ const EFFECT_CLASSES: Record<string, string> = {
   'fx.electric': 'fx-electric',
   'fx.confetti': 'fx-confetti',
   'fx.galaxy': 'fx-galaxy',
+  'fx.bubbles': 'fx-bubbles',
+  'fx.snow': 'fx-snow',
+  'fx.scanline': 'fx-scanline',
+  'fx.aurora': 'fx-aurora',
 };
 
 /** Effects that need extra child nodes (flame tongues, stars) rather than pure CSS layers. */
@@ -31,6 +40,8 @@ const EFFECT_PARTICLES: Record<string, number> = {
   'fx-flames': 7,
   'fx-confetti': 8,
   'fx-galaxy': 10,
+  'fx-bubbles': 7,
+  'fx-snow': 9,
 };
 
 export function bannerClassFor(id: string | undefined): string {

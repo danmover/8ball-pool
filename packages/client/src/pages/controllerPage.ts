@@ -1,6 +1,8 @@
 import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview } from '@8ball/shared';
 import {
   CUE_BALL_ID,
+  EMOTES,
+  EMOTE_COOLDOWN_MS,
   computeTrajectoryPreview,
   legalTargetBallIds,
   levelProgress,
@@ -17,6 +19,9 @@ import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
 import { openSettingsPanel } from '../settings/settingsPanel';
+import { applyRenderSettings } from '../settings/applySettings';
+import { icon } from '../render/icons';
+import { confirmLeave, showToast } from '../render/dialogs';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
 
@@ -279,8 +284,17 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
           <div class="hint" id="hint">Drag anywhere &amp; pull back like a slingshot, release to shoot</div>
           <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
         </div>
+        <!-- Outside .control-area on purpose: that whole region is the aim drag surface,
+             and its pointer capture swallows taps on anything nested inside it. -->
+        <div class="emote-bar" id="emoteBar">
+          ${EMOTES.map((e) => `<button class="emote-btn" data-emote="${e}">${e}</button>`).join('')}
+        </div>
       </div>
-      <button class="icon-btn" id="settingsBtn" style="position:fixed; top:10px; right:10px; z-index:5;">⚙</button>
+      <div class="toast-stack" id="toastStack"></div>
+      <div class="ctrl-buttons">
+        <button class="icon-btn" id="settingsBtn" title="Settings">${icon('settings')}</button>
+        <button class="icon-btn danger" id="leaveBtn" title="Leave table">${icon('leave')}</button>
+      </div>
     `;
 
     const miniTableEl = root.querySelector<HTMLElement>('#miniTable')!;
@@ -294,13 +308,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
 
     renderer = await TableRenderer.create(miniTableEl);
     renderer.setChromeless(true); // no chute/power bar on the small phone preview
-    renderer.setColorblindPatterns(settings.colorblindPatterns);
-    renderer.setFeltTheme(settings.feltTheme);
-    renderer.setEffectsIntensity(settings.effectsIntensity);
+    applyRenderSettings(renderer, settings);
     // This preview is the player's own screen, so it shows their own ball set — the shared
     // table on the host screen is the one that follows the host's set.
     renderer.setBallSet(equippedLoadout().ballSet);
-    document.body.classList.toggle('fx-low', settings.effectsIntensity === 'low');
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
@@ -308,14 +319,19 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     Object.assign(spinPad.el.style, { position: 'absolute', bottom: '54px', right: '18px' });
     controlArea.appendChild(spinPad.el);
 
+    root.querySelector('#leaveBtn')!.addEventListener('click', () => {
+      confirmLeave('Leave this table?', 'Your seat opens up for whoever is waiting.', () => {
+        socket.disconnect();
+        navigate('/');
+      });
+    });
+
     root.querySelector('#settingsBtn')!.addEventListener('click', () => {
       openSettingsPanel(settings, (s) => {
         Object.assign(settings, s);
         saveSettings(settings);
         socket.emit('updateSettings', s);
-        renderer?.setColorblindPatterns(settings.colorblindPatterns);
-        renderer?.setFeltTheme(settings.feltTheme);
-        renderer?.setEffectsIntensity(settings.effectsIntensity);
+        applyRenderSettings(renderer, settings);
         renderPreview(lastAimAngle);
       });
     });
@@ -357,6 +373,20 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       },
     });
 
+    // Reactions go to the host table. The server rate-limits them, and the button dims
+    // locally for the same window so the cooldown is visible rather than silent.
+    root.querySelectorAll<HTMLButtonElement>('.emote-btn').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        socket.emit('sendEmote', { emote: btn.dataset.emote! });
+        if (settings.hapticsEnabled) navigator.vibrate?.(10);
+        const bar = root.querySelector<HTMLElement>('#emoteBar');
+        bar?.classList.add('cooling');
+        setTimeout(() => bar?.classList.remove('cooling'), EMOTE_COOLDOWN_MS);
+      });
+    });
+
     miniTableEl.addEventListener('pointerdown', onPlacementPointer);
     miniTableEl.addEventListener('pointermove', onPlacementPointer);
     miniTableEl.addEventListener('pointerup', onPlacementRelease);
@@ -396,12 +426,8 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       }
     },
     errorMessage: (msg: string) => {
-      const toast = document.createElement('div');
-      toast.className = 'turn-banner';
-      toast.style.background = 'rgba(180,40,40,0.85)';
-      toast.textContent = msg;
-      root.appendChild(toast);
-      setTimeout(() => toast.remove(), 2200);
+      const stack = root.querySelector<HTMLElement>('#toastStack');
+      if (stack) showToast(stack, msg, 'foul');
     },
   };
 

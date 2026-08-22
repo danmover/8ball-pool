@@ -54,11 +54,12 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
 
       const seat = room.openSeat();
       if (!seat) {
-        room.spectatorSocketIds.add(socket.id);
+        // Spectators get the live game state and are queued for the next seat that frees up.
         socket.data.roomCode = room.code;
         socket.join(room.code);
-        cb({ ok: false, error: 'Both seats are taken — you joined as a spectator' });
-        room.broadcastRoomState();
+        room.addSpectator(socket.id);
+        cb({ ok: false, error: 'Table is full — watching as a spectator' });
+        room.broadcastGameState();
         return;
       }
 
@@ -142,6 +143,25 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
 
     socket.on('requestRematch', () => {
       rooms.get(socket.data.roomCode)?.requestRematch();
+    });
+
+    socket.on('hostAddBot', ({ seat, difficulty }) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.addBot(seat, difficulty);
+    });
+
+    socket.on('hostRemoveBot', ({ seat }) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.removeBot(seat);
+    });
+
+    socket.on('sendEmote', ({ emote }) => {
+      const room = rooms.get(socket.data.roomCode);
+      const seat = socket.data.seat as Seat | undefined;
+      if (!room || !seat) return;
+      room.handleEmote(seat, emote);
     });
 
     socket.on('disconnect', () => {

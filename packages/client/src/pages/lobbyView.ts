@@ -1,26 +1,27 @@
-import type { GameMode, RoomStateDTO, Seat } from '@8ball/shared';
-import { MAX_SEATS, resolveLoadout, seatId, seatIndex } from '@8ball/shared';
+import type { BotDifficulty, GameMode, RoomStateDTO, Seat } from '@8ball/shared';
+import { MAX_SEATS, allModes, modeDescriptor, resolveLoadout, seatId, seatIndex } from '@8ball/shared';
 import { avatarSvg } from '../render/avatar';
+import { modeArtSvg } from '../render/modeArt';
+import { icon } from '../render/icons';
 
-const MODES: { id: GameMode; name: string; desc: string }[] = [
-  { id: 'classic', name: 'Classic 8-Ball', desc: '1 v 1. Solids vs stripes, pot the 8 last to win.' },
-  {
-    id: 'teams',
-    name: 'Teams',
-    desc: 'Even split into two teams. Seats alternate around the table; your team shares a group.',
-  },
-  {
-    id: 'rotation',
-    name: 'Rotation',
-    desc: 'Free-for-all. Hit the lowest ball first; every ball you pot scores its number. Highest wins.',
-  },
-];
+const SHOT_CLOCK_STEPS: (number | null)[] = [null, 60, 45, 30, 20, 15, 10];
+
+const BOT_LABELS: Record<BotDifficulty, string> = {
+  rookie: 'Rookie',
+  club: 'Club',
+  shark: 'Shark',
+  legend: 'Legend',
+};
 
 export interface LobbyCallbacks {
   onModeChange: (mode: GameMode) => void;
   onSizeChange: (size: number) => void;
   onClaimSeat: (seat: Seat) => void;
   onReleaseSeat: (seat: Seat) => void;
+  onAddBot: (seat: Seat, difficulty: BotDifficulty) => void;
+  onRemoveBot: (seat: Seat) => void;
+  onShotClockChange: (seconds: number | null) => void;
+  onSeriesChange: (target: number) => void;
   onStart: () => void;
 }
 
@@ -30,35 +31,82 @@ export function renderLobby(
   room: RoomStateDTO,
   qrDataUrl: string,
   joinUrl: string,
-  cb: LobbyCallbacks
+  cb: LobbyCallbacks,
+  defaultBotDifficulty: BotDifficulty = 'club'
 ): void {
   const { lobby } = room;
+  const descriptor = modeDescriptor(lobby.mode);
   const seats: Seat[] = Array.from({ length: lobby.maxPlayers }, (_, i) => seatId(i));
   const filled = seats.filter((s) => room.players[s]).length;
-  const canStart = filled >= 2;
+  const canStart = filled >= descriptor.minPlayers;
+  const clockIndex = Math.max(0, SHOT_CLOCK_STEPS.indexOf(lobby.shotClockSeconds));
 
   container.innerHTML = `
     <div class="lobby">
-      <div class="lobby-card">
-        <div style="display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; justify-content:center;">
-          <div style="text-align:center">
-            <div class="lobby-code">${room.code}</div>
-            <div style="font-size:0.78rem; color:var(--muted)">Join at <b>${joinUrl}</b></div>
+      <div class="lobby-card hero">
+        <div class="code-hero">
+          <div>
+            <div class="code-label">Scan or enter this code</div>
+            <div class="lobby-code">${room.code.split('').map((c) => `<span>${c}</span>`).join('')}</div>
+            <div class="code-url">${joinUrl}</div>
           </div>
-          <img src="${qrDataUrl}" width="132" height="132" alt="QR code to join" style="border-radius:10px; background:#fff; padding:6px" />
+          <img class="code-qr" src="${qrDataUrl}" width="140" height="140" alt="QR code to join" />
         </div>
       </div>
 
       <div class="lobby-card">
         <h2 style="margin:0 0 0.25rem; font-size:0.78rem; letter-spacing:0.1em; color:var(--muted)">GAME MODE</h2>
         <div class="mode-grid">
-          ${MODES.map(
-            (m) => `
+          ${allModes()
+            .map(
+              (m) => `
             <button class="mode-card${lobby.mode === m.id ? ' active' : ''}" data-mode="${m.id}">
+              <span class="mode-card-art">${modeArtSvg(m.id)}</span>
               <div class="mode-name">${m.name}</div>
-              <div class="mode-desc">${m.desc}</div>
+              <div class="mode-desc">${m.blurb}</div>
             </button>`
-          ).join('')}
+            )
+            .join('')}
+        </div>
+      </div>
+
+      <div class="lobby-card">
+        <div class="lobby-options">
+          <div class="option-block">
+            <h2>SHOT CLOCK</h2>
+            <div class="stepper">
+              <button class="secondary" id="clockDown" ${
+                clockIndex <= 0 || !descriptor.supportsShotClock ? 'disabled' : ''
+              }>−</button>
+              <span class="value">${
+                !descriptor.supportsShotClock
+                  ? 'n/a'
+                  : lobby.shotClockSeconds
+                    ? `${lobby.shotClockSeconds}s`
+                    : 'Off'
+              }</span>
+              <button class="secondary" id="clockUp" ${
+                clockIndex >= SHOT_CLOCK_STEPS.length - 1 || !descriptor.supportsShotClock
+                  ? 'disabled'
+                  : ''
+              }>+</button>
+            </div>
+          </div>
+          <div class="option-block">
+            <h2>MATCH LENGTH</h2>
+            <div class="stepper">
+              <button class="secondary" id="seriesDown" ${lobby.seriesTarget <= 1 ? 'disabled' : ''}>−</button>
+              <span class="value">${
+                lobby.seriesTarget === 1 ? 'Single frame' : `First to ${lobby.seriesTarget}`
+              }</span>
+              <button class="secondary" id="seriesUp" ${lobby.seriesTarget >= 9 ? 'disabled' : ''}>+</button>
+            </div>
+          </div>
+          ${
+            room.spectatorCount > 0
+              ? `<div class="option-block"><h2>WATCHING</h2><div class="value">👀 ${room.spectatorCount}</div></div>`
+              : ''
+          }
         </div>
       </div>
 
@@ -81,6 +129,7 @@ export function renderLobby(
               const teamBadge = teamClass
                 ? `<span class="seat-team team-${teamClass}">TEAM ${teamClass.toUpperCase()}</span>`
                 : '';
+              const number = seatIndex(seat) + 1;
               if (p) {
                 // Show the equipped avatar here so a player's cosmetics read before the
                 // game even starts.
@@ -90,20 +139,40 @@ export function renderLobby(
                   false,
                   resolveLoadout(p.loadout).avatar
                 );
-                return `<div class="seat-card">
+                const source = p.isBot
+                  ? { name: 'bot' as const, title: 'Computer player' }
+                  : p.isHost
+                    ? { name: 'screen' as const, title: 'Playing from the host screen' }
+                    : { name: 'phone' as const, title: 'Playing from a phone' };
+
+                return `<div class="seat-slot filled${p.isBot ? ' bot' : ''}">
+                  <span class="seat-no">${number}</span>
                   <span class="seat-avatar" style="background-image:${avatar}"></span>
-                  <span title="${p.isHost ? 'Playing from the host screen' : 'Playing from a phone'}">${
-                    p.isHost ? '🖥️' : '📱'
-                  }</span>
-                  <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${p.name}</span>
-                  ${teamBadge}
+                  <span class="seat-info">
+                    <span class="seat-name">${p.name}</span>
+                    <span class="seat-meta">
+                      <span class="seat-source" title="${source.title}">${icon(source.name, { size: 14 })}</span>
+                      ${p.isBot && p.botDifficulty ? `<span class="bot-tag">${BOT_LABELS[p.botDifficulty]}</span>` : '<span class="ready-tag">Ready</span>'}
+                      ${teamBadge}
+                    </span>
+                  </span>
+                  ${
+                    p.isBot
+                      ? `<button class="seat-x" data-removebot="${seat}" title="Remove bot">${icon('close', { size: 12 })}</button>`
+                      : ''
+                  }
                 </div>`;
               }
-              return `<div class="seat-card empty">
-                <button class="secondary" data-claim="${seat}" style="padding:0.3em 0.7em; font-size:0.76rem">
-                  Play here
-                </button>
-                <span style="color:var(--muted); font-size:0.76rem">or scan QR</span>
+              return `<div class="seat-slot empty">
+                <span class="seat-no">${number}</span>
+                <span class="seat-empty-art">${icon('ball', { size: 26 })}</span>
+                <span class="seat-info">
+                  <span class="seat-name muted">Open seat</span>
+                  <span class="seat-actions">
+                    <button class="mini" data-claim="${seat}">Play here</button>
+                    <button class="mini secondary" data-addbot="${seat}">${icon('bot', { size: 14 })} Bot</button>
+                  </span>
+                </span>
                 ${teamBadge}
               </div>`;
             })
@@ -112,7 +181,7 @@ export function renderLobby(
       </div>
 
       <button id="startGame" ${canStart ? '' : 'disabled'} style="min-width:220px">
-        ${canStart ? 'Start Game' : 'Need 2+ players'}
+        ${canStart ? 'Start Game' : `Need ${descriptor.minPlayers}+ players`}
       </button>
     </div>
   `;
@@ -123,7 +192,25 @@ export function renderLobby(
   container.querySelectorAll<HTMLButtonElement>('[data-claim]').forEach((btn) => {
     btn.addEventListener('click', () => cb.onClaimSeat(btn.dataset.claim!));
   });
+  container.querySelectorAll<HTMLButtonElement>('[data-addbot]').forEach((btn) => {
+    btn.addEventListener('click', () => cb.onAddBot(btn.dataset.addbot!, defaultBotDifficulty));
+  });
+  container.querySelectorAll<HTMLButtonElement>('[data-removebot]').forEach((btn) => {
+    btn.addEventListener('click', () => cb.onRemoveBot(btn.dataset.removebot!));
+  });
   container.querySelector('#sizeUp')?.addEventListener('click', () => cb.onSizeChange(lobby.maxPlayers + 1));
   container.querySelector('#sizeDown')?.addEventListener('click', () => cb.onSizeChange(lobby.maxPlayers - 1));
+  container
+    .querySelector('#clockUp')
+    ?.addEventListener('click', () => cb.onShotClockChange(SHOT_CLOCK_STEPS[clockIndex + 1] ?? null));
+  container
+    .querySelector('#clockDown')
+    ?.addEventListener('click', () => cb.onShotClockChange(SHOT_CLOCK_STEPS[clockIndex - 1] ?? null));
+  container
+    .querySelector('#seriesUp')
+    ?.addEventListener('click', () => cb.onSeriesChange(lobby.seriesTarget + 1));
+  container
+    .querySelector('#seriesDown')
+    ?.addEventListener('click', () => cb.onSeriesChange(lobby.seriesTarget - 1));
   container.querySelector('#startGame')?.addEventListener('click', () => cb.onStart());
 }

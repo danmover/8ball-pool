@@ -74,6 +74,45 @@ const STYLES: Record<string, TrailStyle> = {
     length: 1.45,
     glow: true,
   },
+  'trail.smoke': {
+    ramp: [0xe8e8ea, 0xa8a8b0, 0x6a6a74],
+    shape: 'ribbon',
+    width: 1.15,
+    alpha: 0.7,
+    length: 1.3,
+  },
+  'trail.bubble': {
+    ramp: [0xffffff, 0xc4ecff, 0x7fc4e8],
+    shape: 'sparkle',
+    width: 0.9,
+    alpha: 0.85,
+    length: 1.15,
+    glow: true,
+  },
+  'trail.rainbow': {
+    ramp: [0xff4d4d, 0xffc94d, 0x39ff88, 0x4aa8ff, 0xb44dff],
+    shape: 'ribbon',
+    width: 1.25,
+    alpha: 1,
+    length: 1.5,
+    glow: true,
+  },
+  'trail.electric': {
+    ramp: [0xffffff, 0xc9e6ff, 0x4a8aff],
+    shape: 'sparkle',
+    width: 1.1,
+    alpha: 1,
+    length: 1.3,
+    glow: true,
+  },
+  'trail.gold': {
+    ramp: [0xfff6d8, 0xffd76b, 0xc9a23a],
+    shape: 'comet',
+    width: 1.2,
+    alpha: 1,
+    length: 1.45,
+    glow: true,
+  },
 };
 
 export function trailStyleFor(id: string | undefined): TrailStyle {

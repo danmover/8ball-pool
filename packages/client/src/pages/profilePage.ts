@@ -11,6 +11,7 @@ import {
 } from '@8ball/shared';
 import { buyWithChalk, equip, getProfile, setDisplayName } from '../profile/profile';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
+import { icon } from '../render/icons';
 import { openWheel } from '../profile/wheel';
 import { playerBannerHtml } from '../render/banner';
 import { navigate } from '../router';
@@ -31,11 +32,13 @@ export function renderProfilePage(root: HTMLElement): () => void {
     root.innerHTML = `
       <div class="profile-page">
         <div class="profile-top">
-          <button class="icon-btn" id="backBtn" title="Back">←</button>
+          <button class="icon-btn" id="backBtn" title="Back">${icon('back', { size: 20 })}</button>
           <h1>Your Locker</h1>
           <div class="wallet">
-            <span class="wallet-chip" title="Chalk">🟦 ${profile.chalk}</span>
-            <span class="wallet-chip ${profile.spins > 0 ? 'hot' : ''}" title="Spins">🎡 ${profile.spins}</span>
+            <span class="wallet-chip" title="Chalk">${icon('chalk', { size: 18 })} ${profile.chalk}</span>
+            <span class="wallet-chip ${profile.spins > 0 ? 'hot' : ''}" title="Spins">${icon('wheel', {
+              size: 18,
+            })} ${profile.spins}</span>
           </div>
         </div>
 
@@ -112,12 +115,12 @@ export function renderProfilePage(root: HTMLElement): () => void {
                             item.id +
                             '"' +
                             (affordable ? '' : ' disabled') +
-                            '>🟦 ' +
+                            '>' + icon('chalk', { size: 14 }) + ' ' +
                             price +
                             '</button>'
                     }
                   </div>
-                  ${owned ? '' : '<div class="lock-veil">🔒</div>'}
+                  ${owned ? '' : `<div class="lock-veil">${icon('lock', { size: 14 })}</div>`}
                 </div>`;
             })
             .join('')}

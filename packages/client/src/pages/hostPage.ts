@@ -10,16 +10,20 @@ import type {
 } from '@8ball/shared';
 import {
   CUE_BALL_ID,
+  STARTING_LIVES,
   computeTrajectoryPreview,
   legalTargetBallIds,
   levelProgress,
-  resolveLoadout,
+  modeDescriptor,
   seatIndex,
   xpForResult,
 } from '@8ball/shared';
 import { playerBannerHtml } from '../render/banner';
+import { icon } from '../render/icons';
+import { confirmLeave, showToast } from '../render/dialogs';
 import { PotCelebrator } from '../render/potCelebration';
 import { equippedLoadout, getProfile, grantXp, recordStats } from '../profile/profile';
+import { recordChallengeEvent } from '../profile/dailyChallenge';
 import { openWheel } from '../profile/wheel';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
@@ -28,6 +32,7 @@ import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { openSettingsPanel } from '../settings/settingsPanel';
+import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
@@ -54,6 +59,10 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let lastPotPos: { x: number; y: number } | null = null;
   let rewardsShown = false;
   let winCelebrated = false;
+  let autostarted = false;
+  let clockRaf = 0;
+  /** Tracks the "win without fouling" daily objective across the frame. */
+  let fouledThisFrame = false;
 
   const joinUrl = `${window.location.origin}/play/${code}`;
 
@@ -62,9 +71,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     <div class="hud" id="gameHud" style="display:none">
       <div class="top-bar">
         <div id="playerPanels" style="display:flex; gap:0.5rem; flex-wrap:wrap; flex:1"></div>
-        <button class="icon-btn" id="settingsBtn">⚙</button>
+        <div class="top-right">
+          <div class="shot-clock" id="shotClock" style="display:none"></div>
+          <button class="icon-btn" id="settingsBtn" title="Settings">${icon('settings')}</button>
+          <button class="icon-btn danger" id="leaveBtn" title="Leave table">${icon('leave')}</button>
+        </div>
       </div>
-      <div></div>
+      <div class="toast-stack" id="toastStack"></div>
       <div id="bottomArea"></div>
     </div>
     <div class="host-power-wrap" id="hostPowerWrap" style="display:none">
@@ -96,13 +109,19 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     powerHud.style.setProperty('--power-scale', String(1 + power * 0.18));
   }
 
+  root.querySelector('#leaveBtn')!.addEventListener('click', () => {
+    confirmLeave(
+      'Leave the table?',
+      'The game ends for everyone at this table.',
+      () => navigate('/')
+    );
+  });
+
   root.querySelector('#settingsBtn')!.addEventListener('click', () => {
     openSettingsPanel(settings, (s) => {
       Object.assign(settings, s);
       saveSettings(settings);
-      renderer?.setColorblindPatterns(settings.colorblindPatterns);
-      renderer?.setFeltTheme(settings.feltTheme);
-      renderer?.setEffectsIntensity(settings.effectsIntensity);
+      applyRenderSettings(renderer, settings);
       if (lastAimAngle !== null) renderPreview(lastAimAngle);
     });
   });
@@ -134,18 +153,53 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   });
 
   function drawLobby(room: RoomStateDTO): void {
-    renderLobby(lobbyWrap, room, qrDataUrl, joinUrl.replace(/^https?:\/\//, ''), {
-      onModeChange: (mode) => socket.emit('hostUpdateLobby', { mode }),
-      onSizeChange: (maxPlayers) => socket.emit('hostUpdateLobby', { maxPlayers }),
-      onClaimSeat: (seat) =>
-        socket.emit('hostClaimSeat', {
-          seat,
-          loadout: equippedLoadout(),
-          name: getProfile().displayName,
-        }),
-      onReleaseSeat: (seat) => socket.emit('hostReleaseSeat', { seat }),
-      onStart: () => socket.emit('hostStartGame'),
+    renderLobby(
+      lobbyWrap,
+      room,
+      qrDataUrl,
+      joinUrl.replace(/^https?:\/\//, ''),
+      {
+        onModeChange: (mode) => socket.emit('hostUpdateLobby', { mode }),
+        onSizeChange: (maxPlayers) => socket.emit('hostUpdateLobby', { maxPlayers }),
+        onClaimSeat: (seat) =>
+          socket.emit('hostClaimSeat', {
+            seat,
+            loadout: equippedLoadout(),
+            name: getProfile().displayName,
+          }),
+        onReleaseSeat: (seat) => socket.emit('hostReleaseSeat', { seat }),
+        onAddBot: (seat, difficulty) => socket.emit('hostAddBot', { seat, difficulty }),
+        onRemoveBot: (seat) => socket.emit('hostRemoveBot', { seat }),
+        onShotClockChange: (shotClockSeconds) => socket.emit('hostUpdateLobby', { shotClockSeconds }),
+        onSeriesChange: (seriesTarget) => socket.emit('hostUpdateLobby', { seriesTarget }),
+        onStart: () => socket.emit('hostStartGame'),
+      },
+      settings.defaultBotDifficulty
+    );
+  }
+
+  /**
+   * "Play Solo" from the home screen drops straight into a game: claim seat one, fill the
+   * rest with bots at the chosen difficulty, and start — no lobby step.
+   */
+  function maybeAutostart(room: RoomStateDTO): void {
+    if (autostarted || room.started) return;
+    const raw = sessionStorage.getItem(`8ball:autostart:${code}`);
+    if (!raw) return;
+    autostarted = true;
+    sessionStorage.removeItem(`8ball:autostart:${code}`);
+
+    const seats = Object.keys(room.players);
+    socket.emit('hostClaimSeat', {
+      seat: seats[0],
+      loadout: equippedLoadout(),
+      name: getProfile().displayName,
     });
+    for (const seat of seats.slice(1)) {
+      socket.emit('hostAddBot', { seat, difficulty: settings.defaultBotDifficulty });
+    }
+    // Give the seat claims a beat to land before the server checks the lobby is full.
+    setTimeout(() => socket.emit('hostStartGame'), 220);
   }
 
   async function boot(): Promise<void> {
@@ -157,12 +211,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     lobbyWrap.style.display = 'none';
 
     renderer = await TableRenderer.create(canvasEl);
-    renderer.setColorblindPatterns(settings.colorblindPatterns);
-    renderer.setFeltTheme(settings.feltTheme);
-    renderer.setEffectsIntensity(settings.effectsIntensity);
+    applyRenderSettings(renderer, settings);
     // The balls are shared table furniture, so they wear the host's set.
     renderer.setBallSet(equippedLoadout().ballSet);
-    document.body.classList.toggle('fx-low', settings.effectsIntensity === 'low');
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
@@ -200,14 +251,45 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     socket.emit('placeCueBall', { seat: ownedSeat, pos: renderer.screenToTable(e.clientX, e.clientY) });
   }
 
+  /** The one status badge that matters for the mode in play. */
   function groupBadge(state: GameState, seat: Seat): string {
     const info = state.players[seat];
-    if (state.mode === 'rotation') {
-      return `<span class="score-pill">${info.score} pts</span>`;
+
+    if (state.mode === 'rotation') return `<span class="score-pill">${info.score} pts</span>`;
+
+    if (state.mode === 'killer') {
+      const lives = info.lives ?? 0;
+      const hearts = Array.from({ length: STARTING_LIVES }, (_, i) =>
+        i < lives ? '<span class="life">♥</span>' : '<span class="life spent">♥</span>'
+      ).join('');
+      return `<span class="lives">${hearts}</span>`;
     }
+
+    if (state.mode === 'cutthroat') {
+      const left = info.ownedBalls.filter(
+        (id) => !(state.balls.find((b) => b.id === id)?.pocketed ?? true)
+      ).length;
+      return info.eliminated
+        ? `<span class="group-badge out">OUT</span>`
+        : `<span class="score-pill">${left} ball${left === 1 ? '' : 's'} left</span>`;
+    }
+
+    if (state.mode === 'nineball' || state.mode === 'sandbox') {
+      return `<span class="group-badge">${modeDescriptor(state.mode).name.toUpperCase()}</span>`;
+    }
+
     if (!info.group) return `<span class="group-badge">OPEN TABLE</span>`;
     const label = info.group === 'solid' ? 'SOLIDS' : 'STRIPES';
     return `<span class="group-badge ${info.group}"><i class="swatch-dot"></i>${label}</span>`;
+  }
+
+  /** Which balls to show as this player's row, per mode. */
+  function ballRowIdsFor(state: GameState, seat: Seat): number[] | null {
+    const info = state.players[seat];
+    if (state.mode === 'rotation' || state.mode === 'killer' || state.mode === 'sandbox') return null;
+    if (state.mode === 'cutthroat') return info.ownedBalls;
+    if (state.mode === 'nineball') return [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    return info.group === 'solid' ? SOLID_IDS : info.group === 'stripe' ? STRIPE_IDS : null;
   }
 
   function renderScoreboard(state: GameState): void {
@@ -224,32 +306,38 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
             ? `<span class="seat-team team-${info.team}">TEAM ${info.team.toUpperCase()}</span>`
             : '';
 
-        // Rotation mode has no per-player group, so show the score instead of a ball row.
-        const ids = info.group === 'solid' ? SOLID_IDS : info.group === 'stripe' ? STRIPE_IDS : null;
-        const ballRow =
-          state.mode === 'rotation'
-            ? ''
-            : `<div class="ball-row">${
-                ids
-                  ? ids
-                      .map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? false))
-                      .join('')
-                  : Array.from({ length: 7 }, () => placeholderChipHtml()).join('')
-              }</div>`;
+        // Modes without per-player ball ownership (killer, rotation) show status instead.
+        const ids = ballRowIdsFor(state, seat);
+        const showsRow = state.mode !== 'rotation' && state.mode !== 'killer' && state.mode !== 'sandbox';
+        const ballRow = !showsRow
+          ? ''
+          : `<div class="ball-row">${
+              ids
+                ? ids
+                    .map((id) => ballChipHtml(id, state.balls.find((b) => b.id === id)?.pocketed ?? true))
+                    .join('')
+                : Array.from({ length: 7 }, () => placeholderChipHtml()).join('')
+            }</div>`;
+
+        // Frames won so far, when this is a best-of rather than a single frame.
+        const seriesTag = state.series
+          ? `<span class="series-pill">${state.series.wins[seat] ?? 0}/${state.series.target}</span>`
+          : '';
 
         return playerBannerHtml({
-          name,
+          seat,
+          name: info.isBot ? `${name}${icon('bot', { size: 16, className: 'bot-mark' })}` : name,
           seatIndex: seatIndex(seat),
           loadout: info.loadout,
           striped: info.group === 'stripe',
           active,
-          muted: !info.connected,
+          muted: !info.connected || info.eliminated,
           // Two scoring turns back to back and you're hot.
           onFire: (streaks[seat] ?? 0) >= 2 && state.phase !== 'game_over',
-          extra: `<div style="display:flex; gap:0.35rem; align-items:center">${groupBadge(
+          extra: `<div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap">${groupBadge(
             state,
             seat
-          )}${teamTag}</div>${ballRow}`,
+          )}${teamTag}${seriesTag}</div>${ballRow}`,
         });
       })
       .join('');
@@ -325,6 +413,12 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       award = grantXp(xpForResult(iWon));
       recordStats({ games: 1, wins: iWon ? 1 : 0 });
       if (award.levelsGained > 0 && settings.soundEnabled) sfx.playLevelUp(settings.soundVolume);
+
+      // Frame-level daily objectives resolve here, where the result is finally known.
+      const vsBot = state.seatOrder.some((s) => state.players[s].isBot);
+      const done = recordChallengeEvent({ frameWon: iWon, frameClean: !fouledThisFrame, vsBot });
+      if (done.justCompleted) showChallengeToast(done.challenge.xp);
+      fouledThisFrame = false;
     }
 
     const profile = getProfile();
@@ -351,6 +445,67 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         renderRewards(state, slot);
       });
     });
+  }
+
+  /** Celebration toast when the day's objective is met. */
+  function showChallengeToast(xp: number): void {
+    showToast(
+      root.querySelector<HTMLElement>('#toastStack')!,
+      `Daily challenge complete — +${xp} XP and a spin`,
+      'reward',
+      4000
+    );
+    if (settings.soundEnabled) sfx.playLevelUp(settings.soundVolume);
+  }
+
+  /**
+   * Floats a reaction up off the sending player's banner. DOM rather than Pixi, same as the
+   * combo callouts — the banners are already HTML, so this lands exactly where it should.
+   */
+  function showEmote(seat: Seat, emote: string): void {
+    const panel = panelsEl.querySelector<HTMLElement>(`[data-seat="${seat}"]`);
+    const el = document.createElement('div');
+    el.className = 'emote-pop';
+    el.textContent = emote;
+
+    const box = panel?.getBoundingClientRect();
+    el.style.left = `${box ? box.left + box.width / 2 : window.innerWidth / 2}px`;
+    el.style.top = `${box ? box.bottom - 10 : 80}px`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  }
+
+  /**
+   * Drains the shot-clock ring each frame. The state carries an absolute deadline rather than
+   * a countdown, so this never drifts from the server's own timer.
+   */
+  function tickShotClock(): void {
+    cancelAnimationFrame(clockRaf);
+    const clock = lastState?.shotClock;
+    const ring = root.querySelector<HTMLElement>('#shotClock');
+    if (!clock || !ring) {
+      if (ring) ring.style.display = 'none';
+      return;
+    }
+
+    let warned = false;
+    const step = (): void => {
+      const remaining = Math.max(0, clock.endsAt - Date.now()) / 1000;
+      const ratio = Math.min(1, remaining / clock.seconds);
+      ring.style.display = '';
+      ring.style.setProperty('--clock', String(ratio));
+      ring.dataset.urgent = remaining <= 5 ? 'true' : 'false';
+      ring.textContent = String(Math.ceil(remaining));
+
+      // A tick per second over the last five, so the pressure is audible as well as visible.
+      if (remaining <= 5 && settings.soundEnabled && !warned) {
+        warned = true;
+        sfx.playWheelTick(settings.soundVolume);
+        setTimeout(() => (warned = false), 950);
+      }
+      if (remaining > 0) clockRaf = requestAnimationFrame(step);
+    };
+    step();
   }
 
   function renderPreview(angle: number): void {
@@ -380,6 +535,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
     renderScoreboard(state);
+    tickShotClock();
     renderBottomArea(state);
 
     const canAim =
@@ -412,8 +568,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   socket.on('roomState', (rs) => {
     lastRoom = rs;
     if (rs.started) void boot();
-    else drawLobby(rs);
+    else {
+      drawLobby(rs);
+      maybeAutostart(rs);
+    }
   });
+
+  socket.on('emote', ({ seat, emote }) => showEmote(seat, emote));
 
   socket.on('gameState', (state) => {
     lastState = state;
@@ -464,9 +625,17 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     streaks[shotSeat] = summary.pots > 0 ? (streaks[shotSeat] ?? 0) + 1 : 0;
 
     const shooterIsOurs = lastState?.players[shotSeat]?.isHost ?? false;
-    if (shooterIsOurs && summary.pots > 0) {
-      grantXp(summary.xp);
-      recordStats({ pots: summary.pots, bestCombo: summary.bestCombo });
+    if (shooterIsOurs) {
+      if (summary.pots > 0) {
+        grantXp(summary.xp);
+        recordStats({ pots: summary.pots, bestCombo: summary.bestCombo });
+      }
+      if (summary.pots === 0 || lastState?.lastFoulReason) fouledThisFrame = true;
+      const result = recordChallengeEvent({
+        potsThisShot: summary.pots,
+        scoringStreak: streaks[shotSeat],
+      });
+      if (result.justCompleted) showChallengeToast(result.challenge.xp);
     }
 
     if (lastState) applyState(lastState);
@@ -474,12 +643,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   }
 
   socket.on('errorMessage', (msg) => {
-    const toast = document.createElement('div');
-    toast.className = 'turn-banner';
-    toast.style.background = 'rgba(180,40,40,0.85)';
-    toast.textContent = msg;
-    root.appendChild(toast);
-    setTimeout(() => toast.remove(), 2200);
+    showToast(root.querySelector<HTMLElement>('#toastStack')!, msg, 'foul');
   });
 
   return () => {
@@ -489,6 +653,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     socket.off('shotFired');
     socket.off('simEvent');
     socket.off('errorMessage');
+    socket.off('emote');
+    cancelAnimationFrame(clockRaf);
     aimController?.destroy();
     renderer?.destroy();
   };

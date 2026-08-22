@@ -1,0 +1,1026 @@
+/* ==========================================================================
+   Cartoon restyle. Loaded last, so it re-skins the components that were built
+   against the old dark arcade palette and adds the new chrome: the settings
+   drawer, confirm dialogs, the toast stack, lobby seat slots and the power meter.
+   ========================================================================== */
+
+/* --- Panels --- */
+
+.card,
+.lobby-card,
+.wheel-card,
+.join-panel {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  border-radius: var(--radius);
+  box-shadow:
+    inset 0 0 0 var(--frame) var(--wood),
+    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
+    0 0 0 2px var(--ink),
+    0 10px 0 rgba(26, 20, 16, 0.22),
+    0 18px 34px rgba(0, 0, 0, 0.45);
+  border: none;
+}
+
+.card h2,
+.lobby-card h2 {
+  color: var(--wood-deep);
+}
+
+.error {
+  color: #a8281f;
+  font-weight: 700;
+}
+
+/* --- Icon buttons --- */
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--paper-3),
+    0 8px 14px rgba(0, 0, 0, 0.3);
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 1px 0 var(--paper-3);
+}
+
+.icon-btn.danger {
+  background: linear-gradient(180deg, #eb6055, var(--danger));
+  color: #fff;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 #92251d,
+    0 8px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Settings drawer --- */
+
+.settings-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(10, 8, 6, 0);
+  transition: background 0.24s ease;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-scrim.open {
+  background: rgba(10, 8, 6, 0.5);
+}
+
+.settings-drawer {
+  width: min(420px, 92vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 1.1rem 1.15rem 2rem;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    inset var(--frame) 0 0 var(--wood),
+    inset calc(var(--frame) + 2px) 0 0 var(--wood-dark),
+    -2px 0 0 var(--ink),
+    -18px 0 40px rgba(0, 0, 0, 0.45);
+  transform: translateX(100%);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.settings-scrim.open .settings-drawer {
+  transform: none;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+
+.drawer-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.35rem;
+  color: var(--wood-deep);
+}
+
+/* Phones get a bottom sheet instead — a side drawer on a 400px screen is the whole screen. */
+@media (max-width: 640px) {
+  .settings-scrim {
+    align-items: flex-end;
+  }
+
+  .settings-drawer {
+    width: 100%;
+    height: min(78vh, 640px);
+    border-radius: 22px 22px 0 0;
+    transform: translateY(100%);
+    box-shadow:
+      inset 0 var(--frame) 0 var(--wood),
+      inset 0 calc(var(--frame) + 2px) 0 var(--wood-dark),
+      0 -2px 0 var(--ink),
+      0 -18px 40px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.2rem;
+  border-bottom: 2px dashed rgba(26, 20, 16, 0.14);
+}
+
+.settings-row.column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+
+.settings-row .label {
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.settings-row .desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  max-width: 30ch;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 0.5em 0.4em;
+  font-size: 0.85rem;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--muted);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 var(--paper-3);
+}
+
+.settings-tab.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 var(--gold-dark);
+}
+
+.segmented {
+  display: inline-flex;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.segmented button {
+  border-radius: 0;
+  padding: 0.45em 0.85em;
+  font-size: 0.82rem;
+  background: var(--paper-2);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.segmented button:active:not(:disabled) {
+  transform: none;
+}
+
+.segmented button.active {
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  color: var(--ink);
+}
+
+.toggle {
+  width: 54px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--paper-3);
+  box-shadow: 0 0 0 2px var(--ink);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--ink);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toggle.on {
+  background: var(--felt);
+}
+
+.toggle.on::after {
+  transform: translateX(24px);
+}
+
+.slider {
+  width: 140px;
+  accent-color: var(--felt);
+}
+
+/* --- Table theme picker --- */
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 0.5rem;
+}
+
+.theme-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: stretch;
+  padding: 0.35rem;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 var(--paper-3);
+}
+
+.theme-swatch.active {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 5px var(--gold),
+    0 3px 0 var(--gold-dark);
+}
+
+.theme-preview {
+  display: block;
+  height: 46px;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.theme-rail {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  padding: 3px;
+}
+
+.theme-cloth {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.theme-name {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+/* --- Confirm dialog --- */
+
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(10, 8, 6, 0);
+  transition: background 0.2s ease;
+}
+
+.dialog-scrim.open {
+  background: rgba(10, 8, 6, 0.6);
+}
+
+.dialog {
+  width: min(400px, 92vw);
+  padding: 1.4rem;
+  text-align: center;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 var(--frame) var(--wood),
+    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
+    0 0 0 2px var(--ink),
+    0 20px 50px rgba(0, 0, 0, 0.55);
+  transform: scale(0.85);
+  opacity: 0;
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.18s ease;
+}
+
+.dialog-scrim.open .dialog {
+  transform: none;
+  opacity: 1;
+}
+
+.dialog-icon {
+  color: var(--danger);
+  margin-bottom: 0.3rem;
+}
+
+.dialog h2 {
+  margin: 0 0 0.35rem;
+  color: var(--wood-deep);
+}
+
+.dialog p {
+  margin: 0 0 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+}
+
+/* --- Toast stack (top centre, under the scoreboard) --- */
+
+.toast-stack {
+  position: fixed;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 12px 24px rgba(0, 0, 0, 0.4);
+  animation: toastIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: min(560px, 92vw);
+}
+
+.toast-foul {
+  background: linear-gradient(180deg, #eb6055, var(--danger));
+  color: #fff;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 #92251d,
+    0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast-reward {
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast.leaving {
+  animation: toastOut 0.25s ease forwards;
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateY(-18px) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes toastOut {
+  to {
+    transform: translateY(-12px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+/* --- Lobby --- */
+
+.lobby-card.hero {
+  padding: 1.1rem 1.4rem;
+}
+
+.code-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.6rem;
+  flex-wrap: wrap;
+}
+
+.code-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.lobby-code {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.25rem 0;
+}
+
+/* Each character sits on its own tile, like letters on a scoreboard. */
+.lobby-code span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 66px;
+  border-radius: 12px;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: var(--gold);
+  background: linear-gradient(180deg, #2c2118, #16100b);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 0 16px rgba(255, 201, 77, 0.55);
+}
+
+.code-url {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.code-qr {
+  border-radius: 12px;
+  background: #fff;
+  padding: 7px;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3);
+}
+
+.mode-card {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--paper-3);
+  /* Explicit column flow — as a plain block the art span collapsed to a sliver and the
+     name ended up sitting inline beside the description. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+}
+
+.mode-art svg,
+.mode-card-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mode-card-art {
+  width: 100%;
+}
+
+/* The seat count beside the PLAYERS heading was cream-on-cream after the restyle. */
+.lobby-card h2 span {
+  color: var(--ink);
+}
+
+.mode-card.active {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 5px var(--gold),
+    0 4px 0 var(--gold-dark);
+}
+
+.mode-card .mode-desc {
+  color: var(--muted);
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+/* Player slots: a framed plate per seat rather than a bare dashed box. */
+.seat-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  min-height: 68px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffaf0, var(--paper-2));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--paper-3);
+}
+
+.seat-slot.empty {
+  background:
+    repeating-linear-gradient(45deg, rgba(26, 20, 16, 0.05) 0 8px, transparent 8px 16px),
+    var(--paper-2);
+  box-shadow:
+    0 0 0 2px rgba(26, 20, 16, 0.45),
+    0 4px 0 rgba(26, 20, 16, 0.12);
+}
+
+.seat-slot.filled {
+  animation: seatPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes seatPop {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.seat-no {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: var(--gold);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.seat-slot .seat-avatar {
+  width: 44px;
+  height: 44px;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.seat-empty-art {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: rgba(26, 20, 16, 0.35);
+  box-shadow: inset 0 0 0 2px rgba(26, 20, 16, 0.25);
+}
+
+.seat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.seat-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 0.98rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seat-name.muted {
+  color: var(--muted);
+}
+
+.seat-meta,
+.seat-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.seat-source {
+  color: var(--muted);
+  display: inline-flex;
+}
+
+.ready-tag {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--felt-dark);
+}
+
+.bot-tag {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.seat-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stepper .value {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  min-width: 5.5rem;
+  text-align: center;
+  color: var(--ink);
+}
+
+.option-block h2 {
+  color: var(--muted);
+}
+
+/* --- Home screen on the cream theme --- */
+
+.home-title h1 {
+  color: var(--paper);
+  text-shadow:
+    0 0 0 var(--ink),
+    0 3px 0 rgba(0, 0, 0, 0.5);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+}
+
+.home-title .tagline {
+  color: rgba(253, 243, 221, 0.8);
+}
+
+.mode-tile,
+.tile-btn {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 12px 26px rgba(0, 0, 0, 0.4);
+}
+
+.mode-tile.active {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 5px var(--gold),
+    0 5px 0 var(--gold-dark),
+    0 12px 26px rgba(0, 0, 0, 0.4);
+}
+
+.mode-blurb,
+.mode-rules,
+.tile-sub {
+  color: var(--muted);
+}
+
+.mode-meta {
+  color: var(--felt-dark);
+}
+
+.mode-art,
+.mode-card-art {
+  box-shadow: inset 0 0 0 2px rgba(26, 20, 16, 0.5);
+}
+
+.tile-icon {
+  color: var(--wood-dark);
+  display: flex;
+}
+
+.tile-btn.has-reward .tile-icon {
+  color: var(--gold-dark);
+}
+
+.play-btn.secondary-play {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 12px 26px rgba(0, 0, 0, 0.4);
+}
+
+.join-box input {
+  background: var(--paper);
+}
+
+/* --- Power readout ---
+   Moved up beside the meter on the left rail and framed like everything else; floating
+   ghost-grey numerals in the bottom corner were easy to miss and looked unfinished. */
+
+/* Bottom-left, clear of the meter it describes — centring it vertically put the card
+   straight on top of the meter. */
+.host-power-wrap {
+  left: 16px;
+  bottom: 16px;
+}
+
+.host-power-wrap .power-hud {
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 14px;
+  opacity: 1;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 12px 22px rgba(0, 0, 0, 0.45);
+  transform-origin: center;
+}
+
+.host-power-wrap .power-value {
+  font-size: 1.7rem;
+  text-shadow: none;
+  color: var(--ink);
+}
+
+.host-power-wrap .power-tier {
+  color: var(--muted);
+  opacity: 1;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.bot-mark {
+  margin-left: 0.3em;
+  opacity: 0.85;
+}
+
+/* --- Animated felt weave behind the menu screens ---
+   A slow-moving woven texture keyed to the active table theme, so the lobby and locker
+   feel like part of the same room as the table rather than flat pages. */
+
+.lobby,
+.profile-page {
+  position: relative;
+}
+
+.lobby::before,
+.profile-page::before {
+  content: '';
+  position: fixed;
+  inset: -10%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--theme-felt) 22%, transparent) 0 2px,
+      transparent 2px 9px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--theme-felt-dark) 22%, transparent) 0 2px,
+      transparent 2px 9px
+    );
+  animation: weaveDrift 40s linear infinite;
+}
+
+@keyframes weaveDrift {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      120px 120px,
+      -120px 120px;
+  }
+}
+
+body.reduce-motion .lobby::before,
+body.reduce-motion .profile-page::before {
+  animation: none;
+}
+
+/* --- Locker --- */
+
+.profile-top h1 {
+  color: var(--paper);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+}
+
+.wallet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--paper-3);
+}
+
+.wallet-chip.hot {
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--gold-dark);
+}
+
+.slot-tab {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--muted);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--paper-3);
+}
+
+.slot-tab.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--gold-dark);
+}
+
+.item-card {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 4px var(--rarity, transparent),
+    0 5px 0 var(--paper-3),
+    0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.item-card.equipped {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 4px var(--rarity),
+    0 0 0 5px var(--gold),
+    0 5px 0 var(--gold-dark);
+}
+
+.item-card.locked {
+  opacity: 1;
+  background: linear-gradient(180deg, var(--paper-2) 0%, var(--paper-3) 100%);
+}
+
+.item-rarity {
+  /* The pale rarity colours were designed against a dark card; darken for cream. */
+  filter: brightness(0.72) saturate(1.3);
+}
+
+.lock-veil {
+  color: var(--muted);
+}
+
+.tag-equipped {
+  color: var(--felt-dark);
+}
+
+.stat-row {
+  color: var(--paper);
+}
+
+.stat-row b {
+  color: var(--gold);
+}
+
+.name-field {
+  color: rgba(253, 243, 221, 0.75);
+}
+
+.xp-bar {
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.xp-fill {
+  background: linear-gradient(90deg, var(--felt), var(--gold));
+}
+
+button.mini {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 var(--gold-dark);
+}
+
+button.mini.secondary {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 var(--paper-3);
+}
+
+/* --- Wheel --- */
+
+.wheel-card h2,
+.reveal-name {
+  color: var(--wood-deep);
+}
+
+.wheel-sub,
+.reveal-blurb,
+.reveal-dupe {
+  color: var(--muted);
+}
+
+.reveal-new {
+  color: var(--felt-dark);
+}
+
+.wheel-pointer {
+  border-top-color: var(--gold);
+  filter: drop-shadow(0 0 2px var(--ink));
+}
+
+/* --- Controller --- */
+
+.ctrl-buttons {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  display: flex;
+  gap: 0.4rem;
+}
+
+@media (max-width: 640px) {
+  .toast-stack {
+    top: 70px;
+  }
+}

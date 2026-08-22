@@ -1,19 +1,59 @@
 :root {
-  /* Dark arcade skin: charcoal chrome around a bright felt playfield. */
-  --bg-0: #0a0c11;
-  --bg-1: #12151d;
-  --bg-2: #1a1f2b;
-  --panel: rgba(20, 24, 33, 0.86);
-  --stroke: rgba(255, 255, 255, 0.09);
+  /* Cartoon pool hall: cream panels in maple frames, felt green and gold accents, and the
+     same crisp dark ink outline the balls and cue carry. The dark tones survive only as the
+     room behind the table. */
+  --ink: #1a1410;
+  --ink-soft: rgba(26, 20, 16, 0.55);
+
+  --paper: #fdf3dd;
+  --paper-2: #f2e2bf;
+  --paper-3: #e4cf9f;
+
+  --wood: #c99a63;
+  --wood-dark: #7d5533;
+  --wood-deep: #4a3120;
+
+  --felt: #2c9d5c;
+  --felt-dark: #17703d;
+
   --gold: #ffc94d;
-  --accent: #34e2b0;
-  --accent-2: #4aa8ff;
-  --ink: #0a0c11;
-  --paper: #eef2f8;
-  --muted: #93a0b5;
-  --danger: #ff5c5c;
-  --radius: 16px;
+  --gold-dark: #b8862a;
+  --accent: #1f9d63;
+  --accent-2: #2a6ee0;
+  --danger: #d8443a;
+  --muted: #8a7357;
+
+  /* Set per table theme by applyTableThemeToPage; these are the Classic Green fallbacks. */
+  --surround: radial-gradient(ellipse 90% 70% at 50% 40%, #2a3a2f 0%, #131a17 60%, #0a0d0c 100%);
+  --theme-accent: #ffc94d;
+  --theme-felt: #5fd88a;
+  --theme-felt-dark: #28a85c;
+  --theme-wood: #c99a63;
+  --theme-wood-dark: #7d5533;
+
+  /* Back-compat aliases so older rules keep working while the restyle lands. */
+  --bg-0: #16110c;
+  --bg-1: #241a12;
+  --bg-2: #33251a;
+  --panel: var(--paper);
+  --stroke: rgba(26, 20, 16, 0.25);
+
+  --radius: 18px;
+  --frame: 3px;
   color-scheme: dark;
+}
+
+/** The house panel treatment: cream face, maple frame, ink outline, soft drop shadow. */
+.panel-frame {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  border-radius: var(--radius);
+  box-shadow:
+    inset 0 0 0 var(--frame) var(--wood),
+    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
+    0 0 0 2px var(--ink),
+    0 10px 0 rgba(26, 20, 16, 0.25),
+    0 18px 34px rgba(0, 0, 0, 0.45);
+  color: var(--ink);
 }
 
 * {
@@ -43,26 +83,62 @@ body,
 body {
   /* Nunito for UI copy; Baloo 2 (rounder, chunkier) for headings and numerals. */
   font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background:
-    radial-gradient(ellipse 120% 80% at 50% -10%, #202634 0%, transparent 60%),
-    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+  /* The room behind the table, painted from the active table theme. */
+  background: var(--surround);
   color: var(--paper);
   overflow: hidden;
 }
 
+/* Slow drifting light across the room, so no screen is ever completely static. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.07), transparent 42%),
+    radial-gradient(circle at 78% 72%, rgba(255, 255, 255, 0.05), transparent 46%);
+  animation: roomDrift 26s ease-in-out infinite alternate;
+}
+
+@keyframes roomDrift {
+  from {
+    transform: translate3d(-2%, -1.5%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2.5%, 2%, 0) scale(1.08);
+  }
+}
+
+body.reduce-motion::before {
+  animation: none;
+}
+
+.icon {
+  flex-shrink: 0;
+  vertical-align: -0.15em;
+}
+
+/* Chunky pressable buttons: ink outline, a solid shadow that collapses when pressed. */
 button {
   font: inherit;
   cursor: pointer;
   border: none;
-  border-radius: 12px;
-  padding: 0.75em 1.4em;
-  background: linear-gradient(180deg, #ffd76b, var(--gold));
+  border-radius: 14px;
+  padding: 0.72em 1.35em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
   color: var(--ink);
   font-weight: 800;
   letter-spacing: 0.02em;
   box-shadow:
-    0 3px 0 #b8862a,
-    0 8px 20px rgba(0, 0, 0, 0.45);
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 10px 18px rgba(0, 0, 0, 0.35);
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease,
@@ -70,22 +146,40 @@ button {
 }
 
 button:hover:not(:disabled) {
-  filter: brightness(1.07);
+  filter: brightness(1.06);
 }
 
-button:active {
-  transform: translateY(3px);
+button:active:not(:disabled) {
+  transform: translateY(4px);
   box-shadow:
-    0 0 0 #b8862a,
-    0 3px 8px rgba(0, 0, 0, 0.4);
+    0 0 0 2px var(--ink),
+    0 1px 0 var(--gold-dark),
+    0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 button.secondary {
-  background: linear-gradient(180deg, var(--bg-2), #141822);
-  color: var(--paper);
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
   box-shadow:
-    inset 0 0 0 1px var(--stroke),
-    0 3px 0 rgba(0, 0, 0, 0.45);
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 10px 18px rgba(0, 0, 0, 0.3);
+}
+
+button.secondary:active:not(:disabled) {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 1px 0 var(--paper-3),
+    0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+button.danger-btn {
+  background: linear-gradient(180deg, #eb6055, var(--danger));
+  color: #fff;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 #92251d,
+    0 10px 18px rgba(0, 0, 0, 0.3);
 }
 
 button:disabled {
@@ -97,15 +191,26 @@ button:disabled {
 input {
   font: inherit;
   padding: 0.7em 0.9em;
-  border-radius: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--paper);
+  border-radius: 12px;
+  border: none;
+  background: var(--paper);
+  color: var(--ink);
   width: 100%;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 2px 4px rgba(26, 20, 16, 0.2);
+}
+
+input::placeholder {
+  color: rgba(26, 20, 16, 0.4);
 }
 
 input:focus {
-  outline: 2px solid var(--gold);
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 5px var(--gold),
+    inset 0 2px 4px rgba(26, 20, 16, 0.2);
 }
 
 .landing {

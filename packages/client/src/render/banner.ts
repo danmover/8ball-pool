@@ -22,6 +22,8 @@ export interface BannerOpts {
   striped?: boolean;
   /** Dim everything (empty seat / disconnected). */
   muted?: boolean;
+  /** Stamped onto the element so effects (emotes) can find this player's banner. */
+  seat?: string;
 }
 
 export function playerBannerHtml(opts: BannerOpts): string {
@@ -45,7 +47,7 @@ export function playerBannerHtml(opts: BannerOpts): string {
   const fireLayer = opts.onFire ? bannerEffectHtml('fx-flames') : '';
 
   return `
-    <div class="${classes}">
+    <div class="${classes}"${opts.seat ? ` data-seat="${opts.seat}"` : ''}>
       ${bannerEffectHtml(effect)}
       ${fireLayer}
       <div class="banner-body">

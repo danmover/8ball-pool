@@ -1,7 +1,25 @@
+/**
+ * All game audio, synthesized at runtime — no asset files, no licensing, nothing to load.
+ *
+ * The first version was four bare sine plucks, which all sounded like the same beep at
+ * different pitches. Real pool sounds are *noisy*: a ball strike is a short woody knock with
+ * a burst of high noise on the transient, a cushion is a damped thud with felt hiss, a pot is
+ * a hollow drop followed by a rattle. So this builds from three primitives — a tuned tone
+ * with a pitch envelope, a filtered noise burst, and a resonant "body" — and layers them.
+ */
+
 let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+/** One shared noise buffer; regenerating white noise per sound is pure waste. */
+let noiseBuffer: AudioBuffer | null = null;
 
 function getCtx(): AudioContext {
-  if (!ctx) ctx = new AudioContext();
+  if (!ctx) {
+    ctx = new AudioContext();
+    master = ctx.createGain();
+    master.gain.value = 1;
+    master.connect(ctx.destination);
+  }
   return ctx;
 }
 
@@ -11,36 +29,154 @@ export function unlockAudio(): void {
   if (c.state === 'suspended') void c.resume();
 }
 
-function pluck(freq: number, duration: number, volume: number, type: OscillatorType = 'sine'): void {
+function ready(): AudioContext | null {
   const c = getCtx();
-  if (c.state === 'suspended') return;
+  return c.state === 'suspended' ? null : c;
+}
+
+function getNoise(c: AudioContext): AudioBuffer {
+  if (!noiseBuffer) {
+    const len = Math.floor(c.sampleRate * 0.5);
+    noiseBuffer = c.createBuffer(1, len, c.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+interface ToneOpts {
+  freq: number;
+  /** Frequency to glide to; omit to hold. */
+  to?: number;
+  duration: number;
+  volume: number;
+  type?: OscillatorType;
+  /** Seconds to wait before starting. */
+  delay?: number;
+  /** Attack time; a hard 0 clicks, which is sometimes exactly what you want. */
+  attack?: number;
+}
+
+/** A pitched layer with an exponential decay — the "body" of a sound. */
+function tone(o: ToneOpts): void {
+  const c = ready();
+  if (!c || !master) return;
+  const t0 = c.currentTime + (o.delay ?? 0);
   const osc = c.createOscillator();
   const gain = c.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, c.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq * 0.6), c.currentTime + duration);
-  gain.gain.setValueAtTime(volume, c.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
-  osc.connect(gain).connect(c.destination);
-  osc.start();
-  osc.stop(c.currentTime + duration + 0.02);
+
+  osc.type = o.type ?? 'sine';
+  osc.frequency.setValueAtTime(o.freq, t0);
+  if (o.to) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.to), t0 + o.duration);
+
+  const attack = o.attack ?? 0.004;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.volume), t0 + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + o.duration);
+
+  osc.connect(gain).connect(master);
+  osc.start(t0);
+  osc.stop(t0 + o.duration + 0.03);
 }
 
+interface NoiseOpts {
+  duration: number;
+  volume: number;
+  /** Band-pass centre; the "colour" of the noise. */
+  freq: number;
+  q?: number;
+  /** Sweep the filter to this frequency over the duration. */
+  to?: number;
+  delay?: number;
+  type?: BiquadFilterType;
+}
+
+/** A filtered noise burst — the transient/texture layer. */
+function noise(o: NoiseOpts): void {
+  const c = ready();
+  if (!c || !master) return;
+  const t0 = c.currentTime + (o.delay ?? 0);
+
+  const src = c.createBufferSource();
+  src.buffer = getNoise(c);
+  const filter = c.createBiquadFilter();
+  filter.type = o.type ?? 'bandpass';
+  filter.frequency.setValueAtTime(o.freq, t0);
+  if (o.to) filter.frequency.exponentialRampToValueAtTime(Math.max(60, o.to), t0 + o.duration);
+  filter.Q.value = o.q ?? 1;
+
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(Math.max(0.0002, o.volume), t0);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + o.duration);
+
+  src.connect(filter).connect(gain).connect(master);
+  src.start(t0);
+  src.stop(t0 + o.duration + 0.02);
+}
+
+// ---- Game sounds ----
+
+/**
+ * Ball on ball. Hard hits are brighter and shorter — a sharp phenolic *click* — while soft
+ * contacts are duller and rounder, which is how you can hear the weight of a shot.
+ */
 export function playBallClick(volume: number, intensity = 1): void {
-  pluck(1200 * Math.min(1.4, 0.6 + intensity), 0.08, 0.35 * volume, 'triangle');
+  const i = Math.min(1.4, Math.max(0.05, intensity));
+  const bright = 900 + i * 1500;
+
+  noise({ duration: 0.035, volume: 0.32 * volume * i, freq: bright, to: bright * 0.45, q: 0.8 });
+  tone({
+    freq: 420 + i * 520,
+    to: 240 + i * 200,
+    duration: 0.07 + i * 0.03,
+    volume: 0.3 * volume * i,
+    type: 'triangle',
+    attack: 0.001,
+  });
+  // A touch of low body so a heavy hit is felt as well as heard.
+  if (i > 0.5) {
+    tone({ freq: 150, to: 90, duration: 0.09, volume: 0.16 * volume * i, type: 'sine' });
+  }
 }
 
-export function playCushionThud(volume: number): void {
-  pluck(180, 0.12, 0.25 * volume, 'sine');
+/** Cushion: a damped thud with the soft hiss of cloth. */
+export function playCushionThud(volume: number, intensity = 1): void {
+  const i = Math.min(1.2, Math.max(0.1, intensity));
+  tone({ freq: 190, to: 80, duration: 0.13, volume: 0.26 * volume * i, type: 'sine' });
+  noise({ duration: 0.08, volume: 0.1 * volume * i, freq: 1400, to: 400, q: 0.6 });
 }
 
+/** Pot: the ball disappears, drops, then rattles down the return. */
 export function playPocketSwish(volume: number): void {
-  pluck(700, 0.35, 0.3 * volume, 'sine');
-  setTimeout(() => pluck(420, 0.25, 0.22 * volume, 'sine'), 60);
+  // Falling away into the pocket.
+  noise({ duration: 0.16, volume: 0.16 * volume, freq: 2600, to: 300, q: 0.7 });
+  tone({ freq: 520, to: 180, duration: 0.2, volume: 0.24 * volume, type: 'sine' });
+  // The hollow drop, a beat later.
+  tone({ freq: 190, to: 95, duration: 0.24, volume: 0.26 * volume, type: 'triangle', delay: 0.09 });
+  // Rattle down the track.
+  for (let k = 0; k < 3; k++) {
+    noise({
+      duration: 0.03,
+      volume: (0.09 - k * 0.02) * volume,
+      freq: 1800 - k * 300,
+      q: 1.4,
+      delay: 0.2 + k * 0.07,
+    });
+  }
 }
 
+/** The strike: chalk bite, then the cue transferring into the ball. */
 export function playCueStrike(volume: number, power: number): void {
-  pluck(260 + power * 200, 0.09, 0.4 * volume, 'square');
+  const p = Math.min(1, Math.max(0.1, power));
+  noise({ duration: 0.02, volume: 0.2 * volume, freq: 3200, to: 1200, q: 0.9 });
+  tone({
+    freq: 300 + p * 380,
+    to: 160,
+    duration: 0.06 + p * 0.04,
+    volume: 0.34 * volume,
+    type: 'triangle',
+    attack: 0.001,
+  });
 }
 
 /**
@@ -49,26 +185,73 @@ export function playCueStrike(volume: number, power: number): void {
  */
 export function playCombo(volume: number, comboIndex: number): void {
   const step = Math.min(comboIndex, 7);
-  pluck(520 * Math.pow(1.16, step), 0.22, 0.32 * volume, 'triangle');
-  setTimeout(() => pluck(780 * Math.pow(1.16, step), 0.18, 0.2 * volume, 'sine'), 55);
+  const root = 520 * Math.pow(1.16, step);
+  tone({ freq: root, duration: 0.2, volume: 0.26 * volume, type: 'triangle' });
+  tone({ freq: root * 1.5, duration: 0.24, volume: 0.18 * volume, type: 'sine', delay: 0.05 });
+  noise({ duration: 0.12, volume: 0.08 * volume, freq: root * 3, to: root, q: 1.2 });
 }
 
-/** Single tick of the prize wheel's ratchet. */
+/** Single tick of the prize wheel's ratchet, or the shot clock. */
 export function playWheelTick(volume: number): void {
-  pluck(900, 0.03, 0.12 * volume, 'square');
+  noise({ duration: 0.02, volume: 0.14 * volume, freq: 2600, q: 2.4 });
+  tone({ freq: 1200, to: 900, duration: 0.02, volume: 0.08 * volume, type: 'square' });
 }
 
-/** Reveal sting when the wheel stops; brighter for higher rarities. */
+/** Reveal sting when the wheel stops; brighter and longer for higher rarities. */
 export function playReveal(volume: number, tier: number): void {
-  const root = 440 * Math.pow(1.12, tier);
-  pluck(root, 0.4, 0.3 * volume, 'triangle');
-  setTimeout(() => pluck(root * 1.5, 0.45, 0.26 * volume, 'sine'), 90);
-  setTimeout(() => pluck(root * 2, 0.5, 0.2 * volume, 'sine'), 180);
+  const root = 420 * Math.pow(1.14, tier);
+  [0, 0.08, 0.16, 0.26].forEach((delay, i) => {
+    tone({
+      freq: root * [1, 1.25, 1.5, 2][i],
+      duration: 0.45 - i * 0.05,
+      volume: (0.24 - i * 0.03) * volume,
+      type: i === 3 ? 'triangle' : 'sine',
+      delay,
+    });
+  });
+  noise({ duration: 0.5, volume: 0.06 * volume, freq: 4000, to: 900, q: 0.5, delay: 0.02 });
 }
 
 /** Level-up fanfare on the post-match screen. */
 export function playLevelUp(volume: number): void {
-  [0, 110, 220].forEach((delay, i) => {
-    setTimeout(() => pluck(440 * Math.pow(1.26, i), 0.3, 0.28 * volume, 'triangle'), delay);
+  [0, 0.1, 0.2, 0.32].forEach((delay, i) => {
+    tone({
+      freq: 440 * Math.pow(1.26, i),
+      duration: 0.3,
+      volume: 0.24 * volume,
+      type: 'triangle',
+      delay,
+    });
+  });
+}
+
+/** Win fanfare — bigger than a level-up, with a low swell under it. */
+export function playWin(volume: number): void {
+  [0, 0.12, 0.24].forEach((delay, i) => {
+    tone({ freq: 392 * Math.pow(1.26, i), duration: 0.5, volume: 0.24 * volume, type: 'triangle', delay });
+    tone({ freq: 196 * Math.pow(1.26, i), duration: 0.5, volume: 0.14 * volume, type: 'sine', delay });
+  });
+  tone({ freq: 784, duration: 0.9, volume: 0.2 * volume, type: 'triangle', delay: 0.38 });
+  noise({ duration: 0.7, volume: 0.05 * volume, freq: 5000, to: 800, q: 0.4, delay: 0.36 });
+}
+
+/** UI: a soft click for taps on menu items. */
+export function playUiClick(volume: number): void {
+  noise({ duration: 0.02, volume: 0.1 * volume, freq: 2200, q: 1.6 });
+  tone({ freq: 660, to: 520, duration: 0.05, volume: 0.1 * volume, type: 'sine' });
+}
+
+/** UI: a whoosh for panels sliding in. */
+export function playWhoosh(volume: number): void {
+  noise({ duration: 0.26, volume: 0.09 * volume, freq: 500, to: 2600, q: 0.5 });
+}
+
+/** Power meter charging up — pitch rises with the pull-back. */
+export function playCharge(volume: number, power: number): void {
+  tone({
+    freq: 200 + power * 700,
+    duration: 0.05,
+    volume: 0.05 * volume,
+    type: 'sawtooth',
   });
 }

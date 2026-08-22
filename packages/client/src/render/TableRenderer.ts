@@ -1,24 +1,33 @@
 import { Application, BlurFilter, Container, Graphics, Sprite, Texture } from 'pixi.js';
-import type { Ball, FeltTheme, Loadout, TrajectoryPreview } from '@8ball/shared';
-import { BALL_RADIUS, DEFAULT_LOADOUT, POCKETS, TABLE_LENGTH, TABLE_WIDTH, resolveLoadout } from '@8ball/shared';
+import type { Ball, Loadout, TrajectoryPreview } from '@8ball/shared';
+import {
+  BALL_RADIUS,
+  DEFAULT_LOADOUT,
+  POCKETS,
+  TABLE_LENGTH,
+  TABLE_WIDTH,
+  rackBalls,
+  resolveLoadout,
+  stepSimulation,
+} from '@8ball/shared';
 import { styleForBall } from './ballStyle';
 import { ParticleSystem } from './Particles';
 import { ballSetFor, styleForBallInSet, type BallSet } from './cosmetics/ballSets';
 import { cueSkinFor, type CueSkin } from './cosmetics/cueSkins';
 import { sampleRamp, trailStyleFor, type TrailStyle } from './cosmetics/trailStyles';
+import { applyTableThemeToPage, tableThemeFor, type TableTheme } from './cosmetics/tableThemes';
+import { hitEffectFor, type HitEffect } from './cosmetics/hitEffects';
 
 const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
 
-// Light tan/maple rails around bright cloth, matching the reference art style.
-// The light/dark pair is deliberately close together so the cloth reads as one flat,
-// vivid colour with only a gentle centre glow rather than a heavy vignette.
-const FELT_THEMES: Record<FeltTheme, { light: string; dark: string; rail: string; railDark: string }> = {
-  green: { light: '#5fd88a', dark: '#28a85c', rail: '#c99a63', railDark: '#7d5533' },
-  blue: { light: '#4fc0ee', dark: '#1f80b8', rail: '#c99a63', railDark: '#7d5533' },
-  crimson: { light: '#e8697a', dark: '#a83244', rail: '#c99a63', railDark: '#7d5533' },
-  midnight: { light: '#6e73ad', dark: '#383c6e', rail: '#8d8f9c', railDark: '#4a4c58' },
-};
+/** '#rrggbb' → 0xrrggbb, for feeding CSS-authored theme colours to Pixi. */
+function cssToHex(css: string): number {
+  return Number.parseInt(css.replace('#', ''), 16);
+}
+
+/** Cue length in table units — long enough to read as a real cue behind the ball. */
+const CUE_LENGTH = BALL_RADIUS * 27;
 
 /** Board furniture around the playing surface, in table units. */
 const RAIL = 62;
@@ -200,8 +209,7 @@ function generateNumberCanvas(id: number): HTMLCanvasElement | null {
   return canvas;
 }
 
-function generateFeltCanvas(theme: FeltTheme): HTMLCanvasElement {
-  const colors = FELT_THEMES[theme];
+function generateFeltCanvas(colors: TableTheme): HTMLCanvasElement {
   const w = 1024;
   const h = Math.round((w * TABLE_WIDTH) / TABLE_LENGTH);
   const canvas = document.createElement('canvas');
@@ -215,21 +223,23 @@ function generateFeltCanvas(theme: FeltTheme): HTMLCanvasElement {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
-  // Baulk/head string and centre line, as on a real cloth.
-  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-  ctx.lineWidth = 2;
-  for (const frac of [0.25, 0.5]) {
-    ctx.beginPath();
-    ctx.moveTo(w * frac, 0);
-    ctx.lineTo(w * frac, h);
-    ctx.stroke();
-  }
-  // Head spot and foot spot.
-  ctx.fillStyle = 'rgba(255,255,255,0.22)';
-  for (const frac of [0.25, 0.72]) {
-    ctx.beginPath();
-    ctx.arc(w * frac, h / 2, 3.5, 0, Math.PI * 2);
-    ctx.fill();
+  // Baulk/head string, centre line and the two spots, as on a real cloth. Neon skips them —
+  // painted lines on a backlit table read as dirt.
+  if (colors.markings) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 2;
+    for (const frac of [0.25, 0.5]) {
+      ctx.beginPath();
+      ctx.moveTo(w * frac, 0);
+      ctx.lineTo(w * frac, h);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    for (const frac of [0.25, 0.72]) {
+      ctx.beginPath();
+      ctx.arc(w * frac, h / 2, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // Faint woven-fabric speckle.
@@ -364,20 +374,25 @@ export class TableRenderer {
   /** Where each ball was last seen dropping, so its chute flight can start there. */
   private lastPotPos = new Map<number, { x: number; y: number }>();
   private textureCache = new Map<string, Texture>();
-  private feltTextureCache = new Map<FeltTheme, Texture>();
+  private feltTextureCache = new Map<string, Texture>();
   private woodTextureCache = new Map<string, Texture>();
   private scale = 1;
   private aim: { angle: number; power: number; visible: boolean } = { angle: 0, power: 0, visible: false };
   private placementGhost: { x: number; y: number } | null = null;
   private colorblind = false;
-  private feltTheme: FeltTheme = 'green';
+  private theme: TableTheme = tableThemeFor(undefined);
   /** Table-wide ball art (the host's set) and the current shooter's cue/trail. */
   private ballSetId: string = DEFAULT_LOADOUT.ballSet;
   private ballSet: BallSet = ballSetFor(undefined);
   private cueSkin: CueSkin = cueSkinFor(undefined);
   private trailStyle: TrailStyle = trailStyleFor(undefined);
+  private hitEffect: HitEffect = hitEffectFor(undefined);
   /** Shooter is on a scoring streak: their trail burns regardless of what's equipped. */
   private streakFire = false;
+  /** Menu backdrop state — see startAttractMode. */
+  private attract: { balls: Ball[]; idle: number } | null = null;
+  private trailsEnabled = true;
+  private shakeEnabled = true;
   private legalTargets: Set<number> = new Set();
   private shakeMag = 0;
   private elapsed = 0;
@@ -401,7 +416,7 @@ export class TableRenderer {
   }
 
   private buildTable(): void {
-    const colors = FELT_THEMES[this.feltTheme];
+    const colors = this.theme;
     const outerX = -RAIL;
     const outerY = -RAIL;
     const outerW = TABLE_LENGTH + RAIL * 2;
@@ -410,7 +425,7 @@ export class TableRenderer {
     // --- Wood frame: drop shadow, dark under-edge, grained face, bevel highlights ---
     const frame = new Graphics();
     frame.roundRect(outerX + 6, outerY + 12, outerW, outerH, 40).fill({ color: 0x000000, alpha: 0.45 });
-    frame.roundRect(outerX, outerY, outerW, outerH, 38).fill({ color: colors.railDark });
+    frame.roundRect(outerX, outerY, outerW, outerH, 38).fill({ color: cssToHex(colors.railDark) });
 
     const woodSprite = new Sprite(this.woodTextureFor(colors.rail, colors.railDark));
     woodSprite.position.set(outerX + 7, outerY + 7);
@@ -428,16 +443,18 @@ export class TableRenderer {
       .stroke({ width: 3, color: 0xffffff, alpha: 0.22 });
     frameTop.roundRect(outerX, outerY, outerW, outerH, 38).stroke({ width: 3, color: 0x000000, alpha: 0.35 });
     // Inner lip where the cushion meets the cloth.
-    frameTop.roundRect(-12, -12, TABLE_LENGTH + 24, TABLE_WIDTH + 24, 14).fill({ color: colors.railDark });
+    frameTop
+      .roundRect(-12, -12, TABLE_LENGTH + 24, TABLE_WIDTH + 24, 14)
+      .fill({ color: cssToHex(colors.railDark) });
     frameTop
       .roundRect(-12, -12, TABLE_LENGTH + 24, TABLE_WIDTH + 24, 14)
       .stroke({ width: 2.5, color: 0x000000, alpha: 0.4 });
 
-    this.feltSprite = new Sprite(this.feltTextureFor(this.feltTheme));
+    this.feltSprite = new Sprite(this.feltTextureFor(this.theme));
     this.feltSprite.width = TABLE_LENGTH;
     this.feltSprite.height = TABLE_WIDTH;
 
-    const pocketGfx = this.buildPockets(colors);
+    const pocketGfx = this.buildPockets(this.theme);
     this.buildDiamonds();
     this.buildChute();
 
@@ -470,21 +487,105 @@ export class TableRenderer {
    * The cushion run is drawn as trapezoids whose playing edge (the nose) is the narrowest
    * point, so each pocket visibly opens up behind the nose like the real thing.
    */
-  private buildPockets(colors: { light: string; dark: string; rail: string; railDark: string }): Graphics {
+  private buildPockets(theme: TableTheme): Graphics {
     const g = new Graphics();
     const CUSH = 30; // cushion depth from the playing edge outward
     const JAW = 26; // how far each cushion end angles back toward the pocket
-    const cushion = Number('0x' + colors.dark.slice(1));
-    const cornerGap = 62;
-    const sideGap = 54;
+    const cushion = cssToHex(theme.cushion);
+    const leather = cssToHex(theme.pocket);
+    const throat = cssToHex(theme.pocketDark);
+    const cornerGap = 70;
+    const sideGap = 58;
     const midX = TABLE_LENGTH / 2;
 
-    // Throats first, so the cushions overlap their edges.
-    for (const p of POCKETS) {
-      g.circle(p.x, p.y, p.radius * 1.55).fill({ color: 0x000000, alpha: 0.2 });
-      g.circle(p.x, p.y, p.radius * 1.22).fill({ color: 0x08080a, alpha: 0.85 });
-      g.circle(p.x, p.y, p.radius).fill({ color: 0x050507 });
-      g.circle(p.x, p.y + p.radius * 0.2, p.radius * 0.66).fill({ color: 0x000000, alpha: 0.8 });
+    /**
+     * A pocket mouth is not a circle punched in the cloth — it's an opening *between* two
+     * cushion jaws, bagging outward past the playing surface. Each one is built from the two
+     * jaw tips plus an outward bulge, so corner pockets open on the diagonal and side pockets
+     * open square, exactly as they do on a real table.
+     */
+    type Mouth = {
+      a: { x: number; y: number };
+      b: { x: number; y: number };
+      out: { x: number; y: number };
+      depth: number;
+    };
+
+    const D = Math.SQRT1_2;
+    const mouths: Mouth[] = [
+      // Corners, opening on the diagonal.
+      // `depth` is how far the back of the bag sits past the *chord* between the jaw tips.
+      // For a corner that chord already cuts across the corner, so the depth has to clear it
+      // before the pocket reads as cutting into the rail at all.
+      { a: { x: cornerGap, y: 0 }, b: { x: 0, y: cornerGap }, out: { x: -D, y: -D }, depth: 98 },
+      {
+        a: { x: TABLE_LENGTH - cornerGap, y: 0 },
+        b: { x: TABLE_LENGTH, y: cornerGap },
+        out: { x: D, y: -D },
+        depth: 98,
+      },
+      {
+        a: { x: 0, y: TABLE_WIDTH - cornerGap },
+        b: { x: cornerGap, y: TABLE_WIDTH },
+        out: { x: -D, y: D },
+        depth: 98,
+      },
+      {
+        a: { x: TABLE_LENGTH, y: TABLE_WIDTH - cornerGap },
+        b: { x: TABLE_LENGTH - cornerGap, y: TABLE_WIDTH },
+        out: { x: D, y: D },
+        depth: 98,
+      },
+      // Sides, opening square to the rail.
+      {
+        a: { x: midX - sideGap, y: 0 },
+        b: { x: midX + sideGap, y: 0 },
+        out: { x: 0, y: -1 },
+        depth: 50,
+      },
+      {
+        a: { x: midX + sideGap, y: TABLE_WIDTH },
+        b: { x: midX - sideGap, y: TABLE_WIDTH },
+        out: { x: 0, y: 1 },
+        depth: 50,
+      },
+    ];
+
+    /**
+     * Traces the bag: jaw tip → outward curve → other jaw tip → straight back across.
+     *
+     * A quadratic's midpoint is `0.5·mid + 0.5·control`, not the control point itself, so to
+     * land the back of the bag exactly `depth` past the chord the control has to go *twice*
+     * that far. Getting this wrong is what makes a pocket look like a shallow notch.
+     */
+    const bag = (m: Mouth, grow: number): void => {
+      const mid = { x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2 };
+      const d = (m.depth + grow) * 2;
+      const ctrl = { x: mid.x + m.out.x * d, y: mid.y + m.out.y * d };
+      const aOut = { x: m.a.x + m.out.x * grow, y: m.a.y + m.out.y * grow };
+      const bOut = { x: m.b.x + m.out.x * grow, y: m.b.y + m.out.y * grow };
+      g.moveTo(aOut.x, aOut.y).quadraticCurveTo(ctrl.x, ctrl.y, bOut.x, bOut.y).closePath();
+    };
+
+    for (const m of mouths) {
+      // Leather surround, then the dark throat inside it, then a shadow across the top of
+      // the throat so the hole reads as having depth rather than being a flat black shape.
+      bag(m, 13);
+      g.fill({ color: leather });
+      bag(m, 13);
+      g.stroke({ width: 3, color: 0x000000, alpha: 0.45 });
+
+      bag(m, 0);
+      g.fill({ color: throat });
+
+      // Inner shadow pooling at the back of the bag, so it reads as depth not a flat shape.
+      const mid = { x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2 };
+      const back = { x: mid.x + m.out.x * m.depth * 0.55, y: mid.y + m.out.y * m.depth * 0.55 };
+      g.circle(back.x, back.y, m.depth * 0.4).fill({ color: 0x000000, alpha: 0.5 });
+
+      // A sliver of light on the far lip, which is what makes it look like a hole.
+      bag(m, 6);
+      g.stroke({ width: 2.5, color: 0xffffff, alpha: 0.12 });
     }
 
     // A cushion run along one edge: `along` walks the rail, `depth` points out of play.
@@ -500,18 +601,24 @@ export class TableRenderer {
       const pt = (along: number, d: number): [number, number] =>
         axis === 'h' ? [along, d] : [d, along];
 
-      g.poly([
+      const shape = [
         ...pt(from, nose),
         ...pt(to, nose),
         ...pt(to - JAW, back),
         ...pt(from + JAW, back),
-      ]).fill({ color: cushion });
+      ];
 
-      // Lit nose edge and a shadow where the cushion meets the cloth.
-      g.moveTo(...pt(from, nose)).lineTo(...pt(to, nose));
-      g.stroke({ width: 3, color: 0xffffff, alpha: 0.18 });
-      g.moveTo(...pt(from, nose + 3 * side)).lineTo(...pt(to, nose + 3 * side));
-      g.stroke({ width: 5, color: 0x000000, alpha: 0.16 });
+      // Ink outline first, so the cushion carries the same cartoon edge as everything else.
+      g.poly(shape).stroke({ width: 5, color: 0x1a1410, alpha: 0.85 });
+      g.poly(shape).fill({ color: cushion });
+
+      // Rounded lit nose along the playing edge — the highlight is what makes the rubber
+      // read as a raised cushion rather than a flat painted band.
+      g.moveTo(...pt(from + 3, nose + 2.5 * side)).lineTo(...pt(to - 3, nose + 2.5 * side));
+      g.stroke({ width: 4, color: 0xffffff, alpha: 0.3, cap: 'round' });
+      // Shadow cast onto the cloth just in front of it.
+      g.moveTo(...pt(from, nose - 3 * side)).lineTo(...pt(to, nose - 3 * side));
+      g.stroke({ width: 6, color: 0x000000, alpha: 0.18 });
     };
 
     // Long rails are split either side of the middle pocket; short rails run uninterrupted.
@@ -521,12 +628,6 @@ export class TableRenderer {
     run(midX + sideGap, TABLE_LENGTH - cornerGap, 'h', 1);
     run(cornerGap, TABLE_WIDTH - cornerGap, 'v', -1);
     run(cornerGap, TABLE_WIDTH - cornerGap, 'v', 1);
-
-    // Chrome pocket collars, like the plates on a real table.
-    for (const p of POCKETS) {
-      g.circle(p.x, p.y, p.radius * 1.24).stroke({ width: 4, color: 0xd8dbe2, alpha: 0.22 });
-      g.circle(p.x, p.y, p.radius * 1.24).stroke({ width: 1.5, color: 0x000000, alpha: 0.35 });
-    }
 
     return g;
   }
@@ -541,15 +642,19 @@ export class TableRenderer {
     const r = CHUTE_W / 2;
 
     g.roundRect(x + 4, y + 8, CHUTE_W, h, r).fill({ color: 0x000000, alpha: 0.45 });
-    g.roundRect(x, y, CHUTE_W, h, r).fill({ color: 0x1b1f29 });
-    g.roundRect(x, y, CHUTE_W, h, r).stroke({ width: 3, color: 0xffffff, alpha: 0.09 });
+    // Maple casing matching the rails, so the return track belongs to the same table.
+    g.roundRect(x, y, CHUTE_W, h, r).fill({ color: cssToHex(this.theme.railDark) });
+    g.roundRect(x + 3, y + 3, CHUTE_W - 6, h - 6, r - 3).fill({ color: cssToHex(this.theme.rail) });
+    g.roundRect(x, y, CHUTE_W, h, r).stroke({ width: 3, color: 0x1a1410, alpha: 0.9 });
     // Recessed inner channel the balls sit in.
     const inset = 9;
-    g.roundRect(x + inset, y + inset, CHUTE_W - inset * 2, h - inset * 2, r - inset).fill({ color: 0x0b0d13 });
+    g.roundRect(x + inset, y + inset, CHUTE_W - inset * 2, h - inset * 2, r - inset).fill({
+      color: cssToHex(this.theme.pocketDark),
+    });
     g.roundRect(x + inset, y + inset, CHUTE_W - inset * 2, h - inset * 2, r - inset).stroke({
-      width: 2,
-      color: 0x000000,
-      alpha: 0.6,
+      width: 2.5,
+      color: 0x1a1410,
+      alpha: 0.9,
     });
   }
 
@@ -557,8 +662,9 @@ export class TableRenderer {
     const g = this.diamondLayer;
     g.clear();
     const inset = 22;
+    const sight = cssToHex(this.theme.diamond);
     const draw = (x: number, y: number) => {
-      g.circle(x, y, 4.5).fill({ color: 0xf1e6c8, alpha: 0.85 });
+      g.circle(x, y, 4.5).fill({ color: sight, alpha: 0.85 });
     };
     for (let i = 1; i < 8; i++) {
       if (i === 4) continue; // no diamond over the side pockets
@@ -583,18 +689,21 @@ export class TableRenderer {
     return tex;
   }
 
-  private feltTextureFor(theme: FeltTheme): Texture {
-    let tex = this.feltTextureCache.get(theme);
+  private feltTextureFor(theme: TableTheme): Texture {
+    let tex = this.feltTextureCache.get(theme.id);
     if (!tex) {
       tex = Texture.from(generateFeltCanvas(theme));
-      this.feltTextureCache.set(theme, tex);
+      this.feltTextureCache.set(theme.id, tex);
     }
     return tex;
   }
 
-  setFeltTheme(theme: FeltTheme): void {
-    if (this.feltTheme === theme) return;
-    this.feltTheme = theme;
+  /** Swaps the whole table — cloth, rails, pockets — and repaints the room behind it. */
+  setTableTheme(id: string): void {
+    const theme = tableThemeFor(id);
+    if (this.theme.id === theme.id) return;
+    this.theme = theme;
+    applyTableThemeToPage(theme);
     this.buildTable();
   }
 
@@ -616,7 +725,10 @@ export class TableRenderer {
     const boardW = right - left;
     const boardH = this.chromeless ? TABLE_WIDTH + RAIL * 2 : BOARD_H;
 
-    this.scale = Math.min((w - pad * 2) / boardW, (h - pad * 2) / boardH);
+    // Deliberately short of a perfect fit: at 100% the table crowds the screen edges and
+    // leaves the scoreboard sitting on top of the rails.
+    const FIT = this.chromeless ? 1 : 0.92;
+    this.scale = Math.min((w - pad * 2) / boardW, (h - pad * 2) / boardH) * FIT;
     this.root.scale.set(this.scale);
 
     let ox = (w - boardW * this.scale) / 2 - left * this.scale;
@@ -663,10 +775,19 @@ export class TableRenderer {
     const resolved = resolveLoadout(loadout);
     this.cueSkin = cueSkinFor(resolved.cue);
     this.trailStyle = trailStyleFor(resolved.trail);
+    this.hitEffect = hitEffectFor(resolved.hitEffect);
   }
 
   setStreakFire(onFire: boolean): void {
     this.streakFire = onFire;
+  }
+
+  /** Speed trails can be switched off from settings on lower-end phones. */
+  setTrailsEnabled(enabled: boolean): void {
+    this.trailsEnabled = enabled;
+    if (!enabled) {
+      for (const visual of this.ballVisuals.values()) visual.trail.length = 0;
+    }
   }
 
   private textureFor(id: number): Texture {
@@ -915,41 +1036,79 @@ export class TableRenderer {
     const h = TABLE_WIDTH + RAIL * 2 - 20;
     const r = BAR_W / 2;
 
-    g.roundRect(x + 3, y + 8, BAR_W, h, r).fill({ color: 0x000000, alpha: 0.45 });
-    g.roundRect(x, y, BAR_W, h, r).fill({ color: 0x1b1f29 });
-    g.roundRect(x, y, BAR_W, h, r).stroke({ width: 3, color: 0xffffff, alpha: 0.09 });
+    // Housing: maple casing with the same ink outline as the rest of the game.
+    g.roundRect(x + 4, y + 10, BAR_W, h, r).fill({ color: 0x000000, alpha: 0.45 });
+    g.roundRect(x, y, BAR_W, h, r).fill({ color: cssToHex(this.theme.railDark) });
+    g.roundRect(x + 3, y + 3, BAR_W - 6, h - 6, r - 3).fill({ color: cssToHex(this.theme.rail) });
+    g.roundRect(x, y, BAR_W, h, r).stroke({ width: 3, color: 0x1a1410, alpha: 0.9 });
 
-    const innerX = x + 11;
-    const innerY = y + 11;
-    const innerW = BAR_W - 22;
-    const innerH = h - 22;
-    g.roundRect(innerX, innerY, innerW, innerH, innerW / 2).fill({ color: 0x0b0d13 });
+    const innerX = x + 12;
+    const innerY = y + 12;
+    const innerW = BAR_W - 24;
+    const innerH = h - 24;
+    g.roundRect(innerX, innerY, innerW, innerH, innerW / 2).fill({ color: 0x241a12 });
+    g.roundRect(innerX, innerY, innerW, innerH, innerW / 2).stroke({
+      width: 2,
+      color: 0x1a1410,
+      alpha: 0.9,
+    });
 
     const p = this.aim.visible ? this.aim.power : 0;
-    if (p > 0.01) {
-      const fillH = innerH * p;
-      const fillY = innerY + innerH - fillH;
-      const color =
-        p < 0.5 ? lerpColor(0x4ac26b, 0xffe27a, p / 0.5) : lerpColor(0xffe27a, 0xff4d4d, (p - 0.5) / 0.5);
-      g.roundRect(innerX, fillY, innerW, fillH, innerW / 2).fill({ color, alpha: 0.95 });
+    const maxed = p > 0.965;
 
-      // Chevrons marching up the filled section.
-      const chevGap = 26;
-      const phase = (this.elapsed * 40) % chevGap;
-      for (let cy = innerY + innerH - phase; cy > fillY; cy -= chevGap) {
-        const half = innerW * 0.3;
-        g.moveTo(innerX + innerW / 2 - half, cy)
-          .lineTo(innerX + innerW / 2, cy - 9)
-          .lineTo(innerX + innerW / 2 + half, cy);
-        g.stroke({ width: 3, color: 0xffffff, alpha: 0.4 });
+    // The meter is built from discrete segments rather than one smooth bar — it reads as a
+    // charge level at a glance, and the top segments flashing is what sells "max power".
+    const SEGMENTS = 14;
+    const gap = 3;
+    const segH = (innerH - gap * (SEGMENTS - 1)) / SEGMENTS;
+    const lit = p * SEGMENTS;
+
+    for (let i = 0; i < SEGMENTS; i++) {
+      const frac = (i + 0.5) / SEGMENTS;
+      const segY = innerY + innerH - (i + 1) * segH - i * gap;
+      const on = i < lit;
+      const partial = !on && i < lit + 1 ? lit - i : 0;
+
+      const color =
+        frac < 0.5
+          ? lerpColor(0x4ac26b, 0xffe27a, frac / 0.5)
+          : lerpColor(0xffe27a, 0xff4d4d, (frac - 0.5) / 0.5);
+
+      if (!on && partial <= 0) {
+        // Unlit segments stay clearly visible so the meter reads as a meter at rest, not as
+        // an empty slot in the woodwork.
+        g.roundRect(innerX + 2, segY, innerW - 4, segH, 3).fill({ color, alpha: 0.26 });
+        continue;
       }
+
+      const alpha = on ? 1 : 0.35 + partial * 0.5;
+      // Flash the whole stack at full power.
+      const flash = maxed ? 0.72 + 0.28 * Math.sin(this.elapsed * 22) : 1;
+      g.roundRect(innerX + 2, segY, innerW - 4, segH, 3).fill({ color, alpha: alpha * flash });
+      g.roundRect(innerX + 2, segY, innerW - 4, segH * 0.4, 3).fill({
+        color: 0xffffff,
+        alpha: 0.22 * alpha,
+      });
     }
 
-    // Tick marks so the scale reads even when empty.
+    // A highlight sweeping up the charged section, so the meter feels alive while held.
+    if (p > 0.04) {
+      const sweep = ((this.elapsed * 0.6) % 1) * p;
+      const sweepY = innerY + innerH - sweep * innerH;
+      g.roundRect(innerX + 1, sweepY - 7, innerW - 2, 14, 6).fill({ color: 0xffffff, alpha: 0.16 });
+    }
+
+    // Notch marks at the quarter points, cut into the wood beside the tube.
     for (let i = 1; i < 4; i++) {
       const ty = innerY + (innerH * i) / 4;
-      g.moveTo(innerX + 4, ty).lineTo(innerX + innerW - 4, ty);
-      g.stroke({ width: 1.5, color: 0xffffff, alpha: 0.12 });
+      g.roundRect(x + 4, ty - 1.5, 6, 3, 1.5).fill({ color: 0x1a1410, alpha: 0.6 });
+      g.roundRect(x + BAR_W - 10, ty - 1.5, 6, 3, 1.5).fill({ color: 0x1a1410, alpha: 0.6 });
+    }
+
+    // Max-power crown at the top of the housing.
+    if (maxed) {
+      const glow = 0.55 + 0.45 * Math.sin(this.elapsed * 22);
+      g.circle(x + BAR_W / 2, y + 6, 7).fill({ color: 0xff4d4d, alpha: glow });
     }
   }
 
@@ -1011,6 +1170,68 @@ export class TableRenderer {
     };
   }
 
+  /**
+   * Attract mode for the menu backdrop: the renderer drives its own simulation instead of
+   * waiting for server snapshots, nudging balls again whenever the table settles. Uses the
+   * same `stepSimulation` the server does, so the menu is showing real pool, not a loop.
+   */
+  startAttractMode(): void {
+    if (this.attract) return;
+    this.attract = { balls: rackBalls(), idle: 0 };
+    // Scatter the rack so it doesn't open on a perfect triangle every time.
+    for (const ball of this.attract.balls) {
+      ball.pos.x = BALL_RADIUS * 3 + Math.random() * (TABLE_LENGTH - BALL_RADIUS * 6);
+      ball.pos.y = BALL_RADIUS * 3 + Math.random() * (TABLE_WIDTH - BALL_RADIUS * 6);
+    }
+    this.nudgeAttractBalls();
+  }
+
+  stopAttractMode(): void {
+    this.attract = null;
+  }
+
+  private nudgeAttractBalls(): void {
+    if (!this.attract) return;
+    const live = this.attract.balls.filter((b) => !b.pocketed);
+    // Send two or three balls off at a gentle pace — this is wallpaper, not a break.
+    for (let i = 0; i < 3; i++) {
+      const ball = live[Math.floor(Math.random() * live.length)];
+      if (!ball) continue;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 700 + Math.random() * 900;
+      ball.vel = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
+    }
+  }
+
+  private tickAttract(deltaSeconds: number): void {
+    const attract = this.attract;
+    if (!attract) return;
+
+    const { settled } = stepSimulation(attract.balls, Math.min(deltaSeconds, 1 / 30));
+    // Balls that drop are put straight back so the table never empties out.
+    for (const ball of attract.balls) {
+      if (!ball.pocketed) continue;
+      ball.pocketed = false;
+      ball.pos = {
+        x: BALL_RADIUS * 3 + Math.random() * (TABLE_LENGTH - BALL_RADIUS * 6),
+        y: BALL_RADIUS * 3 + Math.random() * (TABLE_WIDTH - BALL_RADIUS * 6),
+      };
+      ball.vel = { x: 0, y: 0 };
+    }
+
+    if (settled) {
+      attract.idle += deltaSeconds;
+      if (attract.idle > 1.6) {
+        attract.idle = 0;
+        this.nudgeAttractBalls();
+      }
+    } else {
+      attract.idle = 0;
+    }
+
+    this.updateBalls(attract.balls);
+  }
+
   /** Inverse of screenToTable — used to fly DOM effects (XP toasts) off a table position. */
   tableToScreen(x: number, y: number): { x: number; y: number } {
     const rect = this.app.canvas.getBoundingClientRect();
@@ -1026,7 +1247,13 @@ export class TableRenderer {
 
   /** Screen shake, magnitude in table units; scale roughly with collision impulse. */
   shake(strength: number): void {
+    if (!this.shakeEnabled) return;
     this.shakeMag = Math.max(this.shakeMag, Math.min(strength, 18));
+  }
+
+  setShakeEnabled(enabled: boolean): void {
+    this.shakeEnabled = enabled;
+    if (!enabled) this.shakeMag = 0;
   }
 
   /**
@@ -1052,29 +1279,137 @@ export class TableRenderer {
     }
   }
 
-  /** A jagged comic-book starburst plus an expanding ring at the point of contact. */
+  /**
+   * The contact effect, drawn to whatever the shooter has equipped. The geometry differs per
+   * shape but the life cycle is shared: pop out fast, then shrink and fade — the classic
+   * squashy cartoon impact curve.
+   */
   private spawnImpactBurst(pos: { x: number; y: number }, strength: number): void {
-    const spikes = 9;
-    const outer = BALL_RADIUS * (0.85 + strength * 0.9);
-    const inner = outer * 0.45;
-    const pts: number[] = [];
-    for (let i = 0; i < spikes * 2; i++) {
-      // Jitter each spike so the burst looks hand-drawn rather than machined.
-      const r = (i % 2 === 0 ? outer : inner) * (0.82 + Math.random() * 0.36);
-      const a = (i / (spikes * 2)) * Math.PI * 2;
-      pts.push(Math.cos(a) * r, Math.sin(a) * r);
-    }
+    const fx = this.hitEffect;
+    const [core, mid, outerCol] = fx.colors;
+    const outer = BALL_RADIUS * (0.85 + strength * 0.9) * fx.scale;
 
-    const hot = strength > 0.7;
     const star = new Graphics();
-    star.poly(pts).fill({ color: hot ? 0xffd25e : 0xfff6d8, alpha: 0.95 });
-    star.poly(pts).stroke({ width: 3, color: hot ? 0xff6a2d : 0xffb43d, alpha: 0.9 });
     star.position.set(pos.x, pos.y);
     star.rotation = Math.random() * Math.PI;
     this.fxLayer.addChild(star);
 
+    /** Star/burst outline built from alternating long and short radii. */
+    const spikes = (count: number, innerRatio: number, jitter: number): number[] => {
+      const pts: number[] = [];
+      for (let i = 0; i < count * 2; i++) {
+        // Jitter each point so the burst looks hand-drawn rather than machined.
+        const r = (i % 2 === 0 ? outer : outer * innerRatio) * (1 - jitter + Math.random() * jitter * 2);
+        const a = (i / (count * 2)) * Math.PI * 2;
+        pts.push(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      return pts;
+    };
+
+    const drawOutlined = (pts: number[], fill: number, stroke: number): void => {
+      if (fx.outlined) star.poly(pts).stroke({ width: 7, color: 0x140f22, alpha: 0.85 });
+      star.poly(pts).fill({ color: fill, alpha: 0.95 });
+      star.poly(pts).stroke({ width: 3, color: stroke, alpha: 0.9 });
+    };
+
+    switch (fx.shape) {
+      case 'pow':
+        drawOutlined(spikes(Math.round(10 * fx.density), 0.4, 0.22), core, mid);
+        break;
+
+      case 'ring':
+        // Mostly rings, so keep the centre small and let the shockwave do the work.
+        star.circle(0, 0, outer * 0.42).fill({ color: core, alpha: 0.9 });
+        star.circle(0, 0, outer * 0.75).stroke({ width: 5, color: mid, alpha: 0.8 });
+        break;
+
+      case 'puff':
+        for (let i = 0; i < Math.round(7 * fx.density); i++) {
+          const a = Math.random() * Math.PI * 2;
+          const d = Math.random() * outer * 0.7;
+          star
+            .circle(Math.cos(a) * d, Math.sin(a) * d, outer * (0.3 + Math.random() * 0.35))
+            .fill({ color: i % 2 ? core : mid, alpha: 0.5 });
+        }
+        break;
+
+      case 'confetti':
+        for (let i = 0; i < Math.round(12 * fx.density); i++) {
+          const a = Math.random() * Math.PI * 2;
+          const d = outer * (0.3 + Math.random() * 0.8);
+          const c = [core, mid, outerCol][i % 3];
+          star
+            .rect(Math.cos(a) * d - 3, Math.sin(a) * d - 1.5, 7, 3.5)
+            .fill({ color: c, alpha: 0.95 });
+        }
+        break;
+
+      case 'bolt':
+        for (let i = 0; i < Math.round(5 * fx.density); i++) {
+          const a = Math.random() * Math.PI * 2;
+          // Each bolt walks outward in three kinked segments.
+          let x = 0;
+          let y = 0;
+          star.moveTo(0, 0);
+          for (let seg = 1; seg <= 3; seg++) {
+            const jitter = (Math.random() - 0.5) * 0.9;
+            const r = (outer * 1.4 * seg) / 3;
+            x = Math.cos(a + jitter) * r;
+            y = Math.sin(a + jitter) * r;
+            star.lineTo(x, y);
+          }
+          star.stroke({ width: 3 - i * 0.2, color: i % 2 ? core : mid, alpha: 0.95 });
+        }
+        break;
+
+      case 'shard':
+        for (let i = 0; i < Math.round(7 * fx.density); i++) {
+          const a = (i / Math.round(7 * fx.density)) * Math.PI * 2 + Math.random() * 0.4;
+          const len = outer * (0.7 + Math.random() * 0.7);
+          const w = outer * 0.18;
+          drawOutlined(
+            [
+              Math.cos(a) * len,
+              Math.sin(a) * len,
+              Math.cos(a + 0.5) * w,
+              Math.sin(a + 0.5) * w,
+              Math.cos(a - 0.5) * w,
+              Math.sin(a - 0.5) * w,
+            ],
+            core,
+            mid
+          );
+        }
+        break;
+
+      case 'splat':
+        star.circle(0, 0, outer * 0.5).fill({ color: core, alpha: 0.9 });
+        for (let i = 0; i < Math.round(8 * fx.density); i++) {
+          const a = Math.random() * Math.PI * 2;
+          const d = outer * (0.4 + Math.random() * 0.9);
+          star
+            .circle(Math.cos(a) * d, Math.sin(a) * d, outer * (0.08 + Math.random() * 0.22))
+            .fill({ color: i % 2 ? core : mid, alpha: 0.85 });
+        }
+        break;
+
+      case 'nova':
+        star.circle(0, 0, outer * 0.9).fill({ color: outerCol, alpha: 0.28 });
+        drawOutlined(spikes(Math.round(14 * fx.density), 0.24, 0.3), core, mid);
+        star.circle(0, 0, outer * 0.36).fill({ color: 0xffffff, alpha: 0.95 });
+        break;
+
+      default: {
+        // 'spark' — the original hand-drawn starburst, hot at high impact.
+        const hot = strength > 0.7;
+        drawOutlined(spikes(Math.round(9 * fx.density), 0.45, 0.18), hot ? core : 0xfff6d8, hot ? outerCol : mid);
+      }
+    }
+
     const ring = new Graphics();
-    ring.circle(0, 0, BALL_RADIUS * 0.8).stroke({ width: 4, color: 0xffffff, alpha: 0.85 });
+    if (fx.ring) {
+      ring.circle(0, 0, BALL_RADIUS * 0.8).stroke({ width: 4, color: mid, alpha: 0.85 });
+    }
     ring.position.set(pos.x, pos.y);
     this.fxLayer.addChild(ring);
 
@@ -1167,6 +1502,7 @@ export class TableRenderer {
     this.elapsed += deltaSeconds;
     this.shakeMag *= Math.pow(0.001, deltaSeconds);
     this.layout();
+    this.tickAttract(deltaSeconds);
 
     // Snappy correction toward the (moving) predicted point rather than a slow chase of a
     // stale snapshot — see the extrapolation note above updateBalls/tick.
@@ -1299,6 +1635,8 @@ export class TableRenderer {
    * tail visibly shortens rather than snapping off.
    */
   private updateTrail(visual: BallVisual, speed: number): void {
+    if (!this.trailsEnabled) return;
+
     // Low threshold so even a gently rolling ball leaves a faint wake, with the colour
     // ramp reaching red well before top speed so hard strikes read as hot immediately.
     const MIN_SPEED = 70;
@@ -1467,8 +1805,8 @@ export class TableRenderer {
     // Cue-skin aura sits under the power glow, so a legendary cue reads as lit even at rest.
     const skin = this.cueSkin;
     if (skin.aura) {
-      const tailX = tipX - dirX * BALL_RADIUS * 23;
-      const tailY = tipY - dirY * BALL_RADIUS * 23;
+      const tailX = tipX - dirX * CUE_LENGTH;
+      const tailY = tipY - dirY * CUE_LENGTH;
       glow.moveTo(tailX, tailY).lineTo(tipX, tipY);
       glow.stroke({ width: 30, color: skin.aura, alpha: 0.22, cap: 'round' });
     }
@@ -1477,8 +1815,8 @@ export class TableRenderer {
     if (skin.embers && Math.random() < 0.35) {
       const f = 0.15 + Math.random() * 0.7;
       this.particles.embers(
-        tipX - dirX * BALL_RADIUS * 23 * f,
-        tipY - dirY * BALL_RADIUS * 23 * f
+        tipX - dirX * CUE_LENGTH * f,
+        tipY - dirY * CUE_LENGTH * f
       );
     }
 
@@ -1493,7 +1831,7 @@ export class TableRenderer {
    * Built from quads because Pixi strokes are constant-width — the taper is the whole point.
    */
   private drawCueStick(g: Graphics, tipX: number, tipY: number, dirX: number, dirY: number): void {
-    const LEN = BALL_RADIUS * 23;
+    const LEN = CUE_LENGTH;
     const R_TIP = 4.6;
     const R_BUTT = 13.5;
     // Perpendicular to the cue, used to fan each segment out to its half-width.

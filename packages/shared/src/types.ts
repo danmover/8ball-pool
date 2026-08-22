@@ -28,20 +28,44 @@ export function seatIndex(seat: Seat): number {
 }
 
 /**
- * - `classic`  : standard 1v1 eight-ball, solids vs stripes.
- * - `teams`    : any number of players split into two teams; seats alternate around the
- *                table and each team shares a group, exactly like real-life doubles.
- * - `rotation` : free-for-all; you must strike the lowest-numbered ball on the table first,
- *                and every ball you legally pot scores its face value. Highest score wins.
+ * - `classic`   : standard 1v1 eight-ball, solids vs stripes.
+ * - `teams`     : any number of players split into two teams; seats alternate around the
+ *                 table and each team shares a group, exactly like real-life doubles.
+ * - `rotation`  : free-for-all; you must strike the lowest-numbered ball on the table first,
+ *                 and every ball you legally pot scores its face value. Highest score wins.
+ * - `nineball`  : balls 1-9 only, lowest ball first, and whoever legally sinks the 9 wins —
+ *                 including off a combination.
+ * - `cutthroat` : 3-5 players each own a group of balls; you're out when your last one drops,
+ *                 and the last player with a ball still on the table wins.
+ * - `killer`    : everyone starts with lives; fail to pot on your turn and you lose one.
+ * - `sandbox`   : no turns, no fouls, no winner — a practice table.
  */
-export type GameMode = 'classic' | 'teams' | 'rotation';
+export type GameMode =
+  | 'classic'
+  | 'teams'
+  | 'rotation'
+  | 'nineball'
+  | 'cutthroat'
+  | 'killer'
+  | 'sandbox';
+
+export type BotDifficulty = 'rookie' | 'club' | 'shark' | 'legend';
 
 export interface LobbySettings {
   mode: GameMode;
   maxPlayers: number;
+  /** Per-shot countdown in seconds; null disables the clock. */
+  shotClockSeconds: number | null;
+  /** Frames needed to take the match; 1 is a single one-and-done frame. */
+  seriesTarget: number;
 }
 
-export const DEFAULT_LOBBY: LobbySettings = { mode: 'classic', maxPlayers: 2 };
+export const DEFAULT_LOBBY: LobbySettings = {
+  mode: 'classic',
+  maxPlayers: 2,
+  shotClockSeconds: null,
+  seriesTarget: 1,
+};
 
 export interface PlayerInfo {
   seat: Seat;
@@ -53,6 +77,14 @@ export interface PlayerInfo {
   score: number; // rotation mode only
   /** Cosmetics this player has equipped; rides along in state so the host can render them. */
   loadout: Loadout;
+  /** Killer mode: lives remaining. Null in modes without lives. */
+  lives: number | null;
+  /** Cutthroat: the ball ids this player owns and must protect. */
+  ownedBalls: number[];
+  /** Out of the frame — eliminated in cutthroat/killer. Skipped in turn order. */
+  eliminated: boolean;
+  isBot: boolean;
+  botDifficulty: BotDifficulty | null;
 }
 
 export type TurnPhase =
@@ -74,6 +106,13 @@ export interface GameState {
   winningTeam: Team | null;
   lastFoulReason: string | null;
   turnNumber: number;
+  /**
+   * Shot clock deadline as an absolute epoch-millis timestamp rather than a countdown, so
+   * clients can't drift out of sync with the server's timer.
+   */
+  shotClock: { endsAt: number; seconds: number } | null;
+  /** Best-of series across frames; null when playing single frames. */
+  series: { target: number; frame: number; wins: Record<Seat, number> } | null;
 }
 
 export interface AimInput {
@@ -92,6 +131,11 @@ export interface BallInHandPlacement {
 }
 
 export type TrajectoryPreviewMode = 'off' | 'basic' | 'full';
+
+/**
+ * Retained only so older saved settings still parse; the client resolves these onto the
+ * richer table themes (cloth + rails + pockets + surround) defined in its theme registry.
+ */
 export type FeltTheme = 'green' | 'blue' | 'crimson' | 'midnight';
 
 export interface PlayerSettings {
@@ -101,8 +145,18 @@ export interface PlayerSettings {
   hapticsEnabled: boolean;
   colorblindPatterns: boolean;
   leftHanded: boolean;
-  feltTheme: FeltTheme;
+  /** Table theme id — cloth, rails, pockets and the surround behind the table. */
+  tableTheme: string;
   effectsIntensity: 'low' | 'high';
+  /** Camera shake on hard hits and pots. */
+  screenShake: boolean;
+  /** Speed trails behind moving balls. */
+  ballTrails: boolean;
+  /** Master switch that also stills the banner effects and menu backdrop. */
+  reduceMotion: boolean;
+  /** Defaults carried into new lobbies, so you set them up once. */
+  defaultBotDifficulty: BotDifficulty;
+  defaultShotClock: number | null;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -112,8 +166,13 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   hapticsEnabled: true,
   colorblindPatterns: false,
   leftHanded: false,
-  feltTheme: 'green',
+  tableTheme: 'classic',
   effectsIntensity: 'high',
+  screenShake: true,
+  ballTrails: true,
+  reduceMotion: false,
+  defaultBotDifficulty: 'club',
+  defaultShotClock: null,
 };
 
 export interface TrajectorySegment {
@@ -137,7 +196,16 @@ export interface ServerToClientEvents {
   shotFired: (input: ShootInput) => void;
   simEvent: (event: SimEvent) => void;
   errorMessage: (message: string) => void;
+  /** A player sent a reaction; the host floats it off their banner. */
+  emote: (payload: { seat: Seat; emote: string }) => void;
+  /** A seat opened up and this spectator is first in line for it. */
+  seatAvailable: (payload: { seat: Seat }) => void;
 }
+
+/** The fixed reaction set. Server-validated, so clients can't inject arbitrary content. */
+export const EMOTES = ['👍', '😂', '😱', '🔥', '🎯', '😭', '🤝', '🐍'] as const;
+export type Emote = (typeof EMOTES)[number];
+export const EMOTE_COOLDOWN_MS = 1500;
 
 export interface ClientToServerEvents {
   hostCreateRoom: (payload: { hostName: string }, cb: (res: { code: string; token: string }) => void) => void;
@@ -159,6 +227,9 @@ export interface ClientToServerEvents {
   placeCueBall: (payload: BallInHandPlacement) => void;
   updateSettings: (settings: Partial<PlayerSettings>) => void;
   requestRematch: () => void;
+  hostAddBot: (payload: { seat: Seat; difficulty: BotDifficulty }) => void;
+  hostRemoveBot: (payload: { seat: Seat }) => void;
+  sendEmote: (payload: { emote: string }) => void;
 }
 
 export interface RoomStateDTO {

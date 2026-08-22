@@ -90,6 +90,16 @@ export function grantXp(amount: number): XpAward {
   };
 }
 
+/** Spins awarded outside the level curve — the daily challenge, mainly. */
+export function grantSpin(count = 1): Profile {
+  const profile = getProfile();
+  return commit({ ...profile, spins: profile.spins + Math.max(0, Math.round(count)) });
+}
+
+export function setDailyProgress(daily: NonNullable<Profile['daily']>): Profile {
+  return commit({ ...getProfile(), daily: { ...daily } });
+}
+
 export function recordStats(patch: Partial<Profile['stats']>): Profile {
   const profile = getProfile();
   const stats = { ...profile.stats };

@@ -53,6 +53,35 @@ function raycastBalls(
   return best;
 }
 
+/**
+ * Is the straight line from `from` to `to` free of other balls? Used by the aim guide's
+ * cousin — the bot's shot evaluation — so both agree on what "blocked" means.
+ *
+ * `ignore` lists ball ids that sit at the ends of the line (the cue ball and the target).
+ */
+export function pathIsClear(
+  balls: Ball[],
+  from: Vec2,
+  to: Vec2,
+  ignore: number[] = []
+): boolean {
+  const delta = Vec2.sub(to, from);
+  const distance = Vec2.length(delta);
+  if (distance < 1e-6) return true;
+  const dir = Vec2.scale(delta, 1 / distance);
+
+  for (const ball of balls) {
+    if (ball.pocketed || ignore.includes(ball.id)) continue;
+    const oc = Vec2.sub(ball.pos, from);
+    const along = Vec2.dot(oc, dir);
+    if (along <= 0 || along >= distance) continue; // behind the start or past the end
+    const perp = Math.abs(oc.x * dir.y - oc.y * dir.x);
+    // Two balls collide when their centres pass within one diameter of each other.
+    if (perp < BALL_RADIUS * 2) return false;
+  }
+  return true;
+}
+
 function nearPocket(point: Vec2): boolean {
   return POCKETS.some((p) => Vec2.distance(point, p) <= p.radius * 1.3);
 }
