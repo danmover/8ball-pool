@@ -4,7 +4,8 @@
  * each client resolves those to its own rendering data.
  */
 
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+/** `mystic` sits above legendary — one per slot, and deliberately absurd. */
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mystic';
 
 export type CosmeticSlot =
   | 'cue'
@@ -47,14 +48,20 @@ export const SLOT_LABELS: Record<CosmeticSlot, string> = {
   avatar: 'Avatars',
 };
 
-export const RARITY_ORDER: Rarity[] = ['common', 'rare', 'epic', 'legendary'];
+export const RARITY_ORDER: Rarity[] = ['common', 'rare', 'epic', 'legendary', 'mystic'];
 
 export const RARITY_LABELS: Record<Rarity, string> = {
   common: 'Common',
   rare: 'Rare',
   epic: 'Epic',
   legendary: 'Legendary',
+  mystic: 'Mystic',
 };
+
+/** Sort key so grids always run common → mystic regardless of catalog order. */
+export function rarityRank(rarity: Rarity): number {
+  return RARITY_ORDER.indexOf(rarity);
+}
 
 export const CATALOG: CosmeticItem[] = [
   // ---- Cues ----
@@ -151,6 +158,57 @@ export const CATALOG: CosmeticItem[] = [
   { id: 'avatar.triangle', slot: 'avatar', name: 'The Rack', rarity: 'rare', blurb: 'Fifteen balls, one triangle.' },
   { id: 'avatar.shark', slot: 'avatar', name: 'Shark', rarity: 'epic', blurb: 'Circling the table.' },
   { id: 'avatar.flame', slot: 'avatar', name: 'Firebrand', rarity: 'legendary', blurb: 'Permanently on fire.' },
+
+  // ---- Mystic: one per slot, and each one is meant to be ridiculous ----
+  {
+    id: 'cue.eventhorizon',
+    slot: 'cue',
+    name: 'Event Horizon',
+    rarity: 'mystic',
+    blurb: 'Light bends around the shaft. The tip is somewhere else entirely.',
+  },
+  {
+    id: 'balls.cosmos',
+    slot: 'ballSet',
+    name: 'Pocket Cosmos',
+    rarity: 'mystic',
+    blurb: 'Fifteen tiny galaxies and a moon to break with.',
+  },
+  {
+    id: 'trail.timerift',
+    slot: 'trail',
+    name: 'Time Rift',
+    rarity: 'mystic',
+    blurb: 'Leaves a seam in the afternoon that slowly heals over.',
+  },
+  {
+    id: 'hit.bigbang',
+    slot: 'hitEffect',
+    name: 'Big Bang',
+    rarity: 'mystic',
+    blurb: 'Briefly creates, and then thinks better of, a universe.',
+  },
+  {
+    id: 'banner.oracle',
+    slot: 'banner',
+    name: "Oracle's Slate",
+    rarity: 'mystic',
+    blurb: 'Your name written in a script nobody agreed on.',
+  },
+  {
+    id: 'fx.thirdeye',
+    slot: 'bannerEffect',
+    name: 'Third Eye',
+    rarity: 'mystic',
+    blurb: 'It blinks. Sometimes at people who are not you.',
+  },
+  {
+    id: 'avatar.oracle',
+    slot: 'avatar',
+    name: 'The Oracle',
+    rarity: 'mystic',
+    blurb: 'Has already seen how this frame ends. Rude about it.',
+  },
 ];
 
 /** Everyone starts with these, and they can never be rolled or bought. */
@@ -172,8 +230,11 @@ export function cosmeticById(id: string): CosmeticItem | undefined {
   return BY_ID.get(id);
 }
 
+/** Items for a slot, ordered common → mystic so the grid reads as a progression. */
 export function itemsForSlot(slot: CosmeticSlot): CosmeticItem[] {
-  return CATALOG.filter((item) => item.slot === slot);
+  return CATALOG.filter((item) => item.slot === slot).sort(
+    (a, b) => rarityRank(a.rarity) - rarityRank(b.rarity)
+  );
 }
 
 /** Resolves a (possibly partial or stale) loadout to a complete one with valid ids. */

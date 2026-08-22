@@ -95,8 +95,14 @@ export function renderHomePage(root: HTMLElement): () => void {
   const joinError = root.querySelector<HTMLElement>('#joinError')!;
 
   // ---- Live table backdrop ----
+  // The CSS class paints a felt-and-vignette backdrop immediately; the live table then
+  // renders over it. If WebGL is unavailable — or the browser has run out of contexts after
+  // enough navigation — the page still has a proper background instead of going black.
+  backdrop.classList.add('has-fallback');
+
   if (!settings.reduceMotion) {
-    void TableRenderer.create(backdrop).then((created) => {
+    void TableRenderer.create(backdrop)
+      .then((created) => {
       if (disposed) {
         created.destroy();
         return;
@@ -110,7 +116,11 @@ export function renderHomePage(root: HTMLElement): () => void {
       renderer.setShooterLoadout(loadout);
       renderer.setTrailsEnabled(settings.ballTrails);
       renderer.startAttractMode();
-    });
+      })
+      .catch((err) => {
+        // Never silent: a blank menu with no explanation is exactly what this used to be.
+        console.error('Menu backdrop failed to start; falling back to the painted one.', err);
+      });
   }
 
   function drawPlayer(): void {

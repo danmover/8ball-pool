@@ -113,6 +113,14 @@ const STYLES: Record<string, TrailStyle> = {
     length: 1.45,
     glow: true,
   },
+  'trail.timerift': {
+    ramp: [0xffffff, 0xb98cff, 0x2a0a5a, 0x000000],
+    shape: 'comet',
+    width: 1.5,
+    alpha: 1,
+    length: 1.8,
+    glow: true,
+  },
 };
 
 export function trailStyleFor(id: string | undefined): TrailStyle {

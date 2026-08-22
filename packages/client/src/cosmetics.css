@@ -238,6 +238,36 @@
     0 6px 18px rgba(0, 0, 0, 0.5);
 }
 
+.bn-oracle {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(185, 140, 255, 0.45), transparent 45%),
+    radial-gradient(circle at 80% 70%, rgba(52, 226, 176, 0.3), transparent 45%),
+    linear-gradient(180deg, #241155, #0a0616);
+  box-shadow:
+    inset 0 0 0 2px #b98cff,
+    inset 0 0 26px rgba(185, 140, 255, 0.35),
+    0 0 30px rgba(122, 74, 255, 0.4),
+    0 6px 18px rgba(0, 0, 0, 0.55);
+  animation: oracleBreathe 5s ease-in-out infinite alternate;
+}
+
+@keyframes oracleBreathe {
+  from {
+    box-shadow:
+      inset 0 0 0 2px #b98cff,
+      inset 0 0 20px rgba(185, 140, 255, 0.25),
+      0 0 22px rgba(122, 74, 255, 0.3),
+      0 6px 18px rgba(0, 0, 0, 0.55);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 2px #e8d8ff,
+      inset 0 0 34px rgba(185, 140, 255, 0.5),
+      0 0 42px rgba(122, 74, 255, 0.55),
+      0 6px 18px rgba(0, 0, 0, 0.55);
+  }
+}
+
 /* --- Banner effects --- */
 
 .bn-fx {
@@ -492,6 +522,46 @@
   }
 }
 
+/* An eye that opens, looks around, and blinks — drawn entirely with gradients so it needs
+   no child nodes. */
+/* Parked at the right edge rather than dead centre — in the middle the pupil landed right
+   on top of the player's name. */
+.fx-thirdeye {
+  background:
+    radial-gradient(circle 4px at var(--eye-x, 84%) 50%, #0a0616 0 4px, transparent 5px),
+    radial-gradient(circle 8px at var(--eye-x, 84%) 50%, #7a4aff 0 8px, transparent 9px),
+    radial-gradient(ellipse 26px 15px at 84% 50%, rgba(232, 216, 255, 0.9) 0 14px, transparent 15px);
+  animation:
+    eyeBlink 5.5s ease-in-out infinite,
+    eyeLook 7s ease-in-out infinite;
+}
+
+@keyframes eyeBlink {
+  0%,
+  88%,
+  100% {
+    opacity: 0.85;
+    transform: scaleY(1);
+  }
+  92% {
+    opacity: 0.85;
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes eyeLook {
+  0%,
+  100% {
+    --eye-x: 81%;
+  }
+  40% {
+    --eye-x: 87%;
+  }
+  70% {
+    --eye-x: 83%;
+  }
+}
+
 /* The low-effects setting and reduced-motion both drop the decorative layers. */
 body.fx-low .bn-fx i {
   display: none;
@@ -524,6 +594,43 @@ body.fx-low .bn-champion {
 }
 .rarity-legendary {
   --rarity: #ffc94d;
+}
+
+.rarity-mystic {
+  --rarity: #b98cff;
+}
+
+/* Mystic cards shimmer, so the tier is obvious before you read the label. */
+.item-card.rarity-mystic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    transparent 34%,
+    rgba(185, 140, 255, 0.35) 47%,
+    rgba(52, 226, 176, 0.28) 53%,
+    transparent 66%
+  );
+  background-size: 260% 100%;
+  animation: mysticSheen 3.2s linear infinite;
+}
+
+@keyframes mysticSheen {
+  from {
+    background-position: 170% 0;
+  }
+  to {
+    background-position: -70% 0;
+  }
+}
+
+body.reduce-motion .item-card.rarity-mystic::after,
+body.reduce-motion .bn-oracle,
+body.reduce-motion .fx-thirdeye {
+  animation: none;
 }
 
 /* --- The locker --- */

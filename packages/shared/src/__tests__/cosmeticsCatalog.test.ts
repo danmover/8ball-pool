@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   CATALOG,
   DEFAULT_LOADOUT,
+  RARITY_WEIGHTS,
   SLOT_ORDER,
   STARTER_IDS,
+  chalkForDuplicate,
+  chalkPrice,
   cosmeticById,
   itemsForSlot,
+  rarityRank,
   resolveLoadout,
   rollWheel,
   wheelPool,
@@ -52,6 +56,26 @@ describe('expanded catalog', () => {
       owned.push(result.item.id);
     }
     expect(rollWheel(owned, rng).duplicate).toBe(true);
+  });
+
+  it('orders every slot common through mystic', () => {
+    for (const slot of SLOT_ORDER) {
+      const ranks = itemsForSlot(slot).map((i) => rarityRank(i.rarity));
+      expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    }
+  });
+
+  it('gives every slot exactly one mystic item', () => {
+    for (const slot of SLOT_ORDER) {
+      const mystics = itemsForSlot(slot).filter((i) => i.rarity === 'mystic');
+      expect(mystics).toHaveLength(1);
+    }
+  });
+
+  it('prices and pays out mystic above legendary', () => {
+    expect(chalkPrice('mystic')).toBeGreaterThan(chalkPrice('legendary'));
+    expect(chalkForDuplicate('mystic')).toBeGreaterThan(chalkForDuplicate('legendary'));
+    expect(RARITY_WEIGHTS.mystic).toBeLessThan(RARITY_WEIGHTS.legendary);
   });
 
   it('resolves a loadout that predates the hit-effect slot', () => {

@@ -139,6 +139,24 @@ function body(opts: AvatarOpts, text: string): string {
       ${GLOSS}`;
   }
 
+  if (style === 'avatar.oracle') {
+    return `
+      <circle cx="50" cy="50" r="50" fill="#140a2e"/>
+      <g fill="#b98cff" opacity="0.8">
+        <circle cx="18" cy="22" r="2"/><circle cx="82" cy="30" r="1.6"/>
+        <circle cx="30" cy="78" r="1.8"/><circle cx="74" cy="76" r="2.2"/>
+        <circle cx="52" cy="14" r="1.4"/>
+      </g>
+      <path d="M8 50s16-22 42-22 42 22 42 22-16 22-42 22S8 50 8 50z" fill="#2a1560" stroke="#b98cff" stroke-width="3"/>
+      <circle cx="50" cy="50" r="15" fill="#e8d8ff"/>
+      <circle cx="50" cy="50" r="9" fill="#7a4aff"/>
+      <circle cx="50" cy="50" r="4" fill="#0a0616"/>
+      <circle cx="46" cy="46" r="2.6" fill="#fff"/>
+      <text x="50" y="86" font-family="${FONT}" font-size="13" font-weight="800"
+            text-anchor="middle" dominant-baseline="central" fill="#e8d8ff">${text}</text>
+      ${GLOSS}`;
+  }
+
   // avatar.ball — the original numbered-ball disc, striped when the group is stripes.
   const stripe = opts.striped
     ? `<circle cx="50" cy="50" r="50" fill="#f6f2e6"/><rect x="0" y="30" width="100" height="40" fill="${base}"/>`

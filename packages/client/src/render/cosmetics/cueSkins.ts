@@ -219,6 +219,20 @@ const SKINS: Record<string, CueSkin> = {
     aura: 0xffd76b,
     shimmer: true,
   },
+  'cue.eventhorizon': {
+    tip: 0xffffff,
+    ferrule: 0xc9b8ff,
+    shaft: 0x0a0616,
+    collar: 0xb98cff,
+    ring: 0x000000,
+    forearm: 0x140a2e,
+    wrap: 0x05020c,
+    butt: 0xb98cff,
+    inlay: 0xffffff,
+    aura: 0x7a4aff,
+    shimmer: true,
+    embers: true,
+  },
 };
 
 export function cueSkinFor(id: string | undefined): CueSkin {

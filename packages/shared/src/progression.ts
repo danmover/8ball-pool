@@ -83,6 +83,7 @@ const DUPLICATE_CHALK: Record<Rarity, number> = {
   rare: 25,
   epic: 60,
   legendary: 150,
+  mystic: 400,
 };
 
 const CHALK_PRICE: Record<Rarity, number> = {
@@ -90,6 +91,7 @@ const CHALK_PRICE: Record<Rarity, number> = {
   rare: 150,
   epic: 400,
   legendary: 1000,
+  mystic: 3000,
 };
 
 export function chalkForDuplicate(rarity: Rarity): number {
@@ -107,6 +109,8 @@ export const RARITY_WEIGHTS: Record<Rarity, number> = {
   rare: 28,
   epic: 13,
   legendary: 4,
+  // Rare enough to be a story when it lands, common enough that it does eventually.
+  mystic: 1,
 };
 
 export interface WheelResult {

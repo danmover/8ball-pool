@@ -18,6 +18,7 @@ const BANNER_CLASSES: Record<string, string> = {
   'banner.marble': 'bn-marble',
   'banner.circuit': 'bn-circuit',
   'banner.royal': 'bn-royal',
+  'banner.oracle': 'bn-oracle',
 };
 
 const EFFECT_CLASSES: Record<string, string> = {
@@ -32,6 +33,7 @@ const EFFECT_CLASSES: Record<string, string> = {
   'fx.snow': 'fx-snow',
   'fx.scanline': 'fx-scanline',
   'fx.aurora': 'fx-aurora',
+  'fx.thirdeye': 'fx-thirdeye',
 };
 
 /** Effects that need extra child nodes (flame tongues, stars) rather than pure CSS layers. */

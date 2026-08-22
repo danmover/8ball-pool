@@ -102,6 +102,14 @@ const EFFECTS: Record<string, HitEffect> = {
     outlined: true,
     ring: true,
   },
+  'hit.bigbang': {
+    shape: 'nova',
+    colors: [0xffffff, 0xb98cff, 0x4a1a9a],
+    density: 2,
+    scale: 2.1,
+    outlined: true,
+    ring: true,
+  },
 };
 
 export function hitEffectFor(id: string | undefined): HitEffect {

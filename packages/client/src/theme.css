@@ -147,6 +147,24 @@
   border-bottom: 2px dashed rgba(26, 20, 16, 0.14);
 }
 
+/* Four-option controls (bot skill, shot clock) don't fit beside their label in the
+   drawer — they were running off the edge — so those rows stack instead. */
+.settings-row:has(.segmented button:nth-child(4)) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+.settings-row:has(.segmented button:nth-child(4)) .segmented {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+}
+
+.settings-row .desc {
+  max-width: none;
+}
+
 .settings-row.column {
   flex-direction: column;
   align-items: stretch;
@@ -227,6 +245,8 @@
   flex-shrink: 0;
 }
 
+/* `left` is reset here on purpose: the base stylesheet slides the knob with `left: 23px`,
+   and adding a transform on top of that stacked the two and threw the knob off the end. */
 .toggle::after {
   content: '';
   position: absolute;
@@ -245,12 +265,68 @@
 }
 
 .toggle.on::after {
+  left: 3px;
   transform: translateX(24px);
 }
 
+/* Range inputs default to a hairline track that looked broken next to the chunky
+   toggles, so the track and thumb are drawn to match. */
 .slider {
-  width: 140px;
-  accent-color: var(--felt);
+  width: 150px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.slider:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--paper-3), var(--paper-2));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 2px 3px rgba(26, 20, 16, 0.3);
+}
+
+.slider::-moz-range-track {
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--paper-3), var(--paper-2));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 2px 3px rgba(26, 20, 16, 0.3);
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 2px 0 var(--gold-dark);
+}
+
+.slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 2px 0 var(--gold-dark);
 }
 
 /* --- Table theme picker --- */
@@ -825,51 +901,88 @@
   opacity: 0.85;
 }
 
-/* --- Animated felt weave behind the menu screens ---
-   A slow-moving woven texture keyed to the active table theme, so the lobby and locker
-   feel like part of the same room as the table rather than flat pages. */
+/* --- Lobby backdrop ---
+   The lobby sits over the live attract-mode table, which then becomes the real table when
+   the game starts. A thin weave alone was invisible in practice: a 2px stripe at ~11%
+   effective alpha over a near-black room reads as nothing at all on a real display. */
 
-.lobby,
+.table-canvas {
+  transition:
+    opacity 0.4s ease,
+    filter 0.4s ease;
+}
+
+#app.in-lobby .table-canvas {
+  opacity: 0.85;
+  filter: blur(1.5px) saturate(0.92);
+}
+
+.lobby-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(6, 10, 8, 0.55), transparent 70%),
+    linear-gradient(180deg, rgba(6, 10, 8, 0.78) 0%, rgba(6, 10, 8, 0.5) 40%, rgba(6, 10, 8, 0.85) 100%);
+}
+
+#app.in-lobby .lobby-scrim {
+  opacity: 1;
+}
+
+.lobby {
+  position: relative;
+  z-index: 2;
+}
+
+/* --- Animated felt weave behind the locker --- */
+
 .profile-page {
   position: relative;
 }
 
-.lobby::before,
 .profile-page::before {
   content: '';
   position: fixed;
   inset: -10%;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.5;
+  /* Heavy vignette over a light weave: at full strength the cross-hatch swamped the item
+     cards. It's meant to read as cloth in the room, not as a pattern you look at. */
   background-image:
+    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(6, 10, 8, 0.72), rgba(6, 10, 8, 0.94) 90%),
     repeating-linear-gradient(
       45deg,
-      color-mix(in srgb, var(--theme-felt) 22%, transparent) 0 2px,
-      transparent 2px 9px
+      color-mix(in srgb, var(--theme-felt) 30%, transparent) 0 2px,
+      transparent 2px 14px
     ),
     repeating-linear-gradient(
       -45deg,
-      color-mix(in srgb, var(--theme-felt-dark) 22%, transparent) 0 2px,
-      transparent 2px 9px
+      color-mix(in srgb, var(--theme-felt-dark) 30%, transparent) 0 2px,
+      transparent 2px 14px
     );
   animation: weaveDrift 40s linear infinite;
 }
 
+/* The vignette layer is first, so it stays put while the two weave layers drift. */
 @keyframes weaveDrift {
   from {
     background-position:
+      0 0,
       0 0,
       0 0;
   }
   to {
     background-position:
+      0 0,
       120px 120px,
       -120px 120px;
   }
 }
 
-body.reduce-motion .lobby::before,
 body.reduce-motion .profile-page::before {
   animation: none;
 }

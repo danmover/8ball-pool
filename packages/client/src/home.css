@@ -21,6 +21,24 @@
   pointer-events: none;
 }
 
+/* Painted felt underneath the live table, so the menu always has a backdrop even when the
+   renderer can't start. The canvas sits on top of this when it does. */
+.home-backdrop.has-fallback {
+  background-image:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(0, 0, 0, 0) 40%, rgba(6, 10, 8, 0.75) 100%),
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--theme-felt) 30%, transparent) 0 2px,
+      transparent 2px 14px
+    ),
+    linear-gradient(160deg, var(--theme-felt) 0%, var(--theme-felt-dark) 100%);
+}
+
+.home-backdrop canvas {
+  position: relative;
+  z-index: 1;
+}
+
 .home-scrim {
   position: fixed;
   inset: 0;

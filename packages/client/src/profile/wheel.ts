@@ -25,9 +25,16 @@ export const RARITY_COLORS: Record<Rarity, string> = {
   rare: '#4aa8ff',
   epic: '#b46aff',
   legendary: '#ffc94d',
+  mystic: '#c9a8ff',
 };
 
-const RARITY_TIER: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
+const RARITY_TIER: Record<Rarity, number> = {
+  common: 0,
+  rare: 1,
+  epic: 2,
+  legendary: 3,
+  mystic: 4,
+};
 
 /** Abbreviated so the text fits inside a 30° wedge. */
 const SLICE_LABELS: Record<Rarity, string> = {
@@ -35,12 +42,13 @@ const SLICE_LABELS: Record<Rarity, string> = {
   rare: 'RARE',
   epic: 'EPIC',
   legendary: 'LEGEND',
+  mystic: 'MYSTIC',
 };
 
 /** Slice layout, repeated around the wheel so each rarity appears at its rough odds. */
 const SLICES: Rarity[] = [
   'common', 'rare', 'common', 'epic', 'common', 'rare',
-  'common', 'legendary', 'common', 'rare', 'common', 'epic',
+  'common', 'legendary', 'common', 'rare', 'mystic', 'epic',
 ];
 
 const SPIN_MS = 4200;

@@ -60,6 +60,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let rewardsShown = false;
   let winCelebrated = false;
   let autostarted = false;
+  let backdropStarted = false;
   let clockRaf = 0;
   /** Tracks the "win without fouling" daily objective across the frame. */
   let fouledThisFrame = false;
@@ -67,7 +68,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const joinUrl = `${window.location.origin}/play/${code}`;
 
   root.innerHTML = `
-    <div id="tableCanvas" style="position:absolute; inset:0; display:none"></div>
+    <div id="tableCanvas" class="table-canvas" style="position:absolute; inset:0"></div>
+    <div class="lobby-scrim" id="lobbyScrim"></div>
     <div class="hud" id="gameHud" style="display:none">
       <div class="top-bar">
         <div id="playerPanels" style="display:flex; gap:0.5rem; flex-wrap:wrap; flex:1"></div>
@@ -202,18 +204,47 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     setTimeout(() => socket.emit('hostStartGame'), 220);
   }
 
+  /**
+   * The lobby sits over a live table rather than a flat panel — the renderer is created up
+   * front in attract mode, and `boot()` simply takes it over when the game starts. Same
+   * renderer throughout, so the menu table *becomes* the real table instead of being swapped
+   * for one.
+   */
+  async function ensureRenderer(): Promise<TableRenderer> {
+    if (!renderer) {
+      renderer = await TableRenderer.create(canvasEl);
+      applyRenderSettings(renderer, settings);
+      // The balls are shared table furniture, so they wear the host's set.
+      renderer.setBallSet(equippedLoadout().ballSet);
+      renderer.setShooterLoadout(equippedLoadout());
+    }
+    return renderer;
+  }
+
+  async function showLobbyBackdrop(): Promise<void> {
+    if (booted || backdropStarted) return;
+    backdropStarted = true;
+    const created = await ensureRenderer();
+    if (booted) return; // the game started while we were setting up
+    created.setChromeless(true);
+    created.setEffectsIntensity('low');
+    if (!settings.reduceMotion) created.startAttractMode();
+    root.classList.add('in-lobby');
+  }
+
   async function boot(): Promise<void> {
     if (booted) return;
     booted = true;
 
-    canvasEl.style.display = '';
     gameHud.style.display = '';
     lobbyWrap.style.display = 'none';
+    root.classList.remove('in-lobby');
 
-    renderer = await TableRenderer.create(canvasEl);
+    renderer = await ensureRenderer();
+    // Hand the attract-mode table over to the real game.
+    renderer.stopAttractMode();
+    renderer.setChromeless(false);
     applyRenderSettings(renderer, settings);
-    // The balls are shared table furniture, so they wear the host's set.
-    renderer.setBallSet(equippedLoadout().ballSet);
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
@@ -570,6 +601,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (rs.started) void boot();
     else {
       drawLobby(rs);
+      void showLobbyBackdrop();
       maybeAutostart(rs);
     }
   });

@@ -115,6 +115,14 @@ const SETS: Record<string, BallSet> = {
     finish: 'metallic',
     outline: 0x4a3410,
   },
+  'balls.cosmos': {
+    colors: [0xffd76b, 0x4a8aff, 0xff4d8a, 0xb44dff, 0xff9a3a, 0x34e2b0, 0xff5c5c],
+    cue: 0xe8e4ff,
+    eight: 0x05020c,
+    backing: 0x140a2e,
+    finish: 'neon',
+    outline: 0x05020c,
+  },
 };
 
 export function ballSetFor(id: string | undefined): BallSet {
