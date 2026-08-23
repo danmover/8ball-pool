@@ -411,7 +411,14 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     },
     simEvent: (ev: SimEvent) => {
       if (ev.type === 'ballCollision') {
-        if (settings.soundEnabled) sfx.playBallClick(settings.soundVolume, ev.impulse / 1500);
+        if (settings.soundEnabled) {
+        // The impact sound follows the shooter's equipped hit effect.
+        sfx.playHitImpact(
+          renderer?.currentHitEffectId() ?? 'hit.spark',
+          settings.soundVolume,
+          ev.impulse / 1500
+        );
+      }
         if (settings.hapticsEnabled) navigator.vibrate?.(8);
         renderer?.spawnSparks(ev.pos, ev.impulse, ev.a, ev.b);
       } else if (ev.type === 'cushion') {

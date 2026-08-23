@@ -145,8 +145,10 @@ export function openSettingsPanel(
 
     if (id === 'audio') {
       return [
-        row('Sound', '', toggle('soundEnabled')),
-        row('Volume', '', slider('soundVolume', settings.soundVolume)),
+        row('Sound effects', 'Hits, cushions, pots and the wheel', toggle('soundEnabled')),
+        row('Effects volume', '', slider('soundVolume', settings.soundVolume)),
+        row('Music', 'Each table theme has its own score', toggle('musicEnabled')),
+        row('Music volume', '', slider('musicVolume', settings.musicVolume)),
         row('Vibration', 'Haptic feedback on collisions and pots', toggle('hapticsEnabled')),
       ].join('');
     }

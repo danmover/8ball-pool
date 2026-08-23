@@ -54,6 +54,77 @@ function cuePreview(id: string, size: number): string {
     ${aura}${parts}</svg>`;
 }
 
+/**
+ * A miniature of the set's surface treatment, matching what `paintBallPattern` draws on the
+ * table. Without this the locker showed twelve near-identical discs.
+ */
+function patternOverlay(set: ReturnType<typeof ballSetFor>, cx: number, cy: number, r: number, clip: string, base: string): string {
+  const g = `<g clip-path="url(#${clip})">`;
+  switch (set.pattern) {
+    case 'marble':
+      return `${g}
+        <path d="M${cx - r} ${cy - r * 0.3} q ${r * 0.7} ${r * 0.4} ${r * 1.3} -${r * 0.1} t ${r * 0.9} ${r * 0.3}"
+              fill="none" stroke="rgba(70,66,80,0.4)" stroke-width="${r * 0.16}"/>
+        <path d="M${cx - r} ${cy + r * 0.4} q ${r * 0.8} -${r * 0.5} ${r * 1.5} ${r * 0.2}"
+              fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="${r * 0.09}"/></g>`;
+    case 'wood':
+      return `${g}${[0.35, 0.6, 0.85, 1.1].map(
+        (f) =>
+          `<ellipse cx="${cx + r * 0.2}" cy="${cy + r * 0.1}" rx="${r * f}" ry="${r * f * 1.15}"
+                    fill="none" stroke="rgba(60,34,14,0.3)" stroke-width="${r * 0.09}"/>`
+      ).join('')}</g>`;
+    case 'swirl':
+      return `${g}${[0, 2.1, 4.2].map((off) => {
+        const pts = Array.from({ length: 14 }, (_, t) => {
+          const a = (t / 14) * Math.PI * 2.4 + off;
+          const rad = (t / 14) * r * 1.4;
+          return `${cx + Math.cos(a) * rad},${cy + Math.sin(a) * rad}`;
+        }).join(' ');
+        return `<polyline points="${pts}" fill="none" stroke="rgba(255,255,255,0.8)"
+                          stroke-width="${r * 0.2}" stroke-linecap="round"/>`;
+      }).join('')}</g>`;
+    case 'starfield':
+      return `${g}<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#neb)"/>
+        ${Array.from({ length: 14 }, (_, i) => {
+          const a = i * 2.4;
+          const d = ((i * 37) % 100) / 100;
+          return `<circle cx="${cx + Math.cos(a) * r * d}" cy="${cy + Math.sin(a) * r * d}"
+                          r="${0.7 + (i % 3) * 0.5}" fill="#fff"/>`;
+        }).join('')}</g>`;
+    case 'glass':
+      return `${g}<circle cx="${cx}" cy="${cy}" r="${r * 0.78}" fill="none"
+                          stroke="rgba(255,255,255,0.6)" stroke-width="${r * 0.12}"/>
+        <circle cx="${cx + r * 0.25}" cy="${cy - r * 0.2}" r="${r * 0.35}" fill="#fff" opacity="0.55"/></g>`;
+    case 'engraved':
+      return `${g}${Array.from({ length: 16 }, (_, i) => {
+        const a = (i / 16) * Math.PI * 2;
+        return `<line x1="${cx + Math.cos(a) * r * 0.8}" y1="${cy + Math.sin(a) * r * 0.8}"
+                      x2="${cx + Math.cos(a) * r}" y2="${cy + Math.sin(a) * r}"
+                      stroke="rgba(255,255,255,0.45)" stroke-width="1.2"/>`;
+      }).join('')}
+        <circle cx="${cx}" cy="${cy}" r="${r * 0.76}" fill="none" stroke="rgba(0,0,0,0.3)" stroke-width="1.6"/></g>`;
+    case 'crackle':
+      return `${g}${Array.from({ length: 5 }, (_, i) => {
+        const a = i * 1.3;
+        return `<path d="M${cx + Math.cos(a) * r} ${cy + Math.sin(a) * r} L${cx + Math.cos(a + 0.6) * r * 0.3} ${
+          cy + Math.sin(a + 0.6) * r * 0.3
+        } L${cx + Math.cos(a + 2.2) * r} ${cy + Math.sin(a + 2.2) * r}"
+                 fill="none" stroke="rgba(70,50,30,0.35)" stroke-width="1"/>`;
+      }).join('')}</g>`;
+    case 'prism':
+      return `${g}<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#pris)" opacity="0.6"/></g>`;
+    case 'circuit':
+      return `${g}<circle cx="${cx}" cy="${cy}" r="${r}" fill="rgba(6,10,20,0.5)"/>
+        <path d="M${cx - r * 0.7} ${cy - r * 0.3} h${r * 0.6} v${r * 0.5} h${r * 0.7}"
+              fill="none" stroke="${base}" stroke-width="1.6"/>
+        <path d="M${cx - r * 0.2} ${cy + r * 0.6} v-${r * 0.5} h${r * 0.8}"
+              fill="none" stroke="${base}" stroke-width="1.6"/>
+        <circle cx="${cx + r * 0.6}" cy="${cy + r * 0.2}" r="2.2" fill="${base}"/></g>`;
+    default:
+      return '';
+  }
+}
+
 function ballPreview(id: string, size: number): string {
   const set = ballSetFor(id);
   const balls = [1, 9, 8];
@@ -81,14 +152,27 @@ function ballPreview(id: string, size: number): string {
           : `<ellipse cx="${cx[i] - r[i] * 0.3}" cy="${cy[i] - r[i] * 0.4}" rx="${r[i] * 0.3}" ry="${
               r[i] * 0.2
             }" fill="#fff" opacity="${set.finish === 'metallic' ? 0.9 : 0.65}"/>`;
+      const pattern = patternOverlay(set, cx[i], cy[i], r[i], `cp${uid}${i}`, css(style.base));
       return `<clipPath id="cp${uid}${i}"><circle cx="${cx[i]}" cy="${cy[i]}" r="${r[i]}"/></clipPath>
-        ${glow}<circle cx="${cx[i]}" cy="${cy[i]}" r="${r[i]}" fill="${fill}"/>${band}${shine}
+        ${glow}<circle cx="${cx[i]}" cy="${cy[i]}" r="${r[i]}" fill="${fill}"/>${band}${pattern}${shine}
         <circle cx="${cx[i]}" cy="${cy[i]}" r="${r[i]}" fill="none" stroke="${css(
           set.outline
         )}" stroke-width="3"/>`;
     })
     .join('');
-  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}"><defs></defs>${discs}</svg>`;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">
+    <defs>
+      <radialGradient id="neb" cx="35%" cy="35%">
+        <stop offset="0%" stop-color="#b98cff"/>
+        <stop offset="55%" stop-color="#2a1060"/>
+        <stop offset="100%" stop-color="#05020c"/>
+      </radialGradient>
+      <linearGradient id="pris" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stop-color="#ff4d4d"/><stop offset="25%" stop-color="#ffc94d"/>
+        <stop offset="50%" stop-color="#39ff88"/><stop offset="75%" stop-color="#4aa8ff"/>
+        <stop offset="100%" stop-color="#b44dff"/>
+      </linearGradient>
+    </defs>${discs}</svg>`;
 }
 
 function trailPreview(id: string, size: number): string {

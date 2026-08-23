@@ -142,6 +142,9 @@ export interface PlayerSettings {
   trajectoryPreview: TrajectoryPreviewMode;
   soundEnabled: boolean;
   soundVolume: number; // 0..1
+  /** Background music, scored per table theme. Separate from effects on purpose. */
+  musicEnabled: boolean;
+  musicVolume: number; // 0..1
   hapticsEnabled: boolean;
   colorblindPatterns: boolean;
   leftHanded: boolean;
@@ -163,6 +166,8 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   trajectoryPreview: 'full',
   soundEnabled: true,
   soundVolume: 0.7,
+  musicEnabled: true,
+  musicVolume: 0.35,
   hapticsEnabled: true,
   colorblindPatterns: false,
   leftHanded: false,

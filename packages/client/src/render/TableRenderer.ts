@@ -17,6 +17,7 @@ import { cueSkinFor, type CueSkin } from './cosmetics/cueSkins';
 import { sampleRamp, trailStyleFor, type TrailStyle } from './cosmetics/trailStyles';
 import { applyTableThemeToPage, tableThemeFor, type TableTheme } from './cosmetics/tableThemes';
 import { hitEffectFor, type HitEffect } from './cosmetics/hitEffects';
+import { drawScene } from './cosmetics/scenes';
 
 const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
@@ -48,6 +49,239 @@ function hexToCss(hex: number): string {
   return `#${hex.toString(16).padStart(6, '0')}`;
 }
 
+/** Deterministic per-ball randomness, so a ball's markings never change between renders. */
+function seeded(seed: number): () => number {
+  let s = (seed * 2654435761) >>> 0;
+  return () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    s >>>= 0;
+    return s / 0x100000000;
+  };
+}
+
+function shiftHex(hex: number, amount: number): string {
+  const clamp = (v: number): number => Math.max(0, Math.min(255, Math.round(v)));
+  const r = clamp(((hex >> 16) & 0xff) + amount);
+  const g = clamp(((hex >> 8) & 0xff) + amount);
+  const b = clamp((hex & 0xff) + amount);
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Paints the set's surface treatment across the ball, inside the caller's circular clip.
+ *
+ * This is the part that actually makes the sets distinguishable. A palette swap alone reads
+ * as "the same balls in other colours" once they're 45 units across on the cloth — what the
+ * eye picks up at that size is structure: veining, grain, a starfield, milled facets.
+ */
+function paintBallPattern(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  id: number,
+  set: BallSet,
+  base: number
+): void {
+  const r = size / 2;
+  const rand = seeded(id + 1);
+
+  switch (set.pattern) {
+    case 'marble': {
+      // A few soft veins wandering across the surface, plus fainter hairlines.
+      for (let i = 0; i < 5; i++) {
+        const y = rand() * size;
+        ctx.strokeStyle = `rgba(70,66,80,${0.1 + rand() * 0.22})`;
+        ctx.lineWidth = 1.5 + rand() * 5;
+        ctx.beginPath();
+        ctx.moveTo(-10, y);
+        for (let x = 0; x <= size + 10; x += size / 5) {
+          ctx.lineTo(x, y + Math.sin((x / size) * Math.PI * 2 + i) * (12 + rand() * 26));
+        }
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i < 4; i++) {
+        const y = rand() * size;
+        ctx.beginPath();
+        ctx.moveTo(-10, y);
+        ctx.bezierCurveTo(size * 0.3, y - 30, size * 0.7, y + 30, size + 10, y);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'wood': {
+      // Concentric growth rings offset from centre, like a turned billet.
+      const cx = r * (0.55 + rand() * 0.4);
+      const cy = r * (0.5 + rand() * 0.5);
+      for (let ring = 1; ring < 16; ring++) {
+        ctx.strokeStyle = `rgba(60,34,14,${0.06 + (ring % 3 === 0 ? 0.14 : 0.05)})`;
+        ctx.lineWidth = 1 + (ring % 3 === 0 ? 2.6 : 1);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, ring * 9, ring * 11, 0.4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'swirl': {
+      // Peppermint spiral from the centre out.
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = size * 0.09;
+      ctx.lineCap = 'round';
+      for (let arm = 0; arm < 3; arm++) {
+        ctx.beginPath();
+        for (let t = 0; t < 40; t++) {
+          const a = (t / 40) * Math.PI * 2.4 + (arm / 3) * Math.PI * 2;
+          const rad = (t / 40) * r * 1.5;
+          const x = r + Math.cos(a) * rad;
+          const y = r + Math.sin(a) * rad;
+          if (t === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'starfield': {
+      // Nebula wash, then stars — small, bright and unevenly spread.
+      const neb = ctx.createRadialGradient(r * 0.7, r * 0.6, r * 0.1, r, r, r);
+      neb.addColorStop(0, `${hexToCss(base)}dd`);
+      neb.addColorStop(0.55, 'rgba(40,10,80,0.75)');
+      neb.addColorStop(1, 'rgba(5,2,12,0.95)');
+      ctx.fillStyle = neb;
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 70; i++) {
+        const x = rand() * size;
+        const y = rand() * size;
+        const s = rand();
+        ctx.fillStyle = `rgba(255,255,255,${0.35 + s * 0.65})`;
+        ctx.beginPath();
+        ctx.arc(x, y, s * 2.2 + 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+
+    case 'glass': {
+      // Lit from within, with a denser rim where the "glass" thickens.
+      const core = ctx.createRadialGradient(r * 0.75, r * 0.7, r * 0.05, r, r, r);
+      core.addColorStop(0, '#ffffff');
+      core.addColorStop(0.35, `${hexToCss(base)}f2`);
+      core.addColorStop(1, shiftHex(base, -70));
+      ctx.fillStyle = core;
+      ctx.fillRect(0, 0, size, size);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = size * 0.045;
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+
+    case 'engraved': {
+      // Milled facets around the edge and a struck ring, so it reads as worked metal.
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(r + Math.cos(a) * r * 0.82, r + Math.sin(a) * r * 0.82);
+        ctx.lineTo(r + Math.cos(a) * r, r + Math.sin(a) * r);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.72, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+
+    case 'crackle': {
+      // Aged glaze: irregular crazing plus a dusting of speckle.
+      ctx.strokeStyle = 'rgba(70,50,30,0.3)';
+      ctx.lineWidth = 1.2;
+      for (let i = 0; i < 18; i++) {
+        let x = rand() * size;
+        let y = rand() * size;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let seg = 0; seg < 4; seg++) {
+          x += (rand() - 0.5) * 44;
+          y += (rand() - 0.5) * 44;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      for (let i = 0; i < 90; i++) {
+        ctx.fillStyle = `rgba(90,70,40,${rand() * 0.16})`;
+        ctx.fillRect(rand() * size, rand() * size, 2.5, 2.5);
+      }
+      break;
+    }
+
+    case 'prism': {
+      // Refraction sweep across the face.
+      const sweep = ctx.createLinearGradient(0, size, size, 0);
+      const stops = ['#ff4d4d', '#ffc94d', '#39ff88', '#4aa8ff', '#b44dff'];
+      stops.forEach((c, i) => sweep.addColorStop(i / (stops.length - 1), c));
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = sweep;
+      ctx.fillRect(0, 0, size, size);
+      ctx.globalAlpha = 1;
+      // Hard-edged refraction bands, like light split through a facet.
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = `rgba(255,255,255,${0.16 + i * 0.05})`;
+        ctx.save();
+        ctx.translate(r, r);
+        ctx.rotate(-0.7 + i * 0.22);
+        ctx.fillRect(-size, -size * 0.06 + i * 22, size * 2, size * 0.05);
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'circuit': {
+      // Etched traces with solder pads, lit against a dark board.
+      ctx.fillStyle = 'rgba(6,10,20,0.55)';
+      ctx.fillRect(0, 0, size, size);
+      ctx.strokeStyle = `${hexToCss(base)}`;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'square';
+      for (let i = 0; i < 9; i++) {
+        let x = rand() * size;
+        let y = rand() * size;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let seg = 0; seg < 3; seg++) {
+          // Traces only run at right angles, which is what makes them read as circuitry.
+          if (rand() > 0.5) x += (rand() - 0.5) * 90;
+          else y += (rand() - 0.5) * 90;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = hexToCss(base);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+
 function generateBallCanvas(
   id: number,
   colorblindPatterns: boolean,
@@ -74,14 +308,25 @@ function generateBallCanvas(
   ctx.arc(r, r, r - 2, 0, Math.PI * 2);
   ctx.clip();
 
+  const bandHalf = TEX_SIZE * ((set.stripeWidth ?? 0.58) / 2);
+
   if (style.stripe) {
     ctx.fillStyle = hexToCss(set.backing);
     ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
     ctx.fillStyle = hexToCss(style.base);
-    ctx.fillRect(0, r - TEX_SIZE * 0.29, TEX_SIZE, TEX_SIZE * 0.58);
+    ctx.fillRect(0, r - bandHalf, TEX_SIZE, bandHalf * 2);
+    // The surface treatment belongs to the coloured band only — a marbled *stripe* on a
+    // plain white ball is what a real patterned set looks like.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, r - bandHalf, TEX_SIZE, bandHalf * 2);
+    ctx.clip();
+    paintBallPattern(ctx, TEX_SIZE, id, set, style.base);
+    ctx.restore();
   } else {
     ctx.fillStyle = hexToCss(style.base);
     ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+    paintBallPattern(ctx, TEX_SIZE, id, set, style.base);
   }
 
   if (colorblindPatterns && id !== 0 && id !== 8) {
@@ -339,6 +584,10 @@ export class TableRenderer {
   app: Application;
   private container: HTMLElement;
   private root = new Container();
+  /** The themed room behind the table, drawn in screen space. */
+  private sceneLayer = new Graphics();
+  /** Canvas size and theme the scene was last painted for, so it only redraws on change. */
+  private sceneKey = '';
   private tableLayer = new Container();
   private diamondLayer = new Graphics();
   private feltSprite: Sprite | null = null;
@@ -387,6 +636,7 @@ export class TableRenderer {
   private cueSkin: CueSkin = cueSkinFor(undefined);
   private trailStyle: TrailStyle = trailStyleFor(undefined);
   private hitEffect: HitEffect = hitEffectFor(undefined);
+  private hitEffectId: string = DEFAULT_LOADOUT.hitEffect;
   /** Shooter is on a scoring streak: their trail burns regardless of what's equipped. */
   private streakFire = false;
   /** Menu backdrop state — see startAttractMode. */
@@ -410,6 +660,9 @@ export class TableRenderer {
     container.appendChild(app.canvas);
     const renderer = new TableRenderer(container, app);
     renderer.buildTable();
+    // The room goes on the stage directly, in screen space, so it doesn't scale or shake
+    // with the table sitting in it.
+    app.stage.addChild(renderer.sceneLayer);
     app.stage.addChild(renderer.root);
     app.ticker.add((ticker) => renderer.tick(ticker.deltaMS / 1000));
     return renderer;
@@ -725,9 +978,10 @@ export class TableRenderer {
     const boardW = right - left;
     const boardH = this.chromeless ? TABLE_WIDTH + RAIL * 2 : BOARD_H;
 
-    // Deliberately short of a perfect fit: at 100% the table crowds the screen edges and
-    // leaves the scoreboard sitting on top of the rails.
-    const FIT = this.chromeless ? 1 : 0.92;
+    // Deliberately short of a perfect fit. At 100% the table crowds the screen edges, the
+    // scoreboard sits on the rails, and — since themes became whole rooms — the room is
+    // reduced to a sliver at the top and bottom.
+    const FIT = this.chromeless ? 1 : 0.8;
     this.scale = Math.min((w - pad * 2) / boardW, (h - pad * 2) / boardH) * FIT;
     this.root.scale.set(this.scale);
 
@@ -738,6 +992,15 @@ export class TableRenderer {
       oy += (Math.random() - 0.5) * this.shakeMag;
     }
     this.root.position.set(ox, oy);
+
+    // Repaint the room only when the canvas or the theme actually changes — it's a lot of
+    // geometry and none of it moves.
+    const tableTop = oy + BOARD_TOP * this.scale;
+    const key = `${this.theme.id}|${Math.round(w)}x${Math.round(h)}`;
+    if (key !== this.sceneKey) {
+      this.sceneKey = key;
+      drawScene(this.sceneLayer, this.theme, w, h, tableTop);
+    }
   }
 
   /** Hides the chute/power-bar furniture — used by the phone's small table preview. */
@@ -776,6 +1039,12 @@ export class TableRenderer {
     this.cueSkin = cueSkinFor(resolved.cue);
     this.trailStyle = trailStyleFor(resolved.trail);
     this.hitEffect = hitEffectFor(resolved.hitEffect);
+    this.hitEffectId = resolved.hitEffect;
+  }
+
+  /** The shooter's equipped hit effect, so the impact *sound* can match the visual. */
+  currentHitEffectId(): string {
+    return this.hitEffectId;
   }
 
   setStreakFire(onFire: boolean): void {

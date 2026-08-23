@@ -8,30 +8,15 @@
  * with a pitch envelope, a filtered noise burst, and a resonant "body" — and layers them.
  */
 
-let ctx: AudioContext | null = null;
-let master: GainNode | null = null;
+import { getAudioContext, getSfxBus, isAudioReady, unlockAudio } from './audio';
+
 /** One shared noise buffer; regenerating white noise per sound is pure waste. */
 let noiseBuffer: AudioBuffer | null = null;
 
-function getCtx(): AudioContext {
-  if (!ctx) {
-    ctx = new AudioContext();
-    master = ctx.createGain();
-    master.gain.value = 1;
-    master.connect(ctx.destination);
-  }
-  return ctx;
-}
-
-/** Unlocks the AudioContext; must be called from a user gesture (tap/click). */
-export function unlockAudio(): void {
-  const c = getCtx();
-  if (c.state === 'suspended') void c.resume();
-}
+export { unlockAudio };
 
 function ready(): AudioContext | null {
-  const c = getCtx();
-  return c.state === 'suspended' ? null : c;
+  return isAudioReady() ? getAudioContext() : null;
 }
 
 function getNoise(c: AudioContext): AudioBuffer {
@@ -60,7 +45,8 @@ interface ToneOpts {
 /** A pitched layer with an exponential decay — the "body" of a sound. */
 function tone(o: ToneOpts): void {
   const c = ready();
-  if (!c || !master) return;
+  const bus = getSfxBus();
+  if (!c || !bus) return;
   const t0 = c.currentTime + (o.delay ?? 0);
   const osc = c.createOscillator();
   const gain = c.createGain();
@@ -74,7 +60,7 @@ function tone(o: ToneOpts): void {
   gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.volume), t0 + attack);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + o.duration);
 
-  osc.connect(gain).connect(master);
+  osc.connect(gain).connect(bus);
   osc.start(t0);
   osc.stop(t0 + o.duration + 0.03);
 }
@@ -94,7 +80,8 @@ interface NoiseOpts {
 /** A filtered noise burst — the transient/texture layer. */
 function noise(o: NoiseOpts): void {
   const c = ready();
-  if (!c || !master) return;
+  const bus = getSfxBus();
+  if (!c || !bus) return;
   const t0 = c.currentTime + (o.delay ?? 0);
 
   const src = c.createBufferSource();
@@ -109,7 +96,7 @@ function noise(o: NoiseOpts): void {
   gain.gain.setValueAtTime(Math.max(0.0002, o.volume), t0);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + o.duration);
 
-  src.connect(filter).connect(gain).connect(master);
+  src.connect(filter).connect(gain).connect(bus);
   src.start(t0);
   src.stop(t0 + o.duration + 0.02);
 }
@@ -136,6 +123,100 @@ export function playBallClick(volume: number, intensity = 1): void {
   // A touch of low body so a heavy hit is felt as well as heard.
   if (i > 0.5) {
     tone({ freq: 150, to: 90, duration: 0.09, volume: 0.16 * volume * i, type: 'sine' });
+  }
+}
+
+/**
+ * The impact sound for the shooter's equipped hit effect. Each one is voiced to match what
+ * you're looking at — a comic starburst shouldn't sound like ice shattering — and every one
+ * still scales with impact strength so you can hear the weight of the shot underneath it.
+ */
+export function playHitImpact(effectId: string, volume: number, intensity = 1): void {
+  const i = Math.min(1.4, Math.max(0.05, intensity));
+  const v = volume * i;
+
+  switch (effectId) {
+    case 'hit.puff':
+      // Dull, airy — a cushion of chalk dust absorbing the contact.
+      noise({ duration: 0.13, volume: 0.22 * v, freq: 700, to: 220, q: 0.5 });
+      tone({ freq: 240, to: 130, duration: 0.1, volume: 0.16 * v, type: 'sine' });
+      break;
+
+    case 'hit.pow':
+      // Cartoon thwack: a hard transient over a fast falling "boing".
+      noise({ duration: 0.03, volume: 0.3 * v, freq: 1800, to: 500, q: 0.7 });
+      tone({ freq: 760, to: 150, duration: 0.16, volume: 0.34 * v, type: 'square', attack: 0.001 });
+      tone({ freq: 380, to: 110, duration: 0.2, volume: 0.2 * v, type: 'triangle', delay: 0.02 });
+      break;
+
+    case 'hit.shockwave':
+      // Deep pressure hit with a long sub tail.
+      tone({ freq: 180, to: 46, duration: 0.34, volume: 0.4 * v, type: 'sine', attack: 0.001 });
+      noise({ duration: 0.2, volume: 0.16 * v, freq: 400, to: 90, q: 0.6 });
+      break;
+
+    case 'hit.confetti':
+      // A pop, then paper scatter.
+      tone({ freq: 900, to: 300, duration: 0.05, volume: 0.3 * v, type: 'square', attack: 0.001 });
+      for (let k = 0; k < 4; k++) {
+        noise({
+          duration: 0.04,
+          volume: 0.1 * v,
+          freq: 3200 + k * 700,
+          q: 1.6,
+          delay: 0.03 + k * 0.035,
+        });
+      }
+      break;
+
+    case 'hit.lightning':
+      // Crackle first, then the zap sweeping down.
+      noise({ duration: 0.07, volume: 0.3 * v, freq: 6000, to: 1400, q: 0.5 });
+      tone({ freq: 2400, to: 260, duration: 0.13, volume: 0.22 * v, type: 'sawtooth', attack: 0.001 });
+      noise({ duration: 0.16, volume: 0.12 * v, freq: 1200, to: 300, q: 2.4, delay: 0.04 });
+      break;
+
+    case 'hit.frost':
+      // Glassy: a bright bell over splintering high noise.
+      tone({ freq: 2600, duration: 0.3, volume: 0.2 * v, type: 'sine' });
+      tone({ freq: 3900, duration: 0.22, volume: 0.12 * v, type: 'sine', delay: 0.02 });
+      for (let k = 0; k < 5; k++) {
+        noise({
+          duration: 0.05,
+          volume: 0.1 * v,
+          freq: 5200 + k * 900,
+          q: 3,
+          delay: k * 0.03,
+        });
+      }
+      break;
+
+    case 'hit.ink':
+      // Wet, low and short — a splat has almost no ring to it.
+      noise({ duration: 0.09, volume: 0.28 * v, freq: 900, to: 180, q: 1.8 });
+      tone({ freq: 300, to: 70, duration: 0.09, volume: 0.24 * v, type: 'sine', attack: 0.001 });
+      break;
+
+    case 'hit.nova':
+      // Bright flash, then a swelling boom underneath it.
+      noise({ duration: 0.28, volume: 0.2 * v, freq: 900, to: 6000, q: 0.4 });
+      tone({ freq: 620, to: 180, duration: 0.3, volume: 0.26 * v, type: 'triangle' });
+      tone({ freq: 120, to: 44, duration: 0.5, volume: 0.3 * v, type: 'sine', delay: 0.04 });
+      break;
+
+    case 'hit.bigbang':
+      // The full apocalypse: sub drop, long rising sweep, ringing aftermath.
+      tone({ freq: 150, to: 32, duration: 0.9, volume: 0.44 * v, type: 'sine', attack: 0.001 });
+      noise({ duration: 0.7, volume: 0.24 * v, freq: 200, to: 7000, q: 0.35 });
+      noise({ duration: 0.5, volume: 0.16 * v, freq: 5000, to: 300, q: 0.5, delay: 0.18 });
+      [0, 0.12, 0.26].forEach((d, k) =>
+        tone({ freq: 320 * Math.pow(1.5, k), duration: 0.6, volume: 0.14 * v, type: 'triangle', delay: d })
+      );
+      break;
+
+    default:
+      // 'hit.spark' — the standard phenolic click.
+      playBallClick(volume, intensity);
   }
 }
 

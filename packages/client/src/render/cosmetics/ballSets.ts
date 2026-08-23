@@ -8,6 +8,23 @@ import type { BallStyle } from '../ballStyle';
  */
 export type BallFinish = 'glossy' | 'matte' | 'metallic' | 'neon';
 
+/**
+ * Surface treatment painted into the ball before shading. This is what actually tells the
+ * sets apart — swapping the palette alone left every set reading as "the same balls, other
+ * colours" at the size they're drawn on the table.
+ */
+export type BallPattern =
+  | 'plain'
+  | 'marble' // stone veining
+  | 'wood' // turned timber grain rings
+  | 'swirl' // candy spiral
+  | 'starfield' // nebula and stars inside the ball
+  | 'glass' // translucent with a bright inner core
+  | 'engraved' // struck-metal facets and a milled edge
+  | 'crackle' // aged, faintly crazed glaze
+  | 'prism' // rainbow refraction sweep
+  | 'circuit'; // etched neon traces
+
 export interface BallSet {
   colors: [number, number, number, number, number, number, number]; // balls 1..7
   cue: number;
@@ -15,7 +32,10 @@ export interface BallSet {
   /** Backing colour behind a stripe, and the cue ball's "white". */
   backing: number;
   finish: BallFinish;
+  pattern: BallPattern;
   outline: number;
+  /** Stripe band as a fraction of the ball's height. Some sets wear a thinner band. */
+  stripeWidth?: number;
 }
 
 const SETS: Record<string, BallSet> = {
@@ -25,6 +45,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x111111,
     backing: 0xf6f2e6,
     finish: 'glossy',
+    pattern: 'plain',
     outline: 0x0c0a14,
   },
   'balls.vintage': {
@@ -33,6 +54,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x2a241d,
     backing: 0xefe4cb,
     finish: 'matte',
+    pattern: 'crackle',
     outline: 0x2a2016,
   },
   'balls.candy': {
@@ -41,6 +63,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x4a2a55,
     backing: 0xfff6fb,
     finish: 'glossy',
+    pattern: 'swirl',
     outline: 0x5a3a55,
   },
   'balls.midnight': {
@@ -49,6 +72,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x05060a,
     backing: 0xd6dae6,
     finish: 'glossy',
+    pattern: 'plain',
     outline: 0x04050a,
   },
   'balls.chrome': {
@@ -57,6 +81,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x1a1c22,
     backing: 0xe6eaf2,
     finish: 'metallic',
+    pattern: 'engraved',
     outline: 0x2a2e38,
   },
   'balls.neon': {
@@ -65,6 +90,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x0a0410,
     backing: 0x101426,
     finish: 'neon',
+    pattern: 'circuit',
     outline: 0x05030c,
   },
   'balls.prism': {
@@ -73,6 +99,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x1a1030,
     backing: 0xffffff,
     finish: 'metallic',
+    pattern: 'prism',
     outline: 0x2a1a4a,
   },
   'balls.pastel': {
@@ -81,6 +108,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x4a4458,
     backing: 0xfffaf2,
     finish: 'matte',
+    pattern: 'plain',
     outline: 0x5a5266,
   },
   'balls.marble': {
@@ -89,6 +117,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x2a2a30,
     backing: 0xf2ece0,
     finish: 'glossy',
+    pattern: 'marble',
     outline: 0x3a3742,
   },
   'balls.wood': {
@@ -97,6 +126,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x2e2118,
     backing: 0xe8d8b8,
     finish: 'matte',
+    pattern: 'wood',
     outline: 0x33240f,
   },
   'balls.glass': {
@@ -105,6 +135,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x1a2030,
     backing: 0xf4fcff,
     finish: 'glossy',
+    pattern: 'glass',
     outline: 0x2a3550,
   },
   'balls.gold': {
@@ -113,6 +144,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x4a3410,
     backing: 0xfff6d8,
     finish: 'metallic',
+    pattern: 'engraved',
     outline: 0x4a3410,
   },
   'balls.cosmos': {
@@ -121,6 +153,7 @@ const SETS: Record<string, BallSet> = {
     eight: 0x05020c,
     backing: 0x140a2e,
     finish: 'neon',
+    pattern: 'starfield',
     outline: 0x05020c,
   },
 };
