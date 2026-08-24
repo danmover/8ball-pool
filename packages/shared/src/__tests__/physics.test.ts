@@ -5,7 +5,7 @@ import { BALL_RADIUS, CUE_BALL_ID, TABLE_LENGTH, TABLE_WIDTH } from '../constant
 import type { Ball } from '../types.js';
 
 function ball(id: number, x: number, y: number, vx = 0, vy = 0): Ball {
-  return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, spin: 0, pocketed: false };
+  return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, spin: 0, spinV: 0, pocketed: false };
 }
 
 describe('rackBalls', () => {
@@ -88,5 +88,104 @@ describe('stepSimulation', () => {
     const { events } = stepSimulation(balls, 1 / 60);
     expect(events.some((e) => e.type === 'pot' && e.ballId === 1)).toBe(true);
     expect(balls[0].pocketed).toBe(true);
+  });
+});
+
+describe('cue ball control (spin)', () => {
+  /**
+   * Fires the cue ball straight down the table into a stationary object ball.
+   *
+   * Speeds and distances here are chosen so the object ball comes to rest *before* the far
+   * cushion. An earlier version of these tests used a firm shot, the object ball rebounded off
+   * the end rail and struck the cue ball a second time, and every assertion about where the cue
+   * ball finished was really measuring that second collision.
+   */
+  function shot(opts: {
+    spinV?: number;
+    spin?: number;
+    cueX?: number;
+    targetX?: number;
+    speed?: number;
+  }): { cue: Ball; target: Ball; contactX: number } {
+    const cueX = opts.cueX ?? 400;
+    const targetX = opts.targetX ?? 800;
+    const cue = ball(CUE_BALL_ID, cueX, 500, opts.speed ?? 700, 0);
+    cue.spinV = opts.spinV ?? 0;
+    cue.spin = opts.spin ?? 0;
+    const target = ball(1, targetX, 500);
+    const balls = [cue, target];
+    for (let i = 0; i < 900 && !stepSimulation(balls, 1 / 60).settled; i++);
+    return { cue, target, contactX: targetX - BALL_RADIUS * 2 };
+  }
+
+  it('keeps every shot clear of the far cushion, so nothing rebounds into the cue ball', () => {
+    for (const spinV of [-1, 0, 1]) {
+      const { target } = shot({ spinV });
+      expect(target.pos.x).toBeLessThan(TABLE_LENGTH - BALL_RADIUS * 2);
+    }
+  });
+
+  it('sends the object ball on regardless of the spin used', () => {
+    for (const spinV of [-1, 0, 1]) {
+      const { target } = shot({ spinV });
+      expect(target.pos.x).toBeGreaterThan(800);
+      expect(Math.abs(target.pos.y - 500)).toBeLessThan(2);
+    }
+  });
+
+  it('draws the cue ball back behind the contact point with backspin', () => {
+    const { cue, contactX } = shot({ spinV: -1 });
+    expect(cue.pos.x).toBeLessThan(contactX - 40);
+  });
+
+  it('leaves the cue ball near the contact point on a stun shot', () => {
+    const { cue, contactX } = shot({ spinV: 0 });
+    expect(Math.abs(cue.pos.x - contactX)).toBeLessThan(40);
+  });
+
+  it('orders draw, stun and follow correctly along the shot line', () => {
+    const draw = shot({ spinV: -1 }).cue.pos.x;
+    const stun = shot({ spinV: 0 }).cue.pos.x;
+    const follow = shot({ spinV: 1 }).cue.pos.x;
+    expect(draw).toBeLessThan(stun);
+    expect(stun).toBeLessThan(follow);
+  });
+
+  it('loses its bite over distance, so a long screw draws back less', () => {
+    // Both shots arrive at the object ball at the same speed; only the distance travelled to
+    // get there differs, which isolates the decay from everything else.
+    const near = shot({ spinV: -1, cueX: 790, targetX: 1100, speed: 865 });
+    const far = shot({ spinV: -1, cueX: 150, targetX: 1100, speed: 1100 });
+    const nearDraw = near.contactX - near.cue.pos.x;
+    const farDraw = far.contactX - far.cue.pos.x;
+    expect(nearDraw).toBeGreaterThan(farDraw);
+  });
+
+  it('curves the cue ball sideways with english on a firm shot', () => {
+    const cue = ball(CUE_BALL_ID, 200, 500, 3200, 0);
+    cue.spin = 1;
+    const balls = [cue];
+    for (let i = 0; i < 900 && !stepSimulation(balls, 1 / 60).settled; i++);
+    // Struck dead straight down the table, so any drift off the line is swerve.
+    expect(Math.abs(cue.pos.y - 500)).toBeGreaterThan(5);
+  });
+
+  it('throws the object ball off the true line when english is applied', () => {
+    const clean = shot({ spin: 0 }).target.pos.y;
+    const thrown = shot({ spin: 1 }).target.pos.y;
+    expect(Math.abs(thrown - 500)).toBeGreaterThan(Math.abs(clean - 500));
+  });
+
+  it('clears all spin once a ball comes to rest', () => {
+    const { cue, target } = shot({ spinV: -1, spin: 1 });
+    expect(cue.spin).toBe(0);
+    expect(cue.spinV).toBe(0);
+    expect(target.spin).toBe(0);
+  });
+
+  it('still sends a dead-straight centre-ball shot straight, as before', () => {
+    const { cue, target } = shot({ spinV: 0, spin: 0 });
+    expect(Math.abs(target.pos.y - 500)).toBeLessThan(1);
+    expect(Math.abs(cue.pos.y - 500)).toBeLessThan(1);
   });
 });

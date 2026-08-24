@@ -8,9 +8,14 @@ import {
   RESTITUTION_BALL,
   RESTITUTION_CUSHION,
   SIM_HZ,
+  SLIDE_SPEED,
   SPIN_DAMPING,
+  SPIN_V_DECAY_PER_UNIT,
+  SPIN_V_TRANSFER,
+  SWERVE_ACCEL,
   TABLE_LENGTH,
   TABLE_WIDTH,
+  THROW_MAX,
 } from './constants.js';
 
 const SUBSTEP_DT = 1 / SIM_HZ;
@@ -27,12 +32,39 @@ function applyFriction(ball: Ball, dt: number): void {
   const speed = Vec2.length(ball.vel);
   if (speed <= REST_EPSILON) {
     ball.vel = Vec2.zero();
-  } else {
-    const decel = Math.min(speed, FRICTION_DECEL * dt);
-    const dir = Vec2.normalize(ball.vel);
-    ball.vel = Vec2.sub(ball.vel, Vec2.scale(dir, decel));
+    // A stopped ball has nothing left to spin against the cloth.
+    ball.spin = 0;
+    ball.spinV = 0;
+    return;
   }
+
+  const dir = Vec2.normalize(ball.vel);
+
+  // Swerve: while the ball is still sliding, english pushes it sideways off its line. Once
+  // it settles into natural roll the curve stops, which is why swerve only shows on firm shots.
+  if (ball.spin !== 0 && speed > SLIDE_SPEED) {
+    const slide = Math.min(1, (speed - SLIDE_SPEED) / SLIDE_SPEED);
+    const side = { x: -dir.y, y: dir.x };
+    ball.vel = Vec2.add(ball.vel, Vec2.scale(side, ball.spin * SWERVE_ACCEL * slide * dt));
+  }
+
+  const decel = Math.min(speed, FRICTION_DECEL * dt);
+  ball.vel = Vec2.sub(ball.vel, Vec2.scale(dir, decel));
+
+  // Check again *after* decelerating: a ball that drops below the rest threshold on the final
+  // substep would otherwise settle still carrying spin, because the early-out above only sees
+  // the speed it came in with.
+  if (Vec2.length(ball.vel) <= REST_EPSILON) {
+    ball.vel = Vec2.zero();
+    ball.spin = 0;
+    ball.spinV = 0;
+    return;
+  }
+
   ball.spin *= Math.pow(SPIN_DAMPING, dt);
+  // Vertical spin wears off over distance travelled, not time — see SPIN_V_DECAY_PER_UNIT.
+  const travelled = speed * dt;
+  ball.spinV *= Math.max(0, 1 - SPIN_V_DECAY_PER_UNIT * travelled);
 }
 
 function resolveCushions(ball: Ball, events: SimEvent[]): void {
@@ -99,10 +131,41 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
   // fire a "hit" event on every substep for as long as anything else on the table moves.
   if (velAlongNormal > -REST_EPSILON) return;
 
+  // Direction of travel before the impulse — the spin acts along the line the striking ball
+  // was already moving on, so it has to be captured first.
+  const striker = Vec2.length(a.vel) >= Vec2.length(b.vel) ? a : b;
+  const struck = striker === a ? b : a;
+  const strikerDir = Vec2.length(striker.vel) > 1e-6 ? Vec2.normalize(striker.vel) : normal;
+
   const impulse = -(1 + RESTITUTION_BALL) * velAlongNormal * 0.5;
   const impulseVec = Vec2.scale(normal, impulse);
   a.vel = Vec2.sub(a.vel, impulseVec);
   b.vel = Vec2.add(b.vel, impulseVec);
+
+  // ---- Cue ball control ----
+  // Vertical spin survives the collision and expresses itself along the original line:
+  // backspin drags the striker back off the object ball, topspin carries it through, and
+  // nothing at all leaves it stunned dead. This is the whole of position play.
+  if (striker.spinV !== 0) {
+    striker.vel = Vec2.add(striker.vel, Vec2.scale(strikerDir, striker.spinV * SPIN_V_TRANSFER));
+    // Most of it is spent in the hit; what's left keeps working on the roll afterwards.
+    striker.spinV *= 0.25;
+  }
+
+  // Throw: english on the striker rubs against the object ball and pushes it fractionally
+  // off the true contact line, in the direction the spin is turning.
+  if (striker.spin !== 0) {
+    const angle = striker.spin * THROW_MAX;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    struck.vel = {
+      x: struck.vel.x * cos - struck.vel.y * sin,
+      y: struck.vel.x * sin + struck.vel.y * cos,
+    };
+    // A little english transfers to the object ball as the surfaces grip.
+    struck.spin += striker.spin * 0.12;
+    striker.spin *= 0.7;
+  }
 
   const contactPoint = Vec2.add(a.pos, Vec2.scale(normal, BALL_RADIUS));
   events.push({ type: 'ballCollision', a: a.id, b: b.id, pos: contactPoint, impulse: Math.abs(impulse) });

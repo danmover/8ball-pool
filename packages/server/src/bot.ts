@@ -40,6 +40,8 @@ interface Tuning {
    * 0.6 often settles for a mediocre one.
    */
   sloppiness: number;
+  /** Whether this tier bothers to think about where the cue ball finishes. */
+  playsPosition: boolean;
   thinkMs: [number, number];
   names: string[];
 }
@@ -49,6 +51,7 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     contactError: 0.55,
     powerError: 0.3,
     sloppiness: 0.7,
+    playsPosition: false,
     thinkMs: [1300, 2200],
     names: ['Rookie Rita', 'Chalky Pete', 'Two-Left-Hands'],
   },
@@ -56,6 +59,7 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     contactError: 0.22,
     powerError: 0.18,
     sloppiness: 0.4,
+    playsPosition: false,
     thinkMs: [1100, 1900],
     names: ['Club Player', 'Sunday Sam', 'Bar-Room Bex'],
   },
@@ -63,6 +67,7 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     contactError: 0.09,
     powerError: 0.1,
     sloppiness: 0.15,
+    playsPosition: true,
     thinkMs: [900, 1500],
     names: ['The Shark', 'Cue-Ball Kim', 'Side-Pocket Sid'],
   },
@@ -70,6 +75,7 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     contactError: 0.035,
     powerError: 0.05,
     sloppiness: 0,
+    playsPosition: true,
     thinkMs: [700, 1200],
     names: ['The Legend', 'Nine-Ball Nia', 'Mr 147'],
   },
@@ -86,6 +92,8 @@ const BOT_LOADOUTS: Loadout[] = [
 export interface BotShot {
   angle: number;
   power: number;
+  /** Cue tip offset, exactly as a human's spin pad sends it. */
+  spin: { x: number; y: number };
 }
 
 interface Candidate {
@@ -94,6 +102,9 @@ interface Candidate {
   score: number;
   /** Cue-to-contact-point distance, used to convert contact error into an aim angle. */
   cueDist: number;
+  /** The object ball being played and where it's headed, for working out position. */
+  targetId: number;
+  ghost: { x: number; y: number };
 }
 
 function pick<T>(items: T[]): T {
@@ -130,7 +141,7 @@ export class BotPlayer {
    */
   chooseShot(state: GameState, seat: string): BotShot {
     const cue = state.balls.find((b) => b.id === CUE_BALL_ID);
-    if (!cue || cue.pocketed) return { angle: 0, power: 0.5 };
+    if (!cue || cue.pocketed) return { angle: 0, power: 0.5, spin: { x: 0, y: 0 } };
 
     const targets = legalTargetBallIds(state);
     const candidates = this.rankShots(state, cue, targets);
@@ -152,7 +163,55 @@ export class BotPlayer {
         0.12,
         Math.min(1, chosen.power * (1 + (Math.random() - 0.5) * 2 * this.tuning.powerError))
       ),
+      spin: this.choosePositionSpin(state, cue, chosen, targets),
     };
+  }
+
+  /**
+   * Position play, for the tiers that have it.
+   *
+   * Nothing clever: after this shot the cue ball ends up somewhere near the contact point, and
+   * draw pulls it back down the shot line while follow sends it on. So look at where the *next*
+   * ball is, and pick whichever leaves the cue ball closer to it. Rookie and Club never do this
+   * — playing centre-ball and hoping is itself a large part of what makes them weaker.
+   */
+  private choosePositionSpin(
+    state: GameState,
+    cue: Ball,
+    chosen: Candidate,
+    targets: number[]
+  ): { x: number; y: number } {
+    if (!this.tuning.playsPosition) return { x: 0, y: 0 };
+
+    // The next ball to think about is the nearest legal one that isn't the one being potted.
+    let next: Ball | null = null;
+    let bestDist = Infinity;
+    for (const id of targets) {
+      if (id === chosen.targetId) continue;
+      const ball = state.balls.find((b) => b.id === id && !b.pocketed);
+      if (!ball) continue;
+      const d = Vec2.distance(chosen.ghost, ball.pos);
+      if (d < bestDist) {
+        bestDist = d;
+        next = ball;
+      }
+    }
+    if (!next) return { x: 0, y: 0 };
+
+    // Would drawing back or following through leave the cue ball nearer that ball?
+    const dir = Vec2.normalize(Vec2.sub(chosen.ghost, cue.pos));
+    const reach = 260;
+    const drawnTo = Vec2.sub(chosen.ghost, Vec2.scale(dir, reach));
+    const followedTo = Vec2.add(chosen.ghost, Vec2.scale(dir, reach));
+
+    const drawDist = Vec2.distance(drawnTo, next.pos);
+    const followDist = Vec2.distance(followedTo, next.pos);
+    const stunDist = Vec2.distance(chosen.ghost, next.pos);
+
+    const best = Math.min(drawDist, followDist, stunDist);
+    if (best === stunDist) return { x: 0, y: 0 };
+    // Pad y is screen-down, so positive y is below centre — backspin.
+    return { x: 0, y: best === drawDist ? 0.8 : -0.8 };
   }
 
   /**
@@ -205,7 +264,7 @@ export class BotPlayer {
           0.3 + (pocketDist / TABLE_LENGTH) * 0.5 + (cueDist / TABLE_LENGTH) * 0.25 + cut * 0.2
         );
 
-        out.push({ angle, power, score, cueDist });
+        out.push({ angle, power, score, cueDist, targetId: id, ghost });
       }
     }
 
@@ -225,13 +284,14 @@ export class BotPlayer {
         best = ball;
       }
     }
-    if (!best) return { angle: Math.random() * Math.PI * 2, power: 0.45 };
+    if (!best) return { angle: Math.random() * Math.PI * 2, power: 0.45, spin: { x: 0, y: 0 } };
 
     const dir = Vec2.sub(best.pos, cue.pos);
     return {
       angle: Math.atan2(dir.y, dir.x) + this.aimJitter(Vec2.length(dir)),
       // Firm enough to reach a rail after contact, which most modes require.
       power: 0.55,
+      spin: { x: 0, y: 0 },
     };
   }
 
@@ -256,7 +316,7 @@ export class BotPlayer {
       );
       if (overlaps) continue;
 
-      const probe: Ball = { id: CUE_BALL_ID, kind: 'cue', pos, vel: { x: 0, y: 0 }, spin: 0, pocketed: false };
+      const probe: Ball = { id: CUE_BALL_ID, kind: 'cue', pos, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
       const top = this.rankShots(state, probe, targets)[0];
       const score = top?.score ?? -Infinity;
       if (score > bestScore) {

@@ -29,6 +29,20 @@ export const FRICTION_DECEL = 420; // table-units / s^2
 export const REST_EPSILON = 3; // below this speed (tu/s) a ball is considered stopped
 export const SPIN_DAMPING = 0.92; // per second, side-spin decay
 
+// ---- Cue ball control ----
+// Vertical spin decays with *distance travelled* rather than time: it's the cloth rubbing it
+// off into natural roll, so a ball that crosses the table arrives with far less of it than one
+// that travels a few inches. This is what makes a long screw shot genuinely hard.
+export const SPIN_V_DECAY_PER_UNIT = 0.0022;
+/** How much of the cue ball's vertical spin becomes velocity at contact, in table units/s. */
+export const SPIN_V_TRANSFER = 900;
+/** Sideways acceleration from english while the ball is still sliding (swerve). */
+export const SWERVE_ACCEL = 190;
+/** How far english nudges the object ball off its true line (throw), in radians at full spin. */
+export const THROW_MAX = 0.05;
+/** Above this speed a ball is treated as sliding, so english still bites. */
+export const SLIDE_SPEED = 260;
+
 export const MAX_SHOT_SPEED = 4200; // tu/s at full power
 export const MIN_SHOT_SPEED = 150;
 

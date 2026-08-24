@@ -9,7 +9,17 @@ export interface Ball {
   kind: BallKind;
   pos: Vec2;
   vel: Vec2;
-  spin: number; // side-spin scalar, -1..1, decays over time
+  /**
+   * Side ("english") spin, -1..1. Curves the ball while it's still sliding and changes the
+   * angle it comes off a cushion.
+   */
+  spin: number;
+  /**
+   * Vertical spin: -1 is full screw-back (draw), 0 is a stun, +1 is full follow (topspin).
+   * Decays toward 0 as the ball travels, because friction converts it into natural roll —
+   * which is exactly why a screw shot loses its bite across a long table.
+   */
+  spinV: number;
   pocketed: boolean;
 }
 
@@ -190,6 +200,13 @@ export interface TrajectoryPreview {
   ghostBallPos: Vec2 | null;
   firstContactBallId: number | null;
   objectBallPath: TrajectorySegment[];
+  /**
+   * Where the cue ball goes *after* contact, given the spin on the tip. Without this the
+   * whole draw/follow system is invisible — you can't learn a control you can't see.
+   */
+  cueAfterPath: TrajectorySegment[];
+  /** Resting place of the cue ball, drawn as a ghost. */
+  cueRestPos: Vec2 | null;
 }
 
 // ---- Socket event contracts ----

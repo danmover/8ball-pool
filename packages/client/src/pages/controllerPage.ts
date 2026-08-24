@@ -37,6 +37,8 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
   let placing = false;
   let lastAimAngle = 0;
+  /** Latest drag power, so the cue-ball preview scales with how hard the shot will be. */
+  let lastAimPower = 0.5;
   let turnBannerEl: HTMLElement | null = null;
   let ballRowEl: HTMLElement | null = null;
   let celebrator: PotCelebrator | null = null;
@@ -130,7 +132,9 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       lastState.balls,
       CUE_BALL_ID,
       angle,
-      settings.trajectoryPreview
+      settings.trajectoryPreview,
+      spinPad?.getValue() ?? { x: 0, y: 0 },
+      lastAimPower
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
   }
@@ -315,7 +319,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
-    spinPad = createSpinPad();
+    spinPad = createSpinPad(() => renderPreview(lastAimAngle));
     Object.assign(spinPad.el.style, { position: 'absolute', bottom: '54px', right: '18px' });
     controlArea.appendChild(spinPad.el);
 
@@ -358,6 +362,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       onAimChange: (angle, power) => {
         if (!seat) return;
         lastAimAngle = angle;
+        lastAimPower = power;
         setPowerHud(power);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
         socket.emit('updateAim', { seat, angle, spin });

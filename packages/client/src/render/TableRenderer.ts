@@ -1406,6 +1406,19 @@ export class TableRenderer {
       }
       g.stroke({ width: 3, color: 0xffe27a, alpha: 0.55 });
     }
+
+    // Where the cue ball itself finishes — drawn in the accent colour so it's never confused
+    // with the object ball's line. This is the only way the spin is visible before you shoot.
+    if (preview.cueAfterPath.length) {
+      for (const seg of preview.cueAfterPath) {
+        this.dashedLine(g, seg.from, seg.to);
+      }
+      g.stroke({ width: 3, color: 0x34e2b0, alpha: 0.7 });
+    }
+    if (preview.cueRestPos) {
+      g.circle(preview.cueRestPos.x, preview.cueRestPos.y, BALL_RADIUS);
+      g.stroke({ width: 2.5, color: 0x34e2b0, alpha: 0.75 });
+    }
     void cueBallId;
   }
 

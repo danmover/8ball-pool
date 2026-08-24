@@ -1121,6 +1121,89 @@ button.mini.secondary {
   filter: drop-shadow(0 0 2px var(--ink));
 }
 
+/* --- Spin control ---
+   Drawn as an actual cue ball with the tip position on it, so where you're striking is
+   literal rather than an abstract joystick. */
+
+.spin-pad {
+  width: 92px;
+  height: 92px;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 45%),
+    radial-gradient(circle at 50% 50%, var(--paper) 0 46%, var(--paper-3) 100%);
+  border: none;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset -6px -8px 14px rgba(26, 20, 16, 0.25);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Crosshair through the middle, so centre-ball is findable without hunting. */
+.spin-pad::before,
+.spin-pad::after {
+  content: '';
+  position: absolute;
+  background: rgba(26, 20, 16, 0.18);
+}
+
+.spin-pad::before {
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 1.5px;
+}
+
+.spin-pad::after {
+  top: 12%;
+  bottom: 12%;
+  left: 50%;
+  width: 1.5px;
+}
+
+.spin-pad .dot {
+  width: 16px;
+  height: 16px;
+  background: radial-gradient(circle at 35% 32%, #7fd4ff, var(--accent-2));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 10px rgba(42, 110, 224, 0.6);
+}
+
+.host-spin-wrap {
+  position: fixed;
+  left: 16px;
+  bottom: 120px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 12px 22px rgba(0, 0, 0, 0.45);
+}
+
+.spin-label {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.spin-hint {
+  font-size: 0.58rem;
+  color: var(--muted);
+  max-width: 120px;
+  text-align: center;
+  line-height: 1.3;
+}
+
 /* --- Controller --- */
 
 .ctrl-buttons {

@@ -344,7 +344,12 @@ export class Room {
     const power = Math.max(0, Math.min(1, input.power));
     const speed = MIN_SHOT_SPEED + power * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
     cue.vel = Vec2.scale(Vec2.fromAngle(input.angle), speed);
-    cue.spin = Math.max(-1, Math.min(1, input.spin.x));
+    // Tip offset: x is english, y is draw/follow. The vertical component used to be
+    // discarded here, which is why spin only ever changed cushion angles.
+    const clamp = (v: number): number => Math.max(-1, Math.min(1, v));
+    cue.spin = clamp(input.spin.x);
+    // Screen coordinates run downward, so hitting *below* centre (positive y) is backspin.
+    cue.spinV = -clamp(input.spin.y);
 
     this.gameState.phase = 'shot_in_progress';
     this.shotEvents = [];
@@ -374,6 +379,7 @@ export class Room {
     cue.pos = { x, y };
     cue.vel = Vec2.zero();
     cue.spin = 0;
+    cue.spinV = 0;
     cue.pocketed = false;
     this.gameState.phase = 'aiming';
     this.broadcastGameState();
@@ -492,9 +498,10 @@ export class Room {
       }
 
       const shot = bot.chooseShot(this.gameState, seat);
-      // Stream the aim first so the table shows the bot lining up, exactly like a human.
-      this.handleAim({ seat, angle: shot.angle, spin: { x: 0, y: 0 } });
-      setTimeout(() => this.handleShoot({ seat, ...shot, spin: { x: 0, y: 0 } }), 450);
+      // Stream the aim first so the table shows the bot lining up, exactly like a human —
+      // including the spin it has chosen, so the guide on screen matches the shot it takes.
+      this.handleAim({ seat, angle: shot.angle, spin: shot.spin });
+      setTimeout(() => this.handleShoot({ seat, ...shot }), 450);
     }, delay);
   }
 

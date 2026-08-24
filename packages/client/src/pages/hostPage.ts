@@ -31,11 +31,15 @@ import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
 import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
+import { createSpinPad } from '../controller/spinPad';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+
+/** Centre-ball, used when no pad exists yet. */
+const ZERO_SPIN = { x: 0, y: 0 };
 
 const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
 const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
@@ -46,10 +50,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let ownedSeat: Seat | null = null;
   let renderer: TableRenderer | null = null;
   let aimController: AimController | null = null;
+  let spinPad: ReturnType<typeof createSpinPad> | null = null;
   let lastState: GameState | null = null;
   let lastRoom: RoomStateDTO | null = null;
   let placing = false;
   let lastAimAngle: number | null = null;
+  /** Latest drag power, so the cue-ball preview scales with how hard the shot will be. */
+  let lastAimPower = 0.5;
   let booted = false;
   let qrDataUrl = '';
   let celebrator: PotCelebrator | null = null;
@@ -88,6 +95,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         <div class="power-tier" id="powerTier">DRAG TO AIM</div>
       </div>
     </div>
+    <div class="host-spin-wrap" id="hostSpinWrap" style="display:none">
+      <div class="spin-label">SPIN</div>
+      <div id="hostSpin"></div>
+      <div class="spin-hint">Below centre draws back · above follows through</div>
+    </div>
     <div id="lobbyWrap"></div>
   `;
 
@@ -97,6 +109,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const bottomArea = root.querySelector<HTMLElement>('#bottomArea')!;
   const lobbyWrap = root.querySelector<HTMLElement>('#lobbyWrap')!;
   const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
+  const hostSpinWrap = root.querySelector<HTMLElement>('#hostSpinWrap')!;
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
   const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
   const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
@@ -248,19 +261,33 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
+    // The host screen had no spin control at all, so hosts could only ever play centre-ball.
+    // Same pad the phone uses; re-previewing on change is what makes draw/follow learnable.
+    spinPad = createSpinPad(() => {
+      if (lastAimAngle !== null) renderPreview(lastAimAngle);
+    });
+    root.querySelector<HTMLElement>('#hostSpin')!.appendChild(spinPad.el);
+
     aimController = new AimController(canvasEl, {
       onAimChange: (angle, power) => {
         if (!ownedSeat || !lastState) return;
         lastAimAngle = angle;
+        lastAimPower = power;
         renderer?.setAimVisual(angle, power, true);
         setPowerHud(power);
-        socket.emit('updateAim', { seat: ownedSeat, angle, spin: { x: 0, y: 0 } });
+        socket.emit('updateAim', { seat: ownedSeat, angle, spin: spinPad?.getValue() ?? ZERO_SPIN });
         renderPreview(angle);
       },
       onShoot: (angle, power) => {
         if (!ownedSeat) return;
         setPowerHud(0);
-        socket.emit('takeShot', { seat: ownedSeat, angle, power, spin: { x: 0, y: 0 } });
+        socket.emit('takeShot', {
+          seat: ownedSeat,
+          angle,
+          power,
+          spin: spinPad?.getValue() ?? ZERO_SPIN,
+        });
+        spinPad?.reset();
       },
     });
     aimController.setEnabled(false);
@@ -548,7 +575,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       lastState.balls,
       CUE_BALL_ID,
       angle,
-      settings.trajectoryPreview
+      settings.trajectoryPreview,
+      spinPad?.getValue() ?? ZERO_SPIN,
+      lastAimPower
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
   }
@@ -575,6 +604,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       (state.phase === 'aiming' || state.phase === 'break');
     aimController?.setEnabled(canAim);
     hostPowerWrap.style.display = canAim ? '' : 'none';
+    hostSpinWrap.style.display = canAim ? '' : 'none';
     if (!canAim) setPowerHud(0);
 
     // The win only resolves after the shot settles, so the takeover fires here rather than

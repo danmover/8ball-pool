@@ -1,6 +1,16 @@
 import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
-import { BALL_RADIUS, POCKETS, TABLE_LENGTH, TABLE_WIDTH } from './constants.js';
+import {
+  BALL_RADIUS,
+  FRICTION_DECEL,
+  MAX_SHOT_SPEED,
+  MIN_SHOT_SPEED,
+  POCKETS,
+  SPIN_V_DECAY_PER_UNIT,
+  SPIN_V_TRANSFER,
+  TABLE_LENGTH,
+  TABLE_WIDTH,
+} from './constants.js';
 
 const MAX_BOUNCES_FULL = 2;
 const MAX_PREVIEW_LENGTH = 3000;
@@ -82,6 +92,52 @@ export function pathIsClear(
   return true;
 }
 
+/**
+ * The cue ball's path after it strikes an object ball, as a single offset vector.
+ *
+ * Mirrors what `resolveBallCollision` actually does rather than guessing: the cue ball keeps
+ * the component of its motion perpendicular to the contact line (the tangent slide), and the
+ * spin left on it after the trip is added along the original direction. Both use the same
+ * decay constant as the simulation, so the guide and the shot agree.
+ */
+function cueBallAfterContact(
+  dir: Vec2,
+  objDir: Vec2,
+  spin: { x: number; y: number },
+  travelled: number,
+  power: number
+): Vec2 | null {
+  // Screen-down is positive y on the pad, so below-centre (positive) is backspin.
+  const spinV = -Math.max(-1, Math.min(1, spin.y));
+  const remaining = spinV * Math.exp(-SPIN_V_DECAY_PER_UNIT * travelled);
+
+  // Speed at contact, from the same launch speed and friction the simulation uses. Without
+  // this the guide would draw the same line for a tap and a smash.
+  const launch = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
+  const contactSpeed = Math.sqrt(Math.max(0, launch * launch - 2 * FRICTION_DECEL * travelled));
+
+  /** How far a ball travels from a given speed before friction stops it. */
+  const rollOut = (speed: number): number => (speed * speed) / (2 * FRICTION_DECEL);
+
+  // Spin becomes velocity along the shot line at contact — the same transfer the collision
+  // applies — so the guide predicts the real distance rather than a made-up one.
+  const spinPush = Math.sign(remaining) * rollOut(Math.abs(remaining) * SPIN_V_TRANSFER);
+
+  // Tangent component: whatever isn't transferred along the contact normal carries on, which
+  // is why a thin cut sends the cue ball sideways even with no spin at all.
+  const along = Vec2.dot(dir, objDir);
+  const tangent = Vec2.sub(dir, Vec2.scale(objDir, along));
+  const tangentLen = Vec2.length(tangent);
+  const slide = rollOut(tangentLen * contactSpeed);
+
+  if (Math.abs(spinPush) < 4 && slide < 4) return null;
+
+  return Vec2.add(
+    Vec2.scale(dir, spinPush),
+    tangentLen > 1e-6 ? Vec2.scale(Vec2.normalize(tangent), slide) : Vec2.zero()
+  );
+}
+
 function nearPocket(point: Vec2): boolean {
   return POCKETS.some((p) => Vec2.distance(point, p) <= p.radius * 1.3);
 }
@@ -95,7 +151,11 @@ export function computeTrajectoryPreview(
   balls: Ball[],
   cueBallId: number,
   angle: number,
-  mode: 'basic' | 'full'
+  mode: 'basic' | 'full',
+  /** Cue tip offset: x is english, y is draw (positive) / follow (negative), as sent by the pad. */
+  spin: { x: number; y: number } = { x: 0, y: 0 },
+  /** Shot power 0..1, so the post-contact line scales with how hard you're about to hit it. */
+  power = 0.5
 ): TrajectoryPreview {
   const cue = balls.find((b) => b.id === cueBallId);
   const path: TrajectorySegment[] = [];
@@ -104,6 +164,8 @@ export function computeTrajectoryPreview(
     ghostBallPos: null,
     firstContactBallId: null,
     objectBallPath: [],
+    cueAfterPath: [],
+    cueRestPos: null,
   };
   if (!cue || cue.pocketed) return result;
 
@@ -136,6 +198,16 @@ export function computeTrajectoryPreview(
           from: hit.ball.pos,
           to: Vec2.add(hit.ball.pos, Vec2.scale(objDir, OBJECT_BALL_PREVIEW_LENGTH)),
         });
+
+        // Where the cue ball goes after contact. On a full-ball hit it's driven purely by the
+        // spin; on a cut it also slides off along the tangent, which is the "natural" path a
+        // stun shot takes.
+        const travelled = Vec2.distance(cue.pos, hit.point);
+        const after = cueBallAfterContact(dir, objDir, spin, travelled, power);
+        if (after) {
+          result.cueAfterPath.push({ from: hit.point, to: Vec2.add(hit.point, after) });
+          result.cueRestPos = Vec2.add(hit.point, after);
+        }
       }
       break;
     }

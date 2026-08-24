@@ -20,7 +20,7 @@ function kindOf(id: number): BallKind {
 }
 
 function newBall(id: number, x: number, y: number): Ball {
-  return { id, kind: kindOf(id), pos: { x, y }, vel: { x: 0, y: 0 }, spin: 0, pocketed: false };
+  return { id, kind: kindOf(id), pos: { x, y }, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
 }
 
 function cueBall(): Ball {
@@ -103,6 +103,7 @@ export function rackBalls(): Ball[] {
         },
         vel: { x: 0, y: 0 },
         spin: 0,
+        spinV: 0,
         pocketed: false,
       });
     });
@@ -114,6 +115,7 @@ export function rackBalls(): Ball[] {
     pos: { x: TABLE_LENGTH * 0.22, y: TABLE_WIDTH / 2 },
     vel: { x: 0, y: 0 },
     spin: 0,
+    spinV: 0,
     pocketed: false,
   });
 
