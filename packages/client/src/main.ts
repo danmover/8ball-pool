@@ -8,6 +8,7 @@ import { renderHomePage } from './pages/homePage';
 import { renderHostPage } from './pages/hostPage';
 import { renderControllerPage } from './pages/controllerPage';
 import { renderProfilePage } from './pages/profilePage';
+import { renderChallengesPage } from './pages/challengesPage';
 import { unlockAudio } from './render/audio';
 import { startMusic } from './render/music';
 import { tableThemeFor } from './render/cosmetics/tableThemes';
@@ -42,6 +43,8 @@ startRouter(app, (path) => {
     setCleanup(renderControllerPage(app, playMatch[1].toUpperCase()));
   } else if (path === '/profile') {
     setCleanup(renderProfilePage(app));
+  } else if (path === '/challenges') {
+    setCleanup(renderChallengesPage(app));
   } else {
     setCleanup(renderHomePage(app));
   }

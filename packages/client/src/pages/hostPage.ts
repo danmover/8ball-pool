@@ -14,6 +14,7 @@ import {
   computeTrajectoryPreview,
   legalTargetBallIds,
   levelProgress,
+  activeChallenge,
   modeDescriptor,
   seatIndex,
   xpForResult,
@@ -22,7 +23,14 @@ import { playerBannerHtml } from '../render/banner';
 import { icon } from '../render/icons';
 import { confirmLeave, showToast } from '../render/dialogs';
 import { PotCelebrator } from '../render/potCelebration';
-import { equippedLoadout, getProfile, grantXp, recordStats } from '../profile/profile';
+import {
+  challengeStars,
+  equippedLoadout,
+  getProfile,
+  grantXp,
+  recordChallengeStars,
+  recordStats,
+} from '../profile/profile';
 import { recordChallengeEvent } from '../profile/dailyChallenge';
 import { openWheel } from '../profile/wheel';
 import { getSocket } from '../net/socket';
@@ -49,6 +57,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const settings = loadSettings();
   let ownedSeat: Seat | null = null;
   let renderer: TableRenderer | null = null;
+  /** In-flight renderer creation, so concurrent callers share one instance. */
+  let rendererPromise: Promise<TableRenderer> | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
   let lastState: GameState | null = null;
@@ -87,6 +97,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         </div>
       </div>
       <div class="toast-stack" id="toastStack"></div>
+      <div class="challenge-hud" id="challengeHud" style="display:none"></div>
       <div id="bottomArea"></div>
     </div>
     <div class="host-power-wrap" id="hostPowerWrap" style="display:none">
@@ -110,6 +121,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const lobbyWrap = root.querySelector<HTMLElement>('#lobbyWrap')!;
   const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
   const hostSpinWrap = root.querySelector<HTMLElement>('#hostSpinWrap')!;
+  const challengeHud = root.querySelector<HTMLElement>('#challengeHud')!;
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
   const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
   const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
@@ -224,14 +236,21 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
    * for one.
    */
   async function ensureRenderer(): Promise<TableRenderer> {
-    if (!renderer) {
-      renderer = await TableRenderer.create(canvasEl);
-      applyRenderSettings(renderer, settings);
-      // The balls are shared table furniture, so they wear the host's set.
-      renderer.setBallSet(equippedLoadout().ballSet);
-      renderer.setShooterLoadout(equippedLoadout());
+    // Memoise the *promise*, not the result. Checking `renderer` alone let two callers past
+    // the guard while the first was still awaiting `create()` — which happened for real when
+    // a room state with `started: false` was immediately followed by one with `started: true`,
+    // leaving two Pixi apps and two stacked canvases in the same container.
+    if (!rendererPromise) {
+      rendererPromise = TableRenderer.create(canvasEl).then((created) => {
+        renderer = created;
+        applyRenderSettings(created, settings);
+        // The balls are shared table furniture, so they wear the host's set.
+        created.setBallSet(equippedLoadout().ballSet);
+        created.setShooterLoadout(equippedLoadout());
+        return created;
+      });
     }
-    return renderer;
+    return rendererPromise;
   }
 
   async function showLobbyBackdrop(): Promise<void> {
@@ -401,6 +420,79 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       .join('');
   }
 
+  /** The live objective panel while a trick shot is in progress. */
+  function renderChallengeHud(state: GameState): void {
+    const challenge = activeChallenge(state);
+    if (!challenge || !state.challenge || state.phase === 'game_over') {
+      challengeHud.style.display = 'none';
+      return;
+    }
+
+    const used = state.challenge.shotsUsed;
+    const left = challenge.shotLimit - used;
+    challengeHud.style.display = '';
+    challengeHud.innerHTML = `
+      <div class="challenge-name">${challenge.name}</div>
+      <div class="challenge-objective">${challenge.brief}</div>
+      <div class="challenge-shots ${left <= 1 ? 'critical' : ''}">
+        ${icon('target', { size: 14 })} ${left} shot${left === 1 ? '' : 's'} left
+        <span class="challenge-star-hint">${challenge.stars.three} for ★★★</span>
+      </div>
+      <div class="challenge-hint">${icon('sparkle', { size: 13 })} ${challenge.hint}</div>`;
+  }
+
+  /** Stars, rewards, and the retry/next controls once an attempt ends. */
+  function renderChallengeResult(state: GameState): void {
+    const challenge = activeChallenge(state);
+    const progress = state.challenge;
+    if (!challenge || !progress) return;
+
+    const before = challengeStars(challenge.id);
+    const result = recordChallengeStars(challenge.id, progress.stars, challenge.reward);
+    const cleared = progress.stars > 0;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'gameOverOverlay';
+    overlay.className = 'overlay-center';
+    overlay.innerHTML = `
+      <div class="challenge-result">
+        <h2>${cleared ? challenge.name : 'Not this time'}</h2>
+        <div class="result-stars">
+          ${[1, 2, 3]
+            .map(
+              (n) =>
+                `<span class="star big${n <= progress.stars ? ' earned' : ''}">${icon('star', {
+                  size: 40,
+                })}</span>`
+            )
+            .join('')}
+        </div>
+        <p>${
+          cleared
+            ? `Cleared in ${progress.shotsUsed} shot${progress.shotsUsed === 1 ? '' : 's'}.`
+            : (state.lastFoulReason ?? 'Out of shots.')
+        }</p>
+        ${
+          result.firstClear
+            ? `<p class="reward-earned">+${challenge.reward.xp} XP and ${challenge.reward.chalk} chalk</p>`
+            : result.improved
+              ? `<p class="reward-earned">New best — ${before} ★ to ${progress.stars} ★</p>`
+              : ''
+        }
+        <div class="dialog-actions">
+          <button id="retryChallenge">Try again</button>
+          <button class="secondary" id="backToChallenges">All trick shots</button>
+        </div>
+      </div>`;
+    root.appendChild(overlay);
+
+    overlay.querySelector('#retryChallenge')!.addEventListener('click', () => {
+      overlay.remove();
+      socket.emit('hostStartChallenge', { challengeId: challenge.id });
+    });
+    overlay.querySelector('#backToChallenges')!.addEventListener('click', () => navigate('/challenges'));
+  }
+
   function renderBottomArea(state: GameState): void {
     bottomArea.innerHTML = '';
     if (state.phase === 'ball_in_hand') {
@@ -416,6 +508,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
     if (state.phase === 'game_over') {
       if (root.querySelector('#gameOverOverlay')) return;
+      // Challenges have their own result screen — stars, not a winner.
+      if (state.mode === 'challenge') {
+        renderChallengeResult(state);
+        return;
+      }
       const overlay = document.createElement('div');
       overlay.id = 'gameOverOverlay';
       overlay.className = 'overlay-center';
@@ -595,6 +692,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
     renderScoreboard(state);
+    renderChallengeHud(state);
     tickShotClock();
     renderBottomArea(state);
 

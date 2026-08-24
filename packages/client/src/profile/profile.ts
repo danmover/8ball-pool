@@ -96,6 +96,33 @@ export function grantSpin(count = 1): Profile {
   return commit({ ...profile, spins: profile.spins + Math.max(0, Math.round(count)) });
 }
 
+/**
+ * Banks a challenge result. Only ever improves the record — replaying a solved puzzle badly
+ * shouldn't take your stars away — and pays the reward the first time it's cleared.
+ */
+export function recordChallengeStars(
+  challengeId: string,
+  stars: number,
+  reward: { xp: number; chalk: number }
+): { improved: boolean; firstClear: boolean } {
+  const profile = getProfile();
+  const previous = profile.challengeStars?.[challengeId] ?? 0;
+  if (stars <= previous) return { improved: false, firstClear: false };
+
+  const firstClear = previous === 0 && stars > 0;
+  commit({
+    ...profile,
+    challengeStars: { ...(profile.challengeStars ?? {}), [challengeId]: stars },
+    chalk: profile.chalk + (firstClear ? reward.chalk : 0),
+  });
+  if (firstClear) grantXp(reward.xp);
+  return { improved: true, firstClear };
+}
+
+export function challengeStars(challengeId: string): number {
+  return getProfile().challengeStars?.[challengeId] ?? 0;
+}
+
 export function setDailyProgress(daily: NonNullable<Profile['daily']>): Profile {
   return commit({ ...getProfile(), daily: { ...daily } });
 }

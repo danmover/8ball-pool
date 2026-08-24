@@ -19,6 +19,7 @@ function outcome(over: Partial<ShotOutcome> = {}): ShotOutcome {
     eightBallPocketed: false,
     firstBallContacted: 1,
     anyCushionAfterContact: true,
+    cushionsBeforeContact: 0,
     ...over,
   };
 }

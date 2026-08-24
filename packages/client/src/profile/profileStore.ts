@@ -18,6 +18,8 @@ export interface Profile {
   stats: { pots: number; wins: number; games: number; bestCombo: number };
   /** Today's daily-challenge progress, stamped with the day so it self-resets. */
   daily?: { date: string; value: number; completed: boolean; claimed: boolean };
+  /** Best stars earned per trick-shot challenge, keyed by challenge id. */
+  challengeStars?: Record<string, number>;
 }
 
 export interface ProfileStore {
@@ -38,6 +40,7 @@ export function createDefaultProfile(): Profile {
     unlocked: [...STARTER_IDS],
     loadout: { ...DEFAULT_LOADOUT },
     stats: { pots: 0, wins: 0, games: 0, bestCombo: 0 },
+    challengeStars: {},
   };
 }
 
@@ -56,6 +59,7 @@ export class LocalProfileStore implements ProfileStore {
         unlocked: [...new Set([...STARTER_IDS, ...(parsed.unlocked ?? [])])],
         loadout: { ...DEFAULT_LOADOUT, ...(parsed.loadout ?? {}) },
         stats: { ...fallback.stats, ...(parsed.stats ?? {}) },
+        challengeStars: { ...(parsed.challengeStars ?? {}) },
       };
     } catch {
       return fallback;

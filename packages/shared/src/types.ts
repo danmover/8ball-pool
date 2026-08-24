@@ -57,7 +57,8 @@ export type GameMode =
   | 'nineball'
   | 'cutthroat'
   | 'killer'
-  | 'sandbox';
+  | 'sandbox'
+  | 'challenge';
 
 export type BotDifficulty = 'rookie' | 'club' | 'shark' | 'legend';
 
@@ -123,6 +124,14 @@ export interface GameState {
   shotClock: { endsAt: number; seconds: number } | null;
   /** Best-of series across frames; null when playing single frames. */
   series: { target: number; frame: number; wins: Record<Seat, number> } | null;
+  /** Trick-shot progress; null outside challenge mode. */
+  challenge: {
+    challengeId: string;
+    shotsUsed: number;
+    pottedOrder: number[];
+    stars: number;
+    failed: boolean;
+  } | null;
 }
 
 export interface AimInput {
@@ -252,6 +261,8 @@ export interface ClientToServerEvents {
   hostAddBot: (payload: { seat: Seat; difficulty: BotDifficulty }) => void;
   hostRemoveBot: (payload: { seat: Seat }) => void;
   sendEmote: (payload: { emote: string }) => void;
+  /** Start or retry a trick-shot challenge. Host only; the room becomes a single-seat puzzle. */
+  hostStartChallenge: (payload: { challengeId: string }) => void;
 }
 
 export interface RoomStateDTO {

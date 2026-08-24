@@ -66,6 +66,7 @@ export function createInitialGameState(
     turnNumber: 0,
     shotClock: null,
     series: null,
+    challenge: null,
   };
 
   // Groups, lives and owned balls are the mode's business, not this function's.
@@ -76,6 +77,7 @@ export function createInitialGameState(
 export function summarizeShot(events: SimEvent[]): ShotOutcome {
   let firstBallContacted: number | null = null;
   let anyCushionAfterContact = false;
+  let cushionsBeforeContact = 0;
   const potted: number[] = [];
   let cueBallPocketed = false;
   let eightBallPocketed = false;
@@ -88,6 +90,7 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
       }
     } else if (ev.type === 'cushion') {
       if (firstBallContacted !== null) anyCushionAfterContact = true;
+      else if (ev.ballId === CUE_BALL_ID) cushionsBeforeContact++;
     } else if (ev.type === 'pot') {
       potted.push(ev.ballId);
       if (ev.ballId === CUE_BALL_ID) cueBallPocketed = true;
@@ -95,7 +98,14 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
     }
   }
 
-  return { potted, cueBallPocketed, eightBallPocketed, firstBallContacted, anyCushionAfterContact };
+  return {
+    potted,
+    cueBallPocketed,
+    eightBallPocketed,
+    firstBallContacted,
+    anyCushionAfterContact,
+    cushionsBeforeContact,
+  };
 }
 
 /** Which balls are currently legal for the shooter to hit first — for UI highlighting only. */

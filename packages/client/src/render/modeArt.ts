@@ -101,6 +101,14 @@ const ART: Record<GameMode, string> = {
     ${ball(90, 40, '#8b4bd8', '4', 7)}
     <path d="M20 58 H100" stroke="#fff" stroke-width="2" opacity="0.35" stroke-dasharray="4 4"/>`),
 
+  // A starred puzzle layout: two balls and a marked target.
+  challenge: frame(`
+    ${ball(30, 40, '#ffcf2e', '', 7)}
+    ${ball(56, 52, '#f03a2e', '', 7)}
+    <path d="M84 26 L87.5 34 L96 35 L90 41 L91.5 50 L84 46 L76.5 50 L78 41 L72 35 L80.5 34 Z"
+          fill="#ffe27a" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M18 60 H100" stroke="#fff" stroke-width="2" stroke-dasharray="5 4" opacity="0.6"/>`),
+
   // Cue lined up on a lone ball with an aim line.
   sandbox: frame(`
     <path d="M18 62 L58 34" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>

@@ -157,6 +157,12 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       room.removeBot(seat);
     });
 
+    socket.on('hostStartChallenge', ({ challengeId }) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.startChallenge(challengeId);
+    });
+
     socket.on('sendEmote', ({ emote }) => {
       const room = rooms.get(socket.data.roomCode);
       const seat = socket.data.seat as Seat | undefined;

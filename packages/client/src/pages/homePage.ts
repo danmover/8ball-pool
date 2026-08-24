@@ -1,4 +1,4 @@
-import { allModes, clampPlayerCount, levelProgress, type GameMode } from '@8ball/shared';
+import { CHALLENGES, allModes, clampPlayerCount, levelProgress, type GameMode } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { loadSettings, saveSession, saveSettings } from '../settings/settingsStore';
 import { equippedLoadout, getProfile, setDisplayName } from '../profile/profile';
@@ -84,6 +84,11 @@ export function renderHomePage(root: HTMLElement): () => void {
             <span class="tile-label">Settings</span>
             <span class="tile-sub">Aim guide, table, audio</span>
           </button>
+          <button class="tile-btn" id="trickShotsBtn">
+            <span class="tile-icon">${icon('target', { size: 26 })}</span>
+            <span class="tile-label">Trick Shots</span>
+            <span class="tile-sub" id="trickSub"></span>
+          </button>
           <div class="tile-btn challenge" id="challengeTile"></div>
         </section>
       </div>
@@ -148,6 +153,10 @@ export function renderHomePage(root: HTMLElement): () => void {
         drawPlayer();
       }
     });
+
+    const stars = Object.values(profile.challengeStars ?? {}).reduce((a, b) => a + b, 0);
+    const possible = CHALLENGES.length * 3;
+    root.querySelector<HTMLElement>('#trickSub')!.textContent = `${stars} / ${possible} stars`;
 
     const spins = profile.spins;
     root.querySelector<HTMLElement>('#lockerSub')!.textContent =
@@ -259,6 +268,8 @@ export function renderHomePage(root: HTMLElement): () => void {
     }
     navigate('/profile');
   });
+
+  root.querySelector('#trickShotsBtn')!.addEventListener('click', () => navigate('/challenges'));
 
   root.querySelector('#settingsBtn')!.addEventListener('click', () => {
     openSettingsPanel(settings, (next) => {

@@ -5,12 +5,15 @@ import { nineBallMode } from './nineball.js';
 import { cutthroatMode } from './cutthroat.js';
 import { killerMode } from './killer.js';
 import { sandboxMode } from './sandbox.js';
+import { challengeMode } from './challenge.js';
 import type { ModeDescriptor } from './types.js';
 
 export * from './types.js';
 export * from './shared.js';
 export { isGroupCleared } from './classic.js';
 export { STARTING_LIVES } from './killer.js';
+export { activeChallenge } from './challenge.js';
+export type { ChallengeState } from './challenge.js';
 
 /**
  * The mode registry. Adding a game mode means adding a module and one entry here — nothing
@@ -24,9 +27,14 @@ export const MODES: Record<GameMode, ModeDescriptor> = {
   cutthroat: cutthroatMode,
   killer: killerMode,
   sandbox: sandboxMode,
+  challenge: challengeMode,
 };
 
-/** Menu order — the two everyone knows first, the party modes after, practice last. */
+/**
+ * Menu order — the two everyone knows first, the party modes after, practice last.
+ * Modes offered in the lobby's picker. `challenge` is deliberately absent — trick shots are
+ * launched from their own browser, not chosen as a lobby mode.
+ */
 export const MODE_ORDER: GameMode[] = [
   'classic',
   'nineball',

@@ -15,6 +15,8 @@ import {
   TABLE_LENGTH,
   TABLE_WIDTH,
   Vec2,
+  challengeBalls,
+  challengeById,
   createInitialGameState,
   isGroupCleared,
   lowestBallId,
@@ -262,6 +264,45 @@ export class Room {
     this.broadcastGameState();
   }
 
+  /**
+   * Loads a trick-shot challenge: fixed layout, fresh progress, one seat.
+   *
+   * Retrying is the same call, which keeps "start" and "retry" from drifting apart — the
+   * commonest way a puzzle mode ends up with stale state between attempts.
+   */
+  startChallenge(challengeId: string): void {
+    const challenge = challengeById(challengeId);
+    if (!challenge) return;
+
+    this.lobby.mode = 'challenge';
+    this.lobby.maxPlayers = 1;
+    this.lobby.shotClockSeconds = null;
+    this.started = true;
+
+    const name = this.gameState.players.p1?.name ?? 'Player';
+    const next = createInitialGameState('challenge', [name]);
+    next.balls = challengeBalls(challenge);
+    next.phase = 'aiming';
+    next.challenge = {
+      challengeId,
+      shotsUsed: 0,
+      pottedOrder: [],
+      stars: 0,
+      failed: false,
+    };
+
+    const conn = this.connections.get('p1');
+    next.players.p1.connected = Boolean(conn && (conn.socketId || conn.bot));
+    next.players.p1.isHost = this.gameState.players.p1?.isHost ?? true;
+    next.players.p1.loadout = { ...(conn?.loadout ?? {}) };
+
+    this.gameState = next;
+    this.clearShotClock();
+    this.clearBotTimer();
+    this.broadcastRoomState();
+    this.broadcastGameState();
+  }
+
   /** A player changed cosmetics mid-session; push it straight out to the table. */
   setLoadout(seat: Seat, loadout: Loadout): void {
     const conn = this.connections.get(seat);
@@ -465,6 +506,7 @@ export class Room {
         eightBallPocketed: false,
         firstBallContacted: null,
         anyCushionAfterContact: false,
+        cushionsBeforeContact: 0,
       },
       isGroupCleared(this.gameState, this.gameState.currentShooter),
       lowestBallId(this.gameState),

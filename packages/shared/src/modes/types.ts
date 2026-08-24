@@ -7,6 +7,8 @@ export interface ShotOutcome {
   eightBallPocketed: boolean;
   firstBallContacted: number | null;
   anyCushionAfterContact: boolean;
+  /** Rails the cue ball struck *before* touching any object ball — the bank-shot test. */
+  cushionsBeforeContact: number;
 }
 
 /**
