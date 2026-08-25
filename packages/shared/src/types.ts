@@ -275,7 +275,8 @@ export interface RoomStateDTO {
 }
 
 export type SimEvent =
-  | { type: 'pot'; ballId: number; pos: Vec2 }
+  /** `pocketIndex` indexes `POCKETS`, so the renderer can drop the ball into the right bag. */
+  | { type: 'pot'; ballId: number; pos: Vec2; pocketIndex: number }
   | { type: 'cushion'; ballId: number; pos: Vec2; speed: number }
   | { type: 'ballCollision'; a: number; b: number; pos: Vec2; impulse: number }
   | { type: 'shotSettled' };

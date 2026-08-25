@@ -21,7 +21,7 @@ describe('summarizeShot', () => {
     const events: SimEvent[] = [
       { type: 'ballCollision', a: 0, b: 3, pos, impulse: 400 },
       { type: 'cushion', ballId: 3, pos, speed: 200 },
-      { type: 'pot', ballId: 3, pos },
+      { type: 'pot', ballId: 3, pos, pocketIndex: 0 },
     ];
     const result = summarizeShot(events);
     expect(result.firstBallContacted).toBe(3);

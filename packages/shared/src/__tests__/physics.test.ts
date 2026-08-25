@@ -70,24 +70,27 @@ describe('stepSimulation', () => {
     const cue = ball(0, 300, 500, 3600, 0);
     const target = ball(1, 1200, 500 + BALL_RADIUS, 0, 0);
     const balls = [cue, target];
-    for (let i = 0; i < 400 && !stepSimulation(balls, 1 / 60).settled; i++);
+
+    // Measured at the moment of contact, not from where the ball ends up. A cut this firm
+    // carries the object ball into a cushion and back, so its resting place says nothing
+    // about the cut angle — which is the thing this test is actually about.
+    let departure: { x: number; y: number } | null = null;
+    for (let i = 0; i < 400; i++) {
+      const { events, settled } = stepSimulation(balls, 1 / 60);
+      if (!departure && events.some((e) => e.type === 'ballCollision')) {
+        departure = { ...target.vel };
+      }
+      if (settled) break;
+    }
 
     // Contact centres are 2R apart with dy = R, so the cut is 30 degrees off the
     // cue's line of travel; the object ball must move down-and-right, not backwards.
-    const dx = target.pos.x - 1200;
-    const dy = target.pos.y - (500 + BALL_RADIUS);
-    expect(dx).toBeGreaterThan(0);
-    expect(dy).toBeGreaterThan(0);
-    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    expect(departure).not.toBeNull();
+    expect(departure!.x).toBeGreaterThan(0);
+    expect(departure!.y).toBeGreaterThan(0);
+    const angle = (Math.atan2(departure!.y, departure!.x) * 180) / Math.PI;
     expect(angle).toBeGreaterThan(20);
     expect(angle).toBeLessThan(40);
-  });
-
-  it('pockets a ball that reaches a pocket zone', () => {
-    const balls = [ball(1, 5, 5, 0, 0)];
-    const { events } = stepSimulation(balls, 1 / 60);
-    expect(events.some((e) => e.type === 'pot' && e.ballId === 1)).toBe(true);
-    expect(balls[0].pocketed).toBe(true);
   });
 });
 

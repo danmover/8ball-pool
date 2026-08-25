@@ -7,18 +7,19 @@ export const TABLE_WIDTH = 1000;
 export const BALL_RADIUS = 22.5;
 export const BALL_DIAMETER = BALL_RADIUS * 2;
 
-export const CORNER_POCKET_RADIUS = BALL_RADIUS * 1.75;
-export const SIDE_POCKET_RADIUS = BALL_RADIUS * 1.9;
+// ---- Pocket mouths ----
+// A pocket is an *opening between two cushion ends*, not a circle painted on the cloth. These
+// two numbers say where each cushion run stops, and everything else — the physics, the aim
+// guide, the bot's aiming points and the drawn bags — is derived from them in `table.ts`.
+// They are deliberately the sizes the table has always been *drawn* with; the old physics used
+// a far smaller capture circle, which is why balls that visibly entered a pocket bounced out.
 
-// Pocket capture points, in table-space (0,0) = top-left of the playing surface.
-export const POCKETS: { x: number; y: number; radius: number }[] = [
-  { x: 0, y: 0, radius: CORNER_POCKET_RADIUS },
-  { x: TABLE_LENGTH / 2, y: -6, radius: SIDE_POCKET_RADIUS },
-  { x: TABLE_LENGTH, y: 0, radius: CORNER_POCKET_RADIUS },
-  { x: 0, y: TABLE_WIDTH, radius: CORNER_POCKET_RADIUS },
-  { x: TABLE_LENGTH / 2, y: TABLE_WIDTH + 6, radius: SIDE_POCKET_RADIUS },
-  { x: TABLE_LENGTH, y: TABLE_WIDTH, radius: CORNER_POCKET_RADIUS },
-];
+/** How far back from each corner the two cushions meeting there stop. */
+export const CORNER_MOUTH = 70;
+/** How far either side of the middle the long rails stop for a side pocket. */
+export const SIDE_MOUTH = 58;
+/** Radius of the rounded cushion nose at each mouth end — what a rattling ball bounces off. */
+export const JAW_RADIUS = 9;
 
 export const RESTITUTION_CUSHION = 0.78;
 export const RESTITUTION_BALL = 0.96;

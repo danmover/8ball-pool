@@ -1,9 +1,9 @@
 import { Vec2 } from './vector.js';
 import type { Ball, SimEvent } from './types.js';
+import { CUSHIONS, JAWS, POCKETS, mouthDepth, pocketContaining } from './table.js';
 import {
   BALL_RADIUS,
   FRICTION_DECEL,
-  POCKETS,
   REST_EPSILON,
   RESTITUTION_BALL,
   RESTITUTION_CUSHION,
@@ -13,8 +13,6 @@ import {
   SPIN_V_DECAY_PER_UNIT,
   SPIN_V_TRANSFER,
   SWERVE_ACCEL,
-  TABLE_LENGTH,
-  TABLE_WIDTH,
   THROW_MAX,
 } from './constants.js';
 
@@ -67,49 +65,104 @@ function applyFriction(ball: Ball, dt: number): void {
   ball.spinV *= Math.max(0, 1 - SPIN_V_DECAY_PER_UNIT * travelled);
 }
 
+/**
+ * Cushions and pocket jaws.
+ *
+ * The rails are six discrete runs (`CUSHIONS`) rather than four unbroken walls, so there is
+ * genuinely nothing between the jaw tips at a pocket mouth. A ball that enters a mouth carries
+ * on into the bag instead of rebounding off a wall nobody drew.
+ *
+ * Each run ends in a jaw circle tangent to the nose line. Tangency is what lets a ball run down
+ * the rail and straight into the pocket, while a ball arriving at an angle clips the inside of
+ * a jaw and rattles — a real pocket, rather than a hole in a fence.
+ */
 function resolveCushions(ball: Ball, events: SimEvent[]): void {
   const r = BALL_RADIUS;
   let bounced = false;
   const speedBefore = Vec2.length(ball.vel);
 
-  if (ball.pos.x - r < 0 && ball.vel.x < 0) {
-    ball.pos.x = r;
-    ball.vel.x = -ball.vel.x * RESTITUTION_CUSHION;
-    ball.vel.y += ball.spin * 60; // sidespin deflection off a vertical cushion
-    bounced = true;
-  } else if (ball.pos.x + r > TABLE_LENGTH && ball.vel.x > 0) {
-    ball.pos.x = TABLE_LENGTH - r;
-    ball.vel.x = -ball.vel.x * RESTITUTION_CUSHION;
-    ball.vel.y += ball.spin * 60;
+  for (const c of CUSHIONS) {
+    const along = c.axis === 'h' ? ball.pos.x : ball.pos.y;
+    if (along < c.from || along > c.to) continue; // this run doesn't reach here
+
+    const across = c.axis === 'h' ? ball.pos.y : ball.pos.x;
+    const vel = c.axis === 'h' ? ball.vel.y : ball.vel.x;
+    // `side` is -1 for the top/left runs (play lies at larger values) and +1 for bottom/right.
+    const penetrating = c.side < 0 ? across - r < c.base && vel < 0 : across + r > c.base && vel > 0;
+    if (!penetrating) continue;
+
+    const clamped = c.base - c.side * r;
+    const bounce = -vel * RESTITUTION_CUSHION;
+    // English deflects the ball along the cushion as it grips.
+    const slide = ball.spin * 60 * -c.side;
+    if (c.axis === 'h') {
+      ball.pos.y = clamped;
+      ball.vel.y = bounce;
+      ball.vel.x += slide;
+    } else {
+      ball.pos.x = clamped;
+      ball.vel.x = bounce;
+      ball.vel.y += slide;
+    }
     bounced = true;
   }
 
-  if (ball.pos.y - r < 0 && ball.vel.y < 0) {
-    ball.pos.y = r;
-    ball.vel.y = -ball.vel.y * RESTITUTION_CUSHION;
-    ball.vel.x += ball.spin * 60;
-    bounced = true;
-  } else if (ball.pos.y + r > TABLE_WIDTH && ball.vel.y > 0) {
-    ball.pos.y = TABLE_WIDTH - r;
-    ball.vel.y = -ball.vel.y * RESTITUTION_CUSHION;
-    ball.vel.x += ball.spin * 60;
+  for (const jaw of JAWS) {
+    const delta = Vec2.sub(ball.pos, jaw.pos);
+    const dist = Vec2.length(delta);
+    const min = r + jaw.radius;
+    if (dist >= min || dist < 1e-6) continue;
+
+    const normal = Vec2.scale(delta, 1 / dist);
+    const closing = Vec2.dot(ball.vel, normal);
+    ball.pos = Vec2.add(jaw.pos, Vec2.scale(normal, min));
+    if (closing >= 0) continue; // already leaving; just don't let it sink in
+    ball.vel = Vec2.sub(ball.vel, Vec2.scale(normal, closing * (1 + RESTITUTION_CUSHION)));
     bounced = true;
   }
 
   if (bounced) events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: speedBefore });
 }
 
+/**
+ * Has the ball gone in?
+ *
+ * The test is whether its centre has crossed the chord between a pocket's two jaw tips, heading
+ * out of play — which is exactly the opening the table is drawn with. The old test was a small
+ * circle around a point, so a ball passing through the visible middle of a mouth was ruled
+ * still-in-play and then bounced off the phantom cushion behind it.
+ */
 function resolvePocket(ball: Ball, events: SimEvent[]): boolean {
-  for (const pocket of POCKETS) {
-    if (Vec2.distance(ball.pos, pocket) <= pocket.radius) {
-      const pos = { ...ball.pos };
-      ball.pocketed = true;
-      ball.vel = Vec2.zero();
-      events.push({ type: 'pot', ballId: ball.id, pos });
-      return true;
-    }
+  const pocket = pocketContaining(ball.pos);
+  if (!pocket) return false;
+
+  const pos = { ...ball.pos };
+  ball.pocketed = true;
+  ball.vel = Vec2.zero();
+  ball.spin = 0;
+  ball.spinV = 0;
+  events.push({ type: 'pot', ballId: ball.id, pos, pocketIndex: pocket.index });
+  return true;
+}
+
+/**
+ * Once a ball is over the lip it is going in, so stop pretending otherwise.
+ *
+ * Without this a ball can creep into a mouth, run out of pace and sit balanced between the jaws
+ * — the one place on the table where a stationary ball looks obviously wrong. Real balls that
+ * far over the edge drop. `mouthDepth` is negative outside, so this only bites in the last
+ * ball-radius of approach.
+ */
+function applyBagGravity(ball: Ball, dt: number): void {
+  for (const p of POCKETS) {
+    const depth = mouthDepth(p, ball.pos);
+    if (depth < -BALL_RADIUS || depth >= 0) continue;
+    const pull = Vec2.normalize(Vec2.sub(p.capture, ball.pos));
+    // Scaled by how far over the lip it already is, so it eases in rather than snatching.
+    const bite = 1 - -depth / BALL_RADIUS;
+    ball.vel = Vec2.add(ball.vel, Vec2.scale(pull, FRICTION_DECEL * 1.6 * bite * dt));
+    return;
   }
-  return false;
 }
 
 function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
@@ -221,6 +274,8 @@ export function stepSimulation(balls: Ball[], dt: number): StepResult {
     for (const ball of active) {
       if (resolvePocket(ball, events)) continue;
       resolveCushions(ball, events);
+      // After the cushions, so a ball nudged over the lip by a jaw still gets drawn in.
+      applyBagGravity(ball, h);
       applyFriction(ball, h);
     }
   }

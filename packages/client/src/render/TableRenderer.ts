@@ -2,8 +2,9 @@ import { Application, BlurFilter, Container, Graphics, Sprite, Texture } from 'p
 import type { Ball, Loadout, TrajectoryPreview } from '@8ball/shared';
 import {
   BALL_RADIUS,
+  CORNER_MOUTH,
   DEFAULT_LOADOUT,
-  POCKETS,
+  SIDE_MOUTH,
   TABLE_LENGTH,
   TABLE_WIDTH,
   rackBalls,
@@ -747,8 +748,11 @@ export class TableRenderer {
     const cushion = cssToHex(theme.cushion);
     const leather = cssToHex(theme.pocket);
     const throat = cssToHex(theme.pocketDark);
-    const cornerGap = 70;
-    const sideGap = 58;
+    // Straight from the shared table geometry, so the bag we draw is exactly the opening the
+    // simulation lets a ball through. These used to be local copies, and the physics used a
+    // much smaller capture circle — which is why balls that visibly entered a pocket bounced.
+    const cornerGap = CORNER_MOUTH;
+    const sideGap = SIDE_MOUTH;
     const midX = TABLE_LENGTH / 2;
 
     /**

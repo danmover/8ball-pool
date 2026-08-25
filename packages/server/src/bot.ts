@@ -233,8 +233,11 @@ export class BotPlayer {
       if (!ball || ball.pocketed) continue;
 
       for (const pocket of POCKETS) {
+        // Aim at the rest point inside the bag rather than the mouth's lip, so the line the bot
+        // plays is the one that carries the ball all the way in.
+        const aim = pocket.capture;
         // The ghost ball: where the cue ball must be at contact to send this ball pocketwards.
-        const toPocket = Vec2.normalize(Vec2.sub(pocket, ball.pos));
+        const toPocket = Vec2.normalize(Vec2.sub(aim, ball.pos));
         const ghost = Vec2.sub(ball.pos, Vec2.scale(toPocket, BALL_RADIUS * 2));
 
         const toGhost = Vec2.sub(ghost, cue.pos);
@@ -250,12 +253,17 @@ export class BotPlayer {
 
         // Both legs of the shot have to be clear — cue to ghost, and ball to pocket.
         if (!pathIsClear(state.balls, cue.pos, ghost, [CUE_BALL_ID, id])) continue;
-        if (!pathIsClear(state.balls, ball.pos, pocket, [id])) continue;
+        if (!pathIsClear(state.balls, ball.pos, aim, [id])) continue;
 
-        const pocketDist = Vec2.distance(ball.pos, pocket);
-        // Prefer straight, short shots; long thin cuts are where misses come from.
+        const pocketDist = Vec2.distance(ball.pos, aim);
+        // Prefer straight, short shots; long thin cuts are where misses come from. A wider
+        // mouth forgives more, which is why the side pockets are worth a look.
         const score =
-          100 - cut * 42 - (cueDist / TABLE_LENGTH) * 22 - (pocketDist / TABLE_LENGTH) * 30;
+          100 -
+          cut * 42 -
+          (cueDist / TABLE_LENGTH) * 22 -
+          (pocketDist / TABLE_LENGTH) * 30 +
+          (pocket.halfWidth / BALL_RADIUS) * 2;
 
         // Enough pace to carry the object ball in, scaled by how much of the hit is lost
         // to the cut, plus a floor so soft shots still reach.

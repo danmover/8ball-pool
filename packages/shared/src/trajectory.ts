@@ -1,15 +1,13 @@
 import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
+import { CUSHIONS, JAWS, inPocketApproach } from './table.js';
 import {
   BALL_RADIUS,
   FRICTION_DECEL,
   MAX_SHOT_SPEED,
   MIN_SHOT_SPEED,
-  POCKETS,
   SPIN_V_DECAY_PER_UNIT,
   SPIN_V_TRANSFER,
-  TABLE_LENGTH,
-  TABLE_WIDTH,
 } from './constants.js';
 
 const MAX_BOUNCES_FULL = 2;
@@ -24,6 +22,13 @@ interface RayHit {
   wallNormal?: Vec2;
 }
 
+/**
+ * Where the ball would first meet a cushion or a pocket jaw.
+ *
+ * Built on the same `CUSHIONS` runs and `JAWS` circles the simulation uses, so the guide can no
+ * longer promise a rebound at a pocket mouth — there is no cushion there to rebound off, and
+ * drawing one was half of why shots "looked like they should go in".
+ */
 function raycastWalls(origin: Vec2, dir: Vec2, maxT: number): RayHit | null {
   const r = BALL_RADIUS;
   let best: RayHit | null = null;
@@ -32,10 +37,34 @@ function raycastWalls(origin: Vec2, dir: Vec2, maxT: number): RayHit | null {
       best = { t, point: Vec2.add(origin, Vec2.scale(dir, t)), kind: 'wall', wallNormal: normal };
     }
   };
-  if (dir.x < 0) consider((r - origin.x) / dir.x, { x: 1, y: 0 });
-  if (dir.x > 0) consider((TABLE_LENGTH - r - origin.x) / dir.x, { x: -1, y: 0 });
-  if (dir.y < 0) consider((r - origin.y) / dir.y, { x: 0, y: 1 });
-  if (dir.y > 0) consider((TABLE_WIDTH - r - origin.y) / dir.y, { x: 0, y: -1 });
+
+  for (const c of CUSHIONS) {
+    // The ball's centre travels along a line offset one radius in from the nose.
+    const line = c.base - c.side * r;
+    const comp = c.axis === 'h' ? dir.y : dir.x;
+    if (c.side < 0 ? comp >= 0 : comp <= 0) continue; // travelling away from this run
+    const t = (line - (c.axis === 'h' ? origin.y : origin.x)) / comp;
+    if (t <= 1e-6 || t > maxT) continue;
+    const hit = Vec2.add(origin, Vec2.scale(dir, t));
+    const along = c.axis === 'h' ? hit.x : hit.y;
+    if (along < c.from || along > c.to) continue; // past the end of the run — that's a pocket
+    const n = c.axis === 'h' ? { x: 0, y: -c.side } : { x: -c.side, y: 0 };
+    consider(t, n);
+  }
+
+  for (const jaw of JAWS) {
+    const R = r + jaw.radius;
+    const oc = Vec2.sub(origin, jaw.pos);
+    const b = 2 * Vec2.dot(oc, dir);
+    const cc = Vec2.dot(oc, oc) - R * R;
+    const disc = b * b - 4 * cc;
+    if (disc < 0) continue;
+    const t = (-b - Math.sqrt(disc)) / 2;
+    if (t <= 1e-6 || t > maxT) continue;
+    const point = Vec2.add(origin, Vec2.scale(dir, t));
+    consider(t, Vec2.normalize(Vec2.sub(point, jaw.pos)));
+  }
+
   return best;
 }
 
@@ -139,7 +168,7 @@ function cueBallAfterContact(
 }
 
 function nearPocket(point: Vec2): boolean {
-  return POCKETS.some((p) => Vec2.distance(point, p) <= p.radius * 1.3);
+  return inPocketApproach(point);
 }
 
 /**
