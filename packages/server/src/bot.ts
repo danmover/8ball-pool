@@ -5,11 +5,14 @@ import {
   TABLE_LENGTH,
   TABLE_WIDTH,
   Vec2,
+  applyCueStrike,
   createBall,
   legalTargetBallIds,
   pathIsClear,
+  stepSimulation,
+  summarizeShot,
 } from '@8ball/shared';
-import type { Ball, BotDifficulty, GameState, Loadout } from '@8ball/shared';
+import type { Ball, BotDifficulty, GameState, Loadout, SimEvent } from '@8ball/shared';
 
 /**
  * The computer opponent.
@@ -43,9 +46,27 @@ interface Tuning {
   sloppiness: number;
   /** Whether this tier bothers to think about where the cue ball finishes. */
   playsPosition: boolean;
+  /**
+   * Wall-clock milliseconds this tier may spend simulating candidate shots. Zero means it
+   * doesn't search at all and ranks ghost-ball geometry instead — which is why the lower tiers
+   * never find a combination or a two-ball drop.
+   */
+  searchBudgetMs: number;
+  /** How many geometric lines to feed the search, before powers and spins multiply them up. */
+  searchWidth: number;
   thinkMs: [number, number];
   names: string[];
 }
+
+/** A shot to try, with the distance used to convert the tier's contact error into an angle. */
+interface SimCandidate {
+  shot: BotShot;
+  cueDist: number;
+}
+
+/** Simulation step and cap for evaluating a candidate — plenty for any shot to play out. */
+const SIM_FRAME = 1 / 60;
+const MAX_SIM_FRAMES = 420;
 
 const TUNING: Record<BotDifficulty, Tuning> = {
   rookie: {
@@ -53,6 +74,8 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     powerError: 0.3,
     sloppiness: 0.7,
     playsPosition: false,
+    searchBudgetMs: 0,
+    searchWidth: 0,
     thinkMs: [1300, 2200],
     names: ['Rookie Rita', 'Chalky Pete', 'Two-Left-Hands'],
   },
@@ -61,6 +84,8 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     powerError: 0.18,
     sloppiness: 0.4,
     playsPosition: false,
+    searchBudgetMs: 0,
+    searchWidth: 0,
     thinkMs: [1100, 1900],
     names: ['Club Player', 'Sunday Sam', 'Bar-Room Bex'],
   },
@@ -69,6 +94,8 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     powerError: 0.1,
     sloppiness: 0.15,
     playsPosition: true,
+    searchBudgetMs: 550,
+    searchWidth: 8,
     thinkMs: [900, 1500],
     names: ['The Shark', 'Cue-Ball Kim', 'Side-Pocket Sid'],
   },
@@ -77,6 +104,8 @@ const TUNING: Record<BotDifficulty, Tuning> = {
     powerError: 0.05,
     sloppiness: 0,
     playsPosition: true,
+    searchBudgetMs: 1100,
+    searchWidth: 14,
     thinkMs: [700, 1200],
     names: ['The Legend', 'Nine-Ball Nia', 'Mr 147'],
   },
@@ -137,16 +166,33 @@ export class BotPlayer {
   }
 
   /**
-   * Ranks every (legal target ball × pocket) pair and picks one according to difficulty.
-   * Falls back to a nudge at the nearest legal ball when nothing is on.
+   * Picks a shot.
+   *
+   * The top two tiers search by *playing shots out with the real engine* and keeping whichever
+   * outcome they liked best; the lower two rank ghost-ball geometry as they always have. That
+   * split is most of what separates them: geometry can only ever see one ball going in one
+   * pocket, so a combination or a two-ball drop is not merely unlikely for Rookie and Club —
+   * it is not in their vocabulary at all.
    */
-  chooseShot(state: GameState, seat: string): BotShot {
+  async chooseShot(state: GameState, seat: string): Promise<BotShot> {
     const cue = state.balls.find((b) => b.id === CUE_BALL_ID);
     if (!cue || cue.pocketed) return { angle: 0, power: 0.5, spin: { x: 0, y: 0 } };
 
+    void seat;
     const targets = legalTargetBallIds(state);
-    const candidates = this.rankShots(state, cue, targets);
+    if (this.tuning.searchBudgetMs > 0) {
+      const found = await this.searchShot(state, cue, targets);
+      if (found) return found;
+    }
+    return this.geometricShot(state, cue, targets);
+  }
 
+  /**
+   * Ranks every (legal target ball × pocket) pair and picks one according to difficulty.
+   * Falls back to a nudge at the nearest legal ball when nothing is on.
+   */
+  private geometricShot(state: GameState, cue: Ball, targets: number[]): BotShot {
+    const candidates = this.rankShots(state, cue, targets);
     if (candidates.length === 0) return this.safetyShot(state, cue, targets);
 
     // Sloppier bots pick from a wider band below the best shot — but always a *band*, never
@@ -157,7 +203,6 @@ export class BotPlayer {
     const acceptable = candidates.filter((c) => c.score >= best - band);
     const chosen = acceptable[Math.floor(Math.random() * acceptable.length)] ?? candidates[0];
 
-    void seat;
     return {
       angle: chosen.angle + this.aimJitter(chosen.cueDist),
       power: Math.max(
@@ -166,6 +211,215 @@ export class BotPlayer {
       ),
       spin: this.choosePositionSpin(state, cue, chosen, targets),
     };
+  }
+
+  // ------------------------------------------------------------------ simulated search
+
+  /**
+   * Plays candidate shots out with the real engine and keeps the best outcome.
+   *
+   * This is the only way a bot can find a shot that drops two balls, or a combination, or a
+   * carom. Ghost-ball geometry answers "can I send *this* ball to *that* pocket"; it has no
+   * way to notice that the object ball will go on to bump a second one in, because that
+   * depends on the whole table and on how hard the shot is hit. Simulating asks the question
+   * that actually matters — what happens if I hit it like this — and the answer is the truth,
+   * because it comes from the same code that will run the shot for real.
+   *
+   * It is also, deliberately, not a cheat. The bot plays a shot the physics allows and then
+   * has its tier's aiming error applied on top, so it misses like a person.
+   */
+  private async searchShot(state: GameState, cue: Ball, targets: number[]): Promise<BotShot | null> {
+    if (targets.length === 0) return null;
+
+    const candidates = this.generateCandidates(state, cue, targets);
+    if (candidates.length === 0) return null;
+
+    const deadline = Date.now() + this.tuning.searchBudgetMs;
+    let best: { shot: BotShot; score: number; cueDist: number } | null = null;
+    let sinceYield = 0;
+
+    for (const c of candidates) {
+      // Always evaluate a handful, then respect the clock. Degrading to a good single shot is
+      // fine; blocking the server while other rooms wait is not.
+      if (best && Date.now() > deadline) break;
+
+      const score = this.evaluate(state, targets, c);
+      if (!best || score > best.score) best = { shot: c.shot, score, cueDist: c.cueDist };
+
+      if (++sinceYield >= 4) {
+        sinceYield = 0;
+        await new Promise<void>((r) => setImmediate(r));
+      }
+    }
+
+    if (!best || best.score <= 0) return null;
+    return {
+      angle: best.shot.angle + this.aimJitter(best.cueDist),
+      power: Math.max(
+        0.12,
+        Math.min(1, best.shot.power * (1 + (Math.random() - 0.5) * 2 * this.tuning.powerError))
+      ),
+      spin: best.shot.spin,
+    };
+  }
+
+  /**
+   * The shots worth simulating.
+   *
+   * Simulation is far too slow to sweep every angle, so geometry is used for what it *is* good
+   * at — proposing plausible lines — and simulation decides between them. Direct shots come
+   * from the existing ranking; combinations are built by chaining two ghost balls, cue → A → B
+   * → pocket, which is the shape of every combo in the game.
+   */
+  private generateCandidates(state: GameState, cue: Ball, targets: number[]): SimCandidate[] {
+    const out: SimCandidate[] = [];
+    const spins = this.tuning.playsPosition
+      ? [
+          { x: 0, y: 0 },
+          { x: 0, y: 0.85 },
+          { x: 0, y: -0.85 },
+        ]
+      : [{ x: 0, y: 0 }];
+
+    const direct = this.rankShots(state, cue, targets).slice(0, this.tuning.searchWidth);
+    for (const d of direct) {
+      for (const power of [d.power, Math.min(1, d.power * 1.35), Math.max(0.15, d.power * 0.7)]) {
+        for (const spin of spins) {
+          out.push({ shot: { angle: d.angle, power, spin }, cueDist: d.cueDist });
+        }
+      }
+    }
+
+    // Sweep either side of the ideal line on the best few, offset by a fraction of a ball at
+    // the contact point rather than by a fixed angle — the same units the aiming error uses,
+    // so the spread means the same thing whether the object ball is near or across the table.
+    //
+    // This earns its place twice over. The ghost-ball angle is an idealisation that ignores
+    // throw and collision-induced deflection, so the true potting line is often a hair off it;
+    // and a shot that clips a second ball on its way is only ever found by trying the line
+    // next door and seeing what happens.
+    for (const d of direct.slice(0, 6)) {
+      for (const fraction of [-0.55, -0.28, 0.28, 0.55]) {
+        const offset = (fraction * BALL_RADIUS) / Math.max(BALL_RADIUS, d.cueDist);
+        out.push({
+          shot: { angle: d.angle + offset, power: d.power, spin: { x: 0, y: 0 } },
+          cueDist: d.cueDist,
+        });
+      }
+    }
+
+    for (const combo of this.comboLines(state, cue, targets)) {
+      for (const power of [combo.power, Math.min(1, combo.power * 1.3)]) {
+        out.push({ shot: { angle: combo.angle, power, spin: { x: 0, y: 0 } }, cueDist: combo.cueDist });
+      }
+    }
+
+    return out;
+  }
+
+  /**
+   * Combination lines: cue → A → B → pocket, where A is a legal target.
+   *
+   * Two ghost balls chained. Where must A strike B to send B to the pocket? That point is a
+   * ghost; then where must the cue strike A to send A to *that* point? Also a ghost. Every leg
+   * has to be clear and every cut has to be sane, or the line is fiction.
+   */
+  private comboLines(
+    state: GameState,
+    cue: Ball,
+    targets: number[]
+  ): { angle: number; power: number; cueDist: number; score: number }[] {
+    const out: { angle: number; power: number; cueDist: number; score: number }[] = [];
+    const live = state.balls.filter((b) => !b.pocketed && b.id !== CUE_BALL_ID);
+
+    for (const id of targets) {
+      const a = live.find((b) => b.id === id);
+      if (!a) continue;
+
+      for (const b of live) {
+        if (b.id === a.id) continue;
+        // Only worth chaining through a ball that's nearby; long combos are fantasy.
+        const gap = Vec2.distance(a.pos, b.pos);
+        if (gap > TABLE_LENGTH * 0.3) continue;
+
+        for (const pocket of POCKETS) {
+          const toPocket = Vec2.normalize(Vec2.sub(pocket.capture, b.pos));
+          const ghostB = Vec2.sub(b.pos, Vec2.scale(toPocket, BALL_RADIUS * 2));
+
+          const aToGhostB = Vec2.sub(ghostB, a.pos);
+          const aDist = Vec2.length(aToGhostB);
+          if (aDist < 1) continue;
+          const aDir = Vec2.scale(aToGhostB, 1 / aDist);
+          const cutB = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(aDir, toPocket))));
+          if (cutB > 1.0) continue;
+
+          const ghostA = Vec2.sub(a.pos, Vec2.scale(aDir, BALL_RADIUS * 2));
+          const toGhostA = Vec2.sub(ghostA, cue.pos);
+          const cueDist = Vec2.length(toGhostA);
+          if (cueDist < 1) continue;
+          const cueDir = Vec2.scale(toGhostA, 1 / cueDist);
+          const cutA = Math.acos(Math.max(-1, Math.min(1, Vec2.dot(cueDir, aDir))));
+          if (cutA > 1.0) continue;
+
+          if (!pathIsClear(state.balls, cue.pos, ghostA, [CUE_BALL_ID, a.id])) continue;
+          if (!pathIsClear(state.balls, a.pos, ghostB, [a.id, b.id])) continue;
+          if (!pathIsClear(state.balls, b.pos, pocket.capture, [b.id])) continue;
+
+          // Combos bleed pace at every contact, so they want hitting.
+          const power = Math.min(1, 0.55 + (cueDist + aDist) / TABLE_LENGTH * 0.35);
+          out.push({ angle: Math.atan2(toGhostA.y, toGhostA.x), power, cueDist, score: -cutA - cutB });
+        }
+      }
+    }
+
+    return out.sort((x, y) => y.score - x.score).slice(0, 8);
+  }
+
+  /**
+   * Runs one candidate to a standstill and scores what happened.
+   *
+   * Potting is scored *superlinearly*, so a shot that drops two legal balls decisively beats
+   * two separate shots that each drop one — which is the whole reason to search at all. The
+   * position term re-ranks from where the cue ball genuinely finished, which replaces the old
+   * guesswork about how far draw and follow would carry it.
+   */
+  private evaluate(state: GameState, targets: number[], candidate: SimCandidate): number {
+    const balls: Ball[] = state.balls.map((b) => ({
+      ...b,
+      pos: { ...b.pos },
+      vel: { ...b.vel },
+      angVel: { ...b.angVel },
+    }));
+    const cue = balls.find((b) => b.id === CUE_BALL_ID);
+    if (!cue) return -Infinity;
+
+    applyCueStrike(cue, candidate.shot.angle, candidate.shot.power, candidate.shot.spin);
+
+    const events: SimEvent[] = [];
+    for (let i = 0; i < MAX_SIM_FRAMES; i++) {
+      const step = stepSimulation(balls, SIM_FRAME);
+      events.push(...step.events);
+      if (step.settled) break;
+    }
+
+    const summary = summarizeShot(events);
+    if (summary.firstBallContacted === null) return -800; // never hit anything: foul
+    if (!targets.includes(summary.firstBallContacted)) return -600; // wrong ball first: foul
+    if (cue.pocketed) return -700; // scratch
+
+    const legal = summary.potted.filter((id) => targets.includes(id)).length;
+    const illegal = summary.potted.filter((id) => id !== 0 && !targets.includes(id)).length;
+
+    let score = legal * legal * 100 - illegal * 70;
+    if (legal === 0) score -= 25; // a dry shot hands the table over
+
+    // Position: how good is the best shot available from where the cue ball actually stopped?
+    if (this.tuning.playsPosition) {
+      const after = { ...state, balls } as GameState;
+      const next = this.rankShots(after, cue, legalTargetBallIds(after))[0];
+      score += (next?.score ?? 0) * 0.35;
+    }
+    return score;
   }
 
   /**

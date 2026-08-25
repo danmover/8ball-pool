@@ -531,11 +531,17 @@ export class Room {
         return; // handlePlaceCueBall re-enters onTurnReady, which schedules the shot
       }
 
-      const shot = bot.chooseShot(this.gameState, seat);
-      // Stream the aim first so the table shows the bot lining up, exactly like a human —
-      // including the spin it has chosen, so the guide on screen matches the shot it takes.
-      this.handleAim({ seat, angle: shot.angle, spin: shot.spin });
-      setTimeout(() => this.handleShoot({ seat, ...shot }), 450);
+      // The top tiers search by simulating candidate shots, which takes real time and yields
+      // between candidates so other rooms keep ticking. By the time it resolves the turn may
+      // have moved on — a shot clock expiry, a player leaving — so re-check before acting.
+      void bot.chooseShot(this.gameState, seat).then((shot) => {
+        if (this.gameState.currentShooter !== seat) return;
+        if (this.gameState.phase !== 'aiming' && this.gameState.phase !== 'break') return;
+        // Stream the aim first so the table shows the bot lining up, exactly like a human —
+        // including the spin it has chosen, so the guide on screen matches the shot it takes.
+        this.handleAim({ seat, angle: shot.angle, spin: shot.spin });
+        setTimeout(() => this.handleShoot({ seat, ...shot }), 450);
+      });
     }, delay);
   }
 
