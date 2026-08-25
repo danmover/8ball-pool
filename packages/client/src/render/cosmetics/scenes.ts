@@ -4,21 +4,36 @@ import type { TableTheme } from './tableThemes';
 /**
  * The room each table lives in, drawn behind the table in screen space.
  *
- * A table theme used to be a palette swap; this is what makes it a *place*. Everything is
- * flat-shaded with the same crisp ink outlines the balls and cue carry, so the scenes read as
- * detailed cartoon sets rather than attempts at realism.
+ * Drawn from **directly above**, like the table itself. That is the whole point of this file's
+ * second draft: these rooms used to be drawn in elevation — a wall band with hanging lamps, a
+ * floor band below it, pictures at eye level — while the table was drawn as a plan view. Two
+ * incompatible viewpoints on one screen, which is why the result looked wrong no matter how
+ * carefully any individual prop was drawn. Nothing was fixable prop by prop; the camera was the
+ * problem.
+ *
+ * So: floor fills the frame, a lamp is a pool of light cast *on* that floor, and every prop is
+ * the shape you would see looking down on it — chairs as rings, cues as long slivers, a rug
+ * under the table. Everything is flat-shaded with the same crisp ink outlines the balls and cue
+ * carry, so the rooms read as detailed cartoon sets rather than attempts at realism.
  *
  * Drawn once per resize/theme change into a single Graphics — never per frame.
  */
 
 const INK = 0x140f0a;
 
+/** The table's footprint on screen, so props can be arranged around it rather than under it. */
+export interface TableRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 interface Ctx {
   g: Graphics;
   w: number;
   h: number;
-  /** Where the table's top edge roughly sits, so scenery can sit behind rather than over it. */
-  horizon: number;
+  table: TableRect;
   rand: () => number;
 }
 
@@ -40,334 +55,534 @@ function shape(g: Graphics, draw: (g: Graphics) => void, fill: number, outline =
   g.fill({ color: fill, alpha });
 }
 
-/** Warm pool of light falling from a lamp onto the floor. */
-function lampCone(c: Ctx, x: number, y: number, spread: number, reach: number, color: number): void {
-  const { g } = c;
-  for (let i = 3; i >= 1; i--) {
-    const f = i / 3;
-    g.poly([x, y, x - spread * f, y + reach, x + spread * f, y + reach]).fill({
+// ---------------------------------------------------------------- floors
+
+/** Boards running the length of the room, with the odd knot and a seam every few planks. */
+function plankFloor(c: Ctx, base: number, dark: number, light: number, pitch = 54): void {
+  const { g, w, h, rand } = c;
+  g.rect(0, 0, w, h).fill({ color: base });
+  for (let y = 0; y < h; y += pitch) {
+    g.rect(0, y, w, pitch * 0.5).fill({ color: light, alpha: 0.35 });
+    g.rect(0, y, w, 2).fill({ color: dark, alpha: 0.6 });
+    // Butt joints, staggered row to row so it doesn't read as a grid.
+    for (let x = (rand() * 400) | 0; x < w; x += 260 + rand() * 320) {
+      g.rect(x, y, 3, pitch).fill({ color: dark, alpha: 0.5 });
+    }
+    if (rand() > 0.72) {
+      g.ellipse(rand() * w, y + pitch * 0.5, 7, 4).fill({ color: dark, alpha: 0.45 });
+    }
+  }
+}
+
+/** Square tiles with grout, offset row to row. */
+function tileFloor(c: Ctx, grout: number, a: number, b: number, size = 62): void {
+  const { g, w, h } = c;
+  g.rect(0, 0, w, h).fill({ color: grout });
+  let row = 0;
+  for (let y = -size; y < h; y += size, row++) {
+    for (let x = row % 2 ? -size / 2 : 0; x < w; x += size) {
+      g.roundRect(x + 3, y + 3, size - 6, size - 6, 5).fill({ color: row % 2 ? a : b });
+      g.roundRect(x + 3, y + 3, size - 6, size - 6, 5).stroke({ width: 1.5, color: grout, alpha: 0.5 });
+    }
+  }
+}
+
+/**
+ * A pool of light on the floor, as a lamp over the table would actually cast it.
+ *
+ * Kept tight and faint on purpose. The first version spread six near-full-screen ellipses at
+ * 5% each across the whole canvas, which washed every floor to a flat pastel — the shag carpet
+ * came out plain orange and the plank floor vanished entirely. A lamp lights the table and a
+ * ring of floor around it, and leaves the rest of the room dim; that contrast is the effect.
+ */
+function lightPool(c: Ctx, color: number, strength = 1): void {
+  const { g, table } = c;
+  const cx = table.x + table.w / 2;
+  const cy = table.y + table.h / 2;
+  for (let i = 5; i >= 1; i--) {
+    const f = i / 5;
+    g.ellipse(cx, cy, table.w * (0.5 + f * 0.22), table.h * (0.62 + f * 0.34)).fill({
       color,
-      alpha: 0.07 * (4 - i),
+      alpha: 0.03 * strength,
     });
   }
 }
 
-/** A hanging billiard lamp: flex, shade, and the bulb glow under it. */
-function hangingLamp(c: Ctx, x: number, shadeW: number, drop: number, shade: number, glow: number): void {
+/**
+ * Darkens the outer edge of the room so the lit table stays the centre of attention.
+ *
+ * Reaches only a little way in. At a third of the short side it swallowed the very band of
+ * floor the furniture stands on — the chairs were being drawn correctly and then crushed to
+ * the same value as the boards under them.
+ */
+function falloff(c: Ctx, strength = 1): void {
+  const { g, w, h } = c;
+  const BANDS = 9;
+  for (let i = 0; i < BANDS; i++) {
+    const inset = (i / BANDS) * Math.min(w, h) * 0.13;
+    const t = 3 + inset * 0.5;
+    const alpha = 0.05 * strength;
+    g.rect(0, inset, w, t).fill({ color: 0x000000, alpha });
+    g.rect(0, h - inset - t, w, t).fill({ color: 0x000000, alpha });
+    g.rect(inset, 0, t, h).fill({ color: 0x000000, alpha });
+    g.rect(w - inset - t, 0, t, h).fill({ color: 0x000000, alpha });
+  }
+}
+
+/** The shadow the table casts on the floor, offset the way the light falls. */
+function tableShadow(c: Ctx, alpha = 0.4): void {
+  const { g, table } = c;
+  for (let i = 4; i >= 1; i--) {
+    const spread = i * 9;
+    g.roundRect(
+      table.x - spread + 10,
+      table.y - spread + 16,
+      table.w + spread * 2,
+      table.h + spread * 2,
+      26 + spread
+    ).fill({ color: 0x000000, alpha: (alpha * 0.3) / i });
+  }
+}
+
+// ---------------------------------------------------------------- props (all from above)
+
+/** A chair seen from above: seat plate with the back rail across one edge. */
+function chair(c: Ctx, x: number, y: number, r: number, seat: number, angle = 0): void {
   const { g } = c;
-  g.rect(x - 2, 0, 4, drop).fill({ color: INK });
+  // Back rail first, so the seat overlaps it the way it does in life.
+  const bx = x + Math.cos(angle) * r * 0.95;
+  const by = y + Math.sin(angle) * r * 0.95;
+  const long = r * 1.15;
+  const short = r * 0.42;
+  const horizontal = Math.abs(Math.cos(angle)) > 0.5;
   shape(
     g,
-    (gg) => gg.poly([x - shadeW, drop + 34, x + shadeW, drop + 34, x + shadeW * 0.45, drop, x - shadeW * 0.45, drop]),
-    shade,
+    (gg) =>
+      gg.roundRect(
+        bx - (horizontal ? short : long),
+        by - (horizontal ? long : short),
+        (horizontal ? short : long) * 2,
+        (horizontal ? long : short) * 2,
+        6
+      ),
+    seat,
     3
   );
-  // Lit underside and the glow beneath the shade.
-  g.ellipse(x, drop + 34, shadeW, 8).fill({ color: 0xfff0c0, alpha: 0.9 });
-  g.circle(x, drop + 44, shadeW * 0.55).fill({ color: glow, alpha: 0.35 });
-  lampCone(c, x, drop + 40, shadeW * 2.6, c.h, 0xffe9a8);
+  shape(g, (gg) => gg.roundRect(x - r, y - r, r * 2, r * 2, r * 0.42), seat, 3);
+  // A lighter panel inset on the seat, so it isn't a flat blob.
+  g.roundRect(x - r * 0.62, y - r * 0.62, r * 1.24, r * 1.24, r * 0.3).fill({
+    color: 0xffffff,
+    alpha: 0.1,
+  });
+  g.roundRect(x - r * 0.62, y - r * 0.62, r * 1.24, r * 1.24, r * 0.3).stroke({
+    width: 1.5,
+    color: INK,
+    alpha: 0.25,
+  });
+}
+
+/** A stool: just a disc and a ring, which is all you can see of one from up here. */
+function stool(c: Ctx, x: number, y: number, r: number, top: number): void {
+  shape(c.g, (gg) => gg.circle(x, y, r), top, 3);
+  c.g.circle(x, y, r * 0.62).stroke({ width: 2, color: INK, alpha: 0.3 });
+}
+
+/** A cue lying on the floor: butt, wrap, shaft and tip, tapering along its length. */
+function cue(c: Ctx, x: number, y: number, len: number, angle: number, wood: number): void {
+  const { g } = c;
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const at = (t: number): [number, number] => [x + dx * len * t, y + dy * len * t];
+  g.moveTo(...at(0)).lineTo(...at(1)).stroke({ width: 8, color: INK, alpha: 0.5, cap: 'round' });
+  g.moveTo(...at(0)).lineTo(...at(0.42)).stroke({ width: 6, color: 0x2a1c12, cap: 'round' });
+  g.moveTo(...at(0.42)).lineTo(...at(0.96)).stroke({ width: 4.5, color: wood, cap: 'round' });
+  g.moveTo(...at(0.96)).lineTo(...at(1)).stroke({ width: 4, color: 0x5aa9d8, cap: 'round' });
+}
+
+/** A drinks glass from above: rim, liquid, and a highlight. */
+function glass(c: Ctx, x: number, y: number, r: number, liquid: number): void {
+  const { g } = c;
+  shape(g, (gg) => gg.circle(x, y, r), 0xd8e8f0, 2.5, 0.9);
+  g.circle(x, y, r * 0.72).fill({ color: liquid, alpha: 0.9 });
+  g.circle(x - r * 0.3, y - r * 0.3, r * 0.22).fill({ color: 0xffffff, alpha: 0.55 });
+}
+
+/** A cube of chalk, lid open. */
+function chalk(c: Ctx, x: number, y: number, s: number, color: number): void {
+  shape(c.g, (gg) => gg.roundRect(x, y, s, s, 2), color, 2.5);
+  c.g.roundRect(x + s * 0.18, y + s * 0.18, s * 0.64, s * 0.64, 1.5).fill({
+    color: 0x000000,
+    alpha: 0.22,
+  });
+}
+
+/** The triangle, left leaning on the floor. */
+function triangleRack(c: Ctx, x: number, y: number, s: number, color: number): void {
+  const { g } = c;
+  const pts = [x, y - s, x + s * 0.87, y + s * 0.5, x - s * 0.87, y + s * 0.5];
+  g.poly(pts).stroke({ width: 9, color: INK, alpha: 0.5 });
+  g.poly(pts).stroke({ width: 6, color });
+}
+
+/**
+ * A rug beneath the table, with a woven border.
+ *
+ * Only a little larger than the table. Sized generously it simply became the floor, which
+ * defeats the point of having drawn a floor.
+ */
+function rug(c: Ctx, fill: number, border: number, pattern?: number): void {
+  const { g, table, w, h } = c;
+  const rx = Math.max(6, table.x - table.w * 0.05);
+  const ry = Math.max(6, table.y - table.h * 0.12);
+  const rw = Math.min(w - rx - 6, table.w * 1.1);
+  const rh = Math.min(h - ry - 6, table.h * 1.24);
+  shape(g, (gg) => gg.roundRect(rx, ry, rw, rh, 14), fill, 4);
+  g.roundRect(rx + 14, ry + 14, rw - 28, rh - 28, 8).stroke({ width: 5, color: border, alpha: 0.85 });
+  g.roundRect(rx + 26, ry + 26, rw - 52, rh - 52, 6).stroke({ width: 2, color: border, alpha: 0.5 });
+  if (pattern !== undefined) {
+    for (let x = rx + 40; x < rx + rw - 40; x += 56) {
+      g.poly([x, ry + 20, x + 12, ry + 32, x, ry + 44, x - 12, ry + 32]).fill({ color: pattern, alpha: 0.5 });
+      g.poly([x, ry + rh - 20, x + 12, ry + rh - 32, x, ry + rh - 44, x - 12, ry + rh - 32]).fill({
+        color: pattern,
+        alpha: 0.5,
+      });
+    }
+  }
+}
+
+/**
+ * Where props can go: the four bands of floor the table doesn't cover.
+ *
+ * Everything decorative goes through here, because a chair drawn under the table is invisible
+ * and a chair drawn over it is a bug.
+ */
+function margins(c: Ctx): { left: number; right: number; top: number; bottom: number } {
+  return {
+    left: c.table.x,
+    right: c.w - (c.table.x + c.table.w),
+    top: c.table.y,
+    bottom: c.h - (c.table.y + c.table.h),
+  };
 }
 
 // ---------------------------------------------------------------- scenes
 
-/** Old-school pool hall: plank floor, panelled wall, lamps over the table. */
+/** Old-school pool hall: board floor, rug, chairs and a cue or two left lying about. */
 function classicHall(c: Ctx): void {
-  const { g, w, h, horizon } = c;
-  const wall = horizon * 0.62;
+  const { g, w, h, table, rand } = c;
+  plankFloor(c, 0x2b2015, 0x160d06, 0x3b2c1c);
+  // Deep red, deliberately not green: a green rug under a green table left the whole screen
+  // one colour and the table with no edge to sit against.
+  rug(c, 0x5a2028, 0xc9a15e, 0x8a3040);
+  tableShadow(c);
+  lightPool(c, 0xffe9a8, 1.15);
 
-  g.rect(0, 0, w, wall).fill({ color: 0x3a2c22 });
-  // Wainscot panelling with a chair rail.
-  for (let x = 0; x < w; x += 120) {
-    shape(g, (gg) => gg.roundRect(x + 14, wall * 0.32, 92, wall * 0.52, 6), 0x46352a, 2);
-  }
-  g.rect(0, wall * 0.24, w, 12).fill({ color: 0x5c4430 });
-  g.rect(0, wall - 14, w, 16).fill({ color: 0x5c4430 });
-
-  // Framed pictures and a cue rack.
-  for (const [fx, fw] of [
-    [w * 0.12, 90],
-    [w * 0.78, 110],
-  ] as const) {
-    shape(g, (gg) => gg.roundRect(fx, wall * 0.05, fw, wall * 0.16, 4), 0x8a6a3a, 3);
-    g.roundRect(fx + 7, wall * 0.05 + 7, fw - 14, wall * 0.16 - 14, 2).fill({ color: 0x2c7a4c });
-  }
-  shape(g, (gg) => gg.roundRect(w * 0.44, wall * 0.04, 120, wall * 0.2, 5), 0x5c4430, 3);
-  for (let i = 0; i < 4; i++) {
-    g.rect(w * 0.46 + i * 26, wall * 0.05, 6, wall * 0.18).fill({ color: 0xc99a63 });
-  }
-
-  // Floorboards running away from the viewer.
-  g.rect(0, wall, w, h - wall).fill({ color: 0x2a2018 });
-  for (let y = wall; y < h; y += 26) {
-    g.rect(0, y, w, 2).fill({ color: 0x000000, alpha: 0.25 });
-  }
-  for (let x = 0; x < w; x += 150) {
-    g.rect(x, wall, 2, h - wall).fill({ color: 0x000000, alpha: 0.18 });
-  }
-
-  hangingLamp(c, w * 0.34, 54, wall * 0.1, 0x2f6f45, 0xffe9a8);
-  hangingLamp(c, w * 0.66, 54, wall * 0.1, 0x2f6f45, 0xffe9a8);
-}
-
-/** Late-night lounge: city window, neon sign, dark panelling. */
-function midnightLounge(c: Ctx): void {
-  const { g, w, h, horizon, rand } = c;
-  const wall = horizon * 0.66;
-
-  g.rect(0, 0, w, wall).fill({ color: 0x141c28 });
-
-  // Window onto a city at night.
-  const wx = w * 0.06;
-  const ww = w * 0.3;
-  shape(g, (gg) => gg.roundRect(wx, wall * 0.08, ww, wall * 0.68, 8), 0x0b1520, 4);
-  g.circle(wx + ww * 0.72, wall * 0.25, 26).fill({ color: 0xf2f0d8 });
-  for (let i = 0; i < 9; i++) {
-    const bx = wx + 14 + i * (ww / 9);
-    const bh = wall * (0.18 + rand() * 0.34);
-    g.rect(bx, wall * 0.76 - bh, ww / 11, bh).fill({ color: 0x1b2b40 });
-    for (let k = 0; k < 5; k++) {
-      if (rand() > 0.55) {
-        g.rect(bx + 4, wall * 0.76 - bh + 8 + k * 12, 6, 6).fill({ color: 0xffe9a8, alpha: 0.85 });
-      }
+  const m = margins(c);
+  // Chairs down whichever side has room for them.
+  if (m.left > 70) {
+    for (const y of [table.y + table.h * 0.24, table.y + table.h * 0.72]) {
+      chair(c, m.left * 0.48, y, Math.min(30, m.left * 0.32), 0xa8683a, Math.PI);
     }
   }
-  g.roundRect(wx, wall * 0.08, ww, wall * 0.68, 8).stroke({ width: 6, color: 0x2a3a50 });
-
-  // Neon sign on the far wall.
-  const nx = w * 0.62;
-  g.roundRect(nx - 10, wall * 0.16, 240, 86, 14).fill({ color: 0x0d1420 });
-  g.roundRect(nx - 10, wall * 0.16, 240, 86, 14).stroke({ width: 3, color: INK });
-  for (const [ox, oy, ow, oh] of [
-    [16, 20, 60, 46],
-    [92, 20, 46, 46],
-    [154, 20, 62, 46],
-  ] as const) {
-    g.roundRect(nx + ox, wall * 0.16 + oy, ow, oh, 10).stroke({ width: 7, color: 0x7ec8ff, alpha: 0.25 });
-    g.roundRect(nx + ox, wall * 0.16 + oy, ow, oh, 10).stroke({ width: 3, color: 0xbfe6ff });
+  if (m.right > 70) {
+    for (const y of [table.y + table.h * 0.34, table.y + table.h * 0.8]) {
+      chair(c, w - m.right * 0.48, y, Math.min(30, m.right * 0.32), 0xa8683a, 0);
+    }
   }
-
-  // Bar stools in silhouette.
-  for (const sx of [w * 0.46, w * 0.53]) {
-    g.rect(sx - 3, wall - 70, 6, 70).fill({ color: 0x0a1018 });
-    g.ellipse(sx, wall - 74, 22, 8).fill({ color: 0x0a1018 });
+  // Cues left on the floor at the head of the table, plus the small change of a game.
+  if (m.top > 60) {
+    cue(c, w * 0.2, m.top * 0.42, 210, 0.16, 0xc99a63);
+    cue(c, w * 0.26, m.top * 0.66, 210, 0.05, 0xa8763f);
+    chalk(c, w * 0.52, m.top * 0.5, 15, 0x2f6f45);
+    triangleRack(c, w * 0.72, m.top * 0.52, 26, 0xc99a63);
   }
-
-  g.rect(0, wall, w, h - wall).fill({ color: 0x0d141d });
-  for (let y = wall; y < h; y += 30) g.rect(0, y, w, 2).fill({ color: 0x000000, alpha: 0.3 });
-  hangingLamp(c, w * 0.5, 60, wall * 0.06, 0x1f4a6e, 0x9fd8ff);
+  if (m.bottom > 60) {
+    glass(c, w * 0.3, h - m.bottom * 0.45, 13, 0xc98a2e);
+    glass(c, w * 0.34, h - m.bottom * 0.62, 11, 0xc98a2e);
+  }
+  // A few scuffs so the floor isn't perfectly clean.
+  for (let i = 0; i < 24; i++) {
+    g.ellipse(rand() * w, rand() * h, 10 + rand() * 26, 3).fill({ color: 0x000000, alpha: 0.07 });
+  }
+  falloff(c, 1.2);
 }
 
-/** Velvet club: damask wall, sconces, chandelier, carpet. */
-function crimsonClub(c: Ctx): void {
-  const { g, w, h, horizon } = c;
-  const wall = horizon * 0.64;
+/** Late-night lounge: dark boards, neon spill across the floor, stools pulled up. */
+function midnightLounge(c: Ctx): void {
+  const { g, w, h, table } = c;
+  plankFloor(c, 0x111a26, 0x080d14, 0x1a2634, 46);
+  tableShadow(c, 0.55);
 
-  g.rect(0, 0, w, wall).fill({ color: 0x3a151c });
-  // Damask: a lattice of diamonds with a fleur at each crossing.
-  for (let y = 0; y < wall; y += 64) {
-    for (let x = ((y / 64) % 2) * 40; x < w; x += 80) {
+  // Light thrown across the floor from a window and a sign somewhere off-frame. Long soft
+  // parallelograms, the way spill actually lands on a floor seen from above.
+  for (const [x, tint, wide] of [
+    [w * 0.1, 0x7ec8ff, 120],
+    [w * 0.2, 0x7ec8ff, 90],
+    [w * 0.82, 0xff5fa2, 130],
+  ] as const) {
+    g.poly([x, 0, x + wide, 0, x + wide + 140, h, x + 140, h]).fill({ color: tint, alpha: 0.05 });
+  }
+  lightPool(c, 0x9fd8ff, 1.1);
+
+  const m = margins(c);
+  if (m.top > 60) {
+    for (const x of [w * 0.3, w * 0.4, w * 0.62]) stool(c, x, m.top * 0.5, Math.min(22, m.top * 0.3), 0x3a6a94);
+    glass(c, w * 0.5, m.top * 0.5, 12, 0x2ee6ff);
+  }
+  if (m.bottom > 60) {
+    stool(c, w * 0.24, h - m.bottom * 0.5, 20, 0x3a6a94);
+    cue(c, w * 0.56, h - m.bottom * 0.5, 200, -0.08, 0x3d5a72);
+  }
+  if (m.left > 60) chair(c, m.left * 0.5, table.y + table.h * 0.5, Math.min(26, m.left * 0.3), 0x33587c, Math.PI);
+  falloff(c, 1.5);
+}
+
+/** Velvet club: patterned carpet wall to wall, gilt chairs, a chandelier's pool of light. */
+function crimsonClub(c: Ctx): void {
+  const { g, w, h, table } = c;
+  g.rect(0, 0, w, h).fill({ color: 0x2b0f14 });
+  // Damask, laid flat as carpet rather than hung as wallpaper.
+  for (let y = 0; y < h + 64; y += 64) {
+    for (let x = ((y / 64) % 2) * 40; x < w + 40; x += 80) {
       g.poly([x, y, x + 26, y + 28, x, y + 56, x - 26, y + 28]).stroke({
         width: 2,
         color: 0x6e2530,
-        alpha: 0.9,
+        alpha: 0.8,
       });
-      g.circle(x, y + 28, 5).fill({ color: 0x8a3040, alpha: 0.8 });
+      g.circle(x, y + 28, 5).fill({ color: 0x8a3040, alpha: 0.7 });
     }
   }
-  g.rect(0, wall - 18, w, 20).fill({ color: 0x8a6a2a });
+  rug(c, 0x4d1a24, 0xd9a441, 0x8a3040);
+  tableShadow(c, 0.5);
+  lightPool(c, 0xffd08a, 1.3);
 
-  // Wall sconces.
-  for (const sx of [w * 0.16, w * 0.84]) {
-    shape(g, (gg) => gg.roundRect(sx - 14, wall * 0.3, 28, 46, 8), 0xd9a441, 3);
-    g.circle(sx, wall * 0.3, 20).fill({ color: 0xffe9a8, alpha: 0.5 });
-    g.circle(sx, wall * 0.3, 34).fill({ color: 0xffc94d, alpha: 0.16 });
+  const m = margins(c);
+  if (m.left > 70) {
+    for (const y of [table.y + table.h * 0.28, table.y + table.h * 0.7]) {
+      chair(c, m.left * 0.5, y, Math.min(30, m.left * 0.32), 0xb8384c, Math.PI);
+    }
   }
-
-  // Chandelier.
-  const cx = w * 0.5;
-  g.rect(cx - 2, 0, 4, 54).fill({ color: 0x8a6a2a });
-  for (let i = -2; i <= 2; i++) {
-    const dx = cx + i * 34;
-    g.moveTo(cx, 54).lineTo(dx, 74).stroke({ width: 3, color: 0xd9a441 });
-    g.circle(dx, 80, 7).fill({ color: 0xfff0c0 });
-    g.circle(dx, 80, 15).fill({ color: 0xffc94d, alpha: 0.22 });
+  if (m.right > 70) {
+    for (const y of [table.y + table.h * 0.3, table.y + table.h * 0.74]) {
+      chair(c, w - m.right * 0.5, y, Math.min(30, m.right * 0.32), 0xb8384c, 0);
+    }
   }
-  lampCone(c, cx, 92, w * 0.3, h, 0xffd08a);
-
-  g.rect(0, wall, w, h - wall).fill({ color: 0x2a1014 });
-  // Carpet border.
-  g.roundRect(w * 0.05, wall + 16, w * 0.9, h - wall - 32, 18).fill({ color: 0x3d161d });
-  g.roundRect(w * 0.05, wall + 16, w * 0.9, h - wall - 32, 18).stroke({ width: 4, color: 0x8a6a2a, alpha: 0.6 });
+  if (m.top > 60) {
+    glass(c, w * 0.36, m.top * 0.5, 13, 0x8a1d2c);
+    glass(c, w * 0.41, m.top * 0.62, 11, 0x8a1d2c);
+    triangleRack(c, w * 0.68, m.top * 0.52, 26, 0xd9a441);
+  }
+  if (m.bottom > 60) cue(c, w * 0.34, h - m.bottom * 0.5, 220, 0.04, 0x8a6a2a);
+  falloff(c, 1.3);
 }
 
-/** Sunlit patio: adobe arches, plants, warm light shafts. */
+/** Sunlit patio: terracotta tiles, planters, hard bright light and plant shadows. */
 function sandstonePatio(c: Ctx): void {
-  const { g, w, h, horizon } = c;
-  const wall = horizon * 0.66;
+  const { g, w, h, table, rand } = c;
+  tileFloor(c, 0x6b4527, 0x9c6440, 0xa87049, 66);
+  tableShadow(c, 0.45);
+  lightPool(c, 0xfff0b8, 1.4);
 
-  g.rect(0, 0, w, wall).fill({ color: 0xc9a273 });
-  // Arched openings onto a bright sky.
-  for (const ax of [w * 0.14, w * 0.5, w * 0.86]) {
-    const aw = w * 0.12;
-    shape(
-      g,
-      (gg) => {
-        gg.moveTo(ax - aw / 2, wall);
-        gg.lineTo(ax - aw / 2, wall * 0.42);
-        gg.arc(ax, wall * 0.42, aw / 2, Math.PI, 0);
-        gg.lineTo(ax + aw / 2, wall);
-        gg.closePath();
-      },
-      0x8fc9e8,
-      4
-    );
-    g.circle(ax, wall * 0.34, aw * 0.24).fill({ color: 0xfff0b8, alpha: 0.9 });
-  }
-  // Brick coursing.
-  for (let y = 0; y < wall; y += 34) {
-    g.rect(0, y, w, 2).fill({ color: 0xa8794a, alpha: 0.4 });
-  }
-  g.rect(0, wall - 20, w, 22).fill({ color: 0xa8794a });
-
-  // Hanging plants.
-  for (const px of [w * 0.3, w * 0.7]) {
-    g.rect(px - 2, 0, 4, 40).fill({ color: 0x6b4a3a });
-    shape(g, (gg) => gg.roundRect(px - 22, 40, 44, 26, 6), 0xb5713f, 3);
-    for (let i = 0; i < 7; i++) {
-      const a = -0.4 + (i / 6) * 0.8;
-      g.moveTo(px, 62)
-        .quadraticCurveTo(px + Math.sin(a) * 40, 100, px + Math.sin(a) * 56, 150 + i * 8)
-        .stroke({ width: 5, color: 0x4f8a3a, cap: 'round' });
+  const m = margins(c);
+  /** A potted plant from above: rim, soil, and leaves radiating out. */
+  const planter = (x: number, y: number, r: number): void => {
+    // Shadow first, thrown clear of the pot since the light here is high and hard.
+    g.ellipse(x + r * 0.45, y + r * 0.5, r * 1.15, r * 0.8).fill({ color: 0x000000, alpha: 0.14 });
+    // Leaves under the rim, so the plant sits *in* the pot rather than on top of it. Short and
+    // broad: long thin strokes radiating out just read as a scribble at this size.
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + rand() * 0.2;
+      const len = r * (0.95 + rand() * 0.35);
+      g.moveTo(x, y)
+        .quadraticCurveTo(
+          x + Math.cos(a + 0.35) * len * 0.65,
+          y + Math.sin(a + 0.35) * len * 0.65,
+          x + Math.cos(a) * len,
+          y + Math.sin(a) * len
+        )
+        .stroke({ width: 9, color: INK, alpha: 0.35, cap: 'round' });
+      g.moveTo(x, y)
+        .quadraticCurveTo(
+          x + Math.cos(a + 0.35) * len * 0.65,
+          y + Math.sin(a + 0.35) * len * 0.65,
+          x + Math.cos(a) * len,
+          y + Math.sin(a) * len
+        )
+        .stroke({ width: 6, color: i % 2 ? 0x4f8a3a : 0x67a84e, cap: 'round' });
     }
-  }
+    shape(g, (gg) => gg.circle(x, y, r * 0.72), 0xb5713f, 3);
+    g.circle(x, y, r * 0.52).fill({ color: 0x4a2f1c });
+    g.circle(x, y, r * 0.72).stroke({ width: 3, color: 0xd08b52, alpha: 0.7 });
+  };
 
-  // Terracotta tiled floor.
-  g.rect(0, wall, w, h - wall).fill({ color: 0x9c6a44 });
-  for (let y = wall; y < h; y += 44) {
-    for (let x = ((y - wall) / 44) % 2 ? -22 : 0; x < w; x += 44) {
-      g.roundRect(x + 3, y + 3, 38, 38, 4).fill({ color: 0xb07a4a });
-    }
+  if (m.left > 70) {
+    planter(m.left * 0.5, table.y + table.h * 0.2, Math.min(26, m.left * 0.3));
+    planter(m.left * 0.5, table.y + table.h * 0.78, Math.min(24, m.left * 0.28));
   }
-  lampCone(c, w * 0.5, 0, w * 0.4, h, 0xfff0b8);
+  if (m.right > 70) planter(w - m.right * 0.5, table.y + table.h * 0.5, Math.min(28, m.right * 0.3));
+  if (m.top > 60) {
+    for (const x of [w * 0.3, w * 0.66]) chair(c, x, m.top * 0.48, Math.min(26, m.top * 0.3), 0xd9a441, -Math.PI / 2);
+    glass(c, w * 0.48, m.top * 0.5, 12, 0xf0c454);
+  }
+  if (m.bottom > 60) cue(c, w * 0.3, h - m.bottom * 0.5, 210, 0.06, 0xd9a441);
+  falloff(c, 0.9);
 }
 
-/** Arcade: neon grid floor, glowing tubes, dark everything else. */
+/** Arcade: a glowing floor grid, light bleeding up from underneath. */
 function neonArcade(c: Ctx): void {
-  const { g, w, h, horizon, rand } = c;
-  const wall = horizon * 0.6;
-
+  const { g, w, h, table, rand } = c;
   g.rect(0, 0, w, h).fill({ color: 0x0a0618 });
 
-  // Horizon glow.
-  g.rect(0, wall - 60, w, 60).fill({ color: 0x5ffbf1, alpha: 0.06 });
-  g.rect(0, wall - 3, w, 4).fill({ color: 0x5ffbf1, alpha: 0.8 });
-
-  // Perspective grid running to the horizon.
-  for (let i = -14; i <= 14; i++) {
-    g.moveTo(w / 2 + i * 46, wall)
-      .lineTo(w / 2 + i * 340, h)
-      .stroke({ width: 2, color: 0xb44dff, alpha: 0.4 });
+  // A true grid, not a perspective one — we are looking straight down at it now.
+  for (let x = 0; x <= w; x += 58) {
+    g.rect(x - 1, 0, 2, h).fill({ color: 0xb44dff, alpha: 0.28 });
   }
-  let step = 6;
-  for (let y = wall + 4; y < h; y += step) {
-    g.rect(0, y, w, 1.6).fill({ color: 0x5ffbf1, alpha: 0.28 });
-    step *= 1.32;
+  for (let y = 0; y <= h; y += 58) {
+    g.rect(0, y - 1, w, 2).fill({ color: 0x5ffbf1, alpha: 0.22 });
   }
-
-  // Neon tube signs and cabinet silhouettes.
-  for (const [nx, ny, nw, col] of [
-    [w * 0.1, wall * 0.28, 150, 0xff2e6a],
-    [w * 0.72, wall * 0.2, 190, 0x5ffbf1],
-    [w * 0.42, wall * 0.1, 120, 0xffee32],
-  ] as const) {
-    g.roundRect(nx, ny, nw, 54, 16).stroke({ width: 12, color: col, alpha: 0.18 });
-    g.roundRect(nx, ny, nw, 54, 16).stroke({ width: 4, color: col, alpha: 0.95 });
-  }
-  for (let i = 0; i < 6; i++) {
-    const cx = 40 + rand() * (w - 80);
-    const ch = 90 + rand() * 60;
-    g.roundRect(cx, wall - ch, 54, ch, 8).fill({ color: 0x160e2e });
-    g.roundRect(cx + 8, wall - ch + 12, 38, 30, 4).fill({ color: 0x2ee6ff, alpha: 0.5 });
-  }
-}
-
-/** Frozen cavern: ice walls, icicles, cold light. */
-function iceCavern(c: Ctx): void {
-  const { g, w, h, horizon, rand } = c;
-  const wall = horizon * 0.68;
-
-  g.rect(0, 0, w, wall).fill({ color: 0x2a4256 });
-  // Faceted ice wall.
-  for (let i = 0; i < 16; i++) {
-    const x = (i / 16) * w;
-    const fw = w / 16 + 30;
-    g.poly([x, 0, x + fw, 0, x + fw * 0.7, wall, x - 10, wall]).fill({
-      color: i % 2 ? 0x35506a : 0x2e4760,
-      alpha: 0.9,
-    });
-  }
-  // Icicles along the ceiling.
-  for (let i = 0; i < 22; i++) {
-    const x = rand() * w;
-    const len = 30 + rand() * 90;
-    shape(g, (gg) => gg.poly([x - 11, 0, x + 11, 0, x, len]), 0xcfe9f5, 2, 0.92);
-    g.poly([x - 4, 0, x + 2, 0, x, len * 0.7]).fill({ color: 0xffffff, alpha: 0.6 });
-  }
-
-  // Snow drift and floor.
-  g.rect(0, wall, w, h - wall).fill({ color: 0xdfeef7 });
-  g.ellipse(w * 0.2, wall + 10, w * 0.35, 40).fill({ color: 0xffffff });
-  g.ellipse(w * 0.75, wall + 4, w * 0.3, 34).fill({ color: 0xffffff });
-  g.rect(0, wall - 2, w, 5).fill({ color: 0x9fc4d8 });
-
-  lampCone(c, w * 0.5, 0, w * 0.34, h, 0xbfe6ff);
-  // Drifting flecks of frost.
+  // A scatter of lit cells, so the floor pulses rather than being uniform.
   for (let i = 0; i < 40; i++) {
-    g.circle(rand() * w, rand() * h, rand() * 2 + 0.8).fill({ color: 0xffffff, alpha: 0.35 });
+    const gx = Math.floor(rand() * (w / 58)) * 58;
+    const gy = Math.floor(rand() * (h / 58)) * 58;
+    g.rect(gx + 2, gy + 2, 54, 54).fill({ color: rand() > 0.5 ? 0x5ffbf1 : 0xff2e6a, alpha: 0.07 });
   }
+
+  tableShadow(c, 0.7);
+  // Neon doesn't pool warmly; it rings. A bright halo hugging the table instead.
+  for (let i = 5; i >= 1; i--) {
+    g.roundRect(
+      table.x - i * 13,
+      table.y - i * 13,
+      table.w + i * 26,
+      table.h + i * 26,
+      20 + i * 10
+    ).stroke({ width: 5, color: 0x5ffbf1, alpha: 0.05 });
+  }
+
+  const m = margins(c);
+  if (m.top > 60) {
+    // Floor-mounted light bars, glowing.
+    for (const [x, col] of [
+      [w * 0.22, 0xff2e6a],
+      [w * 0.5, 0xffee32],
+      [w * 0.76, 0x5ffbf1],
+    ] as const) {
+      g.roundRect(x - 70, m.top * 0.42, 140, 12, 6).fill({ color: col, alpha: 0.2 });
+      g.roundRect(x - 70, m.top * 0.46, 140, 5, 3).fill({ color: col, alpha: 0.95 });
+    }
+  }
+  if (m.bottom > 60) {
+    for (const x of [w * 0.3, w * 0.68]) {
+      g.roundRect(x - 60, h - m.bottom * 0.5, 120, 5, 3).fill({ color: 0xb44dff, alpha: 0.9 });
+    }
+  }
+  if (m.left > 60) stool(c, m.left * 0.5, table.y + table.h * 0.5, Math.min(22, m.left * 0.3), 0x241a3d);
+  if (m.right > 60) stool(c, w - m.right * 0.5, table.y + table.h * 0.5, Math.min(22, m.right * 0.3), 0x241a3d);
+  falloff(c, 1.6);
 }
 
-/** 70s rec room: wood panelling, starburst clock, shag carpet. */
-function vintageRec(c: Ctx): void {
-  const { g, w, h, horizon } = c;
-  const wall = horizon * 0.64;
+/** Frozen cavern: cracked ice underfoot, drifts of snow, cold light. */
+function iceCavern(c: Ctx): void {
+  const { g, w, h, table, rand } = c;
+  g.rect(0, 0, w, h).fill({ color: 0x6e97ae });
 
-  g.rect(0, 0, w, wall).fill({ color: 0x6b4a26 });
-  for (let x = 0; x < w; x += 46) {
-    g.rect(x, 0, 3, wall).fill({ color: 0x4a3218, alpha: 0.7 });
-    g.rect(x + 6, 0, 1.5, wall).fill({ color: 0x8a6438, alpha: 0.5 });
-  }
-  g.rect(0, wall - 16, w, 18).fill({ color: 0x4a3218 });
-
-  // Starburst clock.
-  const cx = w * 0.5;
-  const cy = wall * 0.34;
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    g.moveTo(cx + Math.cos(a) * 28, cy + Math.sin(a) * 28)
-      .lineTo(cx + Math.cos(a) * (i % 2 ? 52 : 74), cy + Math.sin(a) * (i % 2 ? 52 : 74))
-      .stroke({ width: 5, color: 0xe0c47a, cap: 'round' });
-  }
-  shape(g, (gg) => gg.circle(cx, cy, 26), 0xf0e3c0, 3);
-  g.moveTo(cx, cy).lineTo(cx, cy - 16).stroke({ width: 3, color: INK });
-  g.moveTo(cx, cy).lineTo(cx + 12, cy + 6).stroke({ width: 3, color: INK });
-
-  // Chunky standing lamp.
-  const lx = w * 0.13;
-  g.rect(lx - 4, wall * 0.5, 8, wall * 0.5).fill({ color: 0x3a2a14 });
-  shape(g, (gg) => gg.poly([lx - 34, wall * 0.5, lx + 34, wall * 0.5, lx + 22, wall * 0.28, lx - 22, wall * 0.28]), 0xd8873a, 3);
-  g.circle(lx, wall * 0.52, 44).fill({ color: 0xffb45c, alpha: 0.2 });
-
-  // Shag carpet — dense short strokes rather than a flat fill.
-  g.rect(0, wall, w, h - wall).fill({ color: 0x6b6f34 });
-  const rand = c.rand;
-  for (let i = 0; i < 900; i++) {
+  // Facets of ice, as irregular plates rather than a wall of prisms.
+  for (let i = 0; i < 46; i++) {
     const x = rand() * w;
-    const y = wall + rand() * (h - wall);
-    g.moveTo(x, y)
-      .lineTo(x + (rand() - 0.5) * 6, y - 6 - rand() * 7)
-      .stroke({ width: 2, color: rand() > 0.5 ? 0x808a3e : 0x5a602a, alpha: 0.75 });
+    const y = rand() * h;
+    const r = 60 + rand() * 130;
+    const pts: number[] = [];
+    const sides = 5 + Math.floor(rand() * 3);
+    for (let k = 0; k < sides; k++) {
+      const a = (k / sides) * Math.PI * 2;
+      const rr = r * (0.6 + rand() * 0.5);
+      pts.push(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    g.poly(pts).fill({ color: rand() > 0.5 ? 0xa8cddd : 0x9cc3d6, alpha: 0.55 });
+    g.poly(pts).stroke({ width: 1.5, color: 0xdff0f8, alpha: 0.4 });
   }
+  // Cracks running across the surface.
+  for (let i = 0; i < 14; i++) {
+    let x = rand() * w;
+    let y = rand() * h;
+    g.moveTo(x, y);
+    for (let k = 0; k < 5; k++) {
+      x += (rand() - 0.5) * 180;
+      y += (rand() - 0.5) * 180;
+      g.lineTo(x, y);
+    }
+    g.stroke({ width: 1.5, color: 0x5f8ba3, alpha: 0.4 });
+  }
+
+  // Snow drifted into the corners.
+  for (const [x, y, rx, ry] of [
+    [0, 0, w * 0.3, h * 0.22],
+    [w, h, w * 0.34, h * 0.24],
+    [w, 0, w * 0.22, h * 0.18],
+  ] as const) {
+    g.ellipse(x, y, rx, ry).fill({ color: 0xffffff, alpha: 0.75 });
+  }
+
+  tableShadow(c, 0.3);
+  lightPool(c, 0xdff0f8, 1.5);
+
+  const m = margins(c);
+  if (m.top > 60) triangleRack(c, w * 0.7, m.top * 0.5, 26, 0xdff0f8);
+  if (m.bottom > 60) cue(c, w * 0.3, h - m.bottom * 0.5, 210, 0.05, 0xcfe9f5);
+  if (m.left > 60) stool(c, m.left * 0.5, table.y + table.h * 0.5, Math.min(24, m.left * 0.3), 0xd8cbb8);
+  // Frost sparkle.
+  for (let i = 0; i < 70; i++) {
+    g.circle(rand() * w, rand() * h, rand() * 1.8 + 0.6).fill({ color: 0xffffff, alpha: 0.5 });
+  }
+  falloff(c, 0.8);
+}
+
+/** 70s rec room: shag carpet, a starburst rug, chunky furniture. */
+function vintageRec(c: Ctx): void {
+  const { g, w, h, table, rand } = c;
+  g.rect(0, 0, w, h).fill({ color: 0x4a4e22 });
+  // Shag: dense short strokes in every direction, which is what it looks like from above.
+  for (let i = 0; i < 2600; i++) {
+    const x = rand() * w;
+    const y = rand() * h;
+    const a = rand() * Math.PI * 2;
+    g.moveTo(x, y)
+      .lineTo(x + Math.cos(a) * 7, y + Math.sin(a) * 7)
+      .stroke({ width: 2, color: rand() > 0.5 ? 0x808a3e : 0x5a602a, alpha: 0.7 });
+  }
+
+  // Starburst rug under the table — the clock off the old wall, laid on the floor. Kept inside
+  // the table's own footprint plus a margin, or it stops being a rug and becomes the floor.
+  const cx = table.x + table.w / 2;
+  const cy = table.y + table.h / 2;
+  const rx = table.w * 0.56;
+  const ry = table.h * 0.72;
+  g.ellipse(cx, cy, rx, ry).fill({ color: 0x7a4a1e });
+  g.ellipse(cx, cy, rx, ry).stroke({ width: 5, color: INK, alpha: 0.6 });
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const outer = i % 2 ? 0.7 : 0.94;
+    g.moveTo(cx + Math.cos(a) * rx * 0.3, cy + Math.sin(a) * ry * 0.3)
+      .lineTo(cx + Math.cos(a) * rx * outer, cy + Math.sin(a) * ry * outer)
+      .stroke({ width: 7, color: 0xe0c47a, alpha: 0.7, cap: 'round' });
+  }
+
+  tableShadow(c, 0.45);
+  lightPool(c, 0xffb45c, 1.2);
+
+  const m = margins(c);
+  if (m.left > 70) {
+    chair(c, m.left * 0.5, table.y + table.h * 0.3, Math.min(30, m.left * 0.32), 0xd8873a, Math.PI);
+    chair(c, m.left * 0.5, table.y + table.h * 0.74, Math.min(28, m.left * 0.3), 0xb5652a, Math.PI);
+  }
+  if (m.right > 70) chair(c, w - m.right * 0.5, table.y + table.h * 0.5, Math.min(30, m.right * 0.32), 0xd8873a, 0);
+  if (m.top > 60) {
+    glass(c, w * 0.42, m.top * 0.5, 13, 0xb5652a);
+    chalk(c, w * 0.56, m.top * 0.5, 15, 0x5a602a);
+    triangleRack(c, w * 0.72, m.top * 0.52, 26, 0xe0c47a);
+  }
+  if (m.bottom > 60) cue(c, w * 0.32, h - m.bottom * 0.5, 215, -0.05, 0xc99a63);
+  falloff(c, 1.1);
 }
 
 const SCENES: Record<string, (c: Ctx) => void> = {
@@ -381,10 +596,16 @@ const SCENES: Record<string, (c: Ctx) => void> = {
 };
 
 /**
- * Paints the room for `theme` across a `w × h` canvas. `tableTop` is where the table's top
- * edge lands on screen, so scenery can be arranged around it.
+ * Paints the room for `theme` across a `w × h` canvas. `table` is the table's footprint on
+ * screen, so the floor can be arranged around it and nothing is drawn where it can't be seen.
  */
-export function drawScene(g: Graphics, theme: TableTheme, w: number, h: number, tableTop: number): void {
+export function drawScene(
+  g: Graphics,
+  theme: TableTheme,
+  w: number,
+  h: number,
+  table: TableRect
+): void {
   g.clear();
   if (w <= 0 || h <= 0) return;
 
@@ -392,23 +613,10 @@ export function drawScene(g: Graphics, theme: TableTheme, w: number, h: number, 
     g,
     w,
     h,
-    horizon: Math.max(120, tableTop),
+    table,
     // Seeded from the theme id so a room's clutter stays put across resizes.
     rand: seeded(theme.id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 7)),
   };
 
   (SCENES[theme.id] ?? classicHall)(ctx);
-
-  // Vignette, so the table stays the brightest thing on screen. Built from stacked edge
-  // bands rather than a subtractive cut — `cut()` left a hard rounded-rectangle seam across
-  // the floor instead of a soft falloff.
-  const BANDS = 7;
-  for (let i = 0; i < BANDS; i++) {
-    const inset = (i / BANDS) * Math.min(w, h) * 0.16;
-    const alpha = 0.045;
-    g.rect(0, inset, w, 2 + inset * 0.4).fill({ color: 0x000000, alpha });
-    g.rect(0, h - inset - (2 + inset * 0.4), w, 2 + inset * 0.4).fill({ color: 0x000000, alpha });
-    g.rect(inset, 0, 2 + inset * 0.4, h).fill({ color: 0x000000, alpha });
-    g.rect(w - inset - (2 + inset * 0.4), 0, 2 + inset * 0.4, h).fill({ color: 0x000000, alpha });
-  }
 }

@@ -998,12 +998,23 @@ export class TableRenderer {
     this.root.position.set(ox, oy);
 
     // Repaint the room only when the canvas or the theme actually changes — it's a lot of
-    // geometry and none of it moves.
-    const tableTop = oy + BOARD_TOP * this.scale;
-    const key = `${this.theme.id}|${Math.round(w)}x${Math.round(h)}`;
+    // geometry and none of it moves. The room is drawn from directly above, like the table, so
+    // it needs the table's whole footprint on screen to arrange the floor around rather than
+    // just where its top edge lands.
+    const table = {
+      x: ox - RAIL * this.scale,
+      y: oy - RAIL * this.scale,
+      w: (TABLE_LENGTH + RAIL * 2) * this.scale,
+      h: (TABLE_WIDTH + RAIL * 2) * this.scale,
+    };
+    // The scale belongs in the key, not just the canvas size. `chromeless` changes the fit from
+    // 0.8 to 1.0 at the *same* canvas size, so without it the room stayed painted for whichever
+    // layout happened first — a table footprint 25% too big, which put every prop off-screen and
+    // stretched the rug to the canvas edges.
+    const key = `${this.theme.id}|${Math.round(w)}x${Math.round(h)}|${this.scale.toFixed(3)}`;
     if (key !== this.sceneKey) {
       this.sceneKey = key;
-      drawScene(this.sceneLayer, this.theme, w, h, tableTop);
+      drawScene(this.sceneLayer, this.theme, w, h, table);
     }
   }
 
