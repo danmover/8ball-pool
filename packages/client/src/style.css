@@ -300,15 +300,30 @@ input:focus {
 
 /* --- Lobby --- */
 
+/* The lobby is taller than the screen once every mode is listed, so it has to be a real
+   scroll container pinned to the viewport.
+   `height: 100%` was resolving against an unconstrained parent, so the element simply grew to
+   its content (1177px in a 900px window), never overflowed itself, and had nothing above it
+   that scrolled either — leaving the shot clock, seats and Start button permanently below the
+   fold with no way to reach them.
+   `safe center` keeps the centring when it fits but falls back to top-aligned when it doesn't;
+   plain `center` pushes the overflow off the top where no scrollbar can reach it. */
 .lobby {
-  height: 100%;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   gap: 1rem;
   padding: 1.5rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Cards must keep their height in a scrolling flex column, or they squash instead of overflow. */
+.lobby > * {
+  flex: 0 0 auto;
 }
 
 .lobby-card {
@@ -330,11 +345,20 @@ input:focus {
   text-shadow: 0 0 26px rgba(255, 201, 77, 0.4);
 }
 
+/* Eight modes is three rows of cards, which on its own pushed the seats and the Start button
+   off the bottom of the screen. Capped to roughly two rows and scrolled inside, so the rest of
+   the lobby stays where you can see it. */
 .mode-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.6rem;
   margin-top: 0.5rem;
+  max-height: min(46vh, 360px);
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  /* Deliberately not `scrollbar-width: thin` — setting the standard property makes Chrome
+     ignore the ::-webkit-scrollbar rules that give this a drawn, always-visible bar, and an
+     overlay scrollbar that fades out is exactly what made the list look cut off. */
 }
 
 .mode-card {

@@ -27,6 +27,27 @@
   color: var(--wood-deep);
 }
 
+/* A drawn scrollbar for the mode list, so the fact that it scrolls is visible — a hidden one
+   here would just look like the list had been cut off again. */
+.mode-grid::-webkit-scrollbar {
+  width: 10px;
+}
+
+.mode-grid::-webkit-scrollbar-track {
+  background: var(--paper-3);
+  border-radius: 999px;
+}
+
+.mode-grid::-webkit-scrollbar-thumb {
+  background: var(--wood);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.mode-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
 .error {
   color: #a8281f;
   font-weight: 700;
@@ -402,6 +423,26 @@
 
 .dialog-scrim.open {
   background: rgba(10, 8, 6, 0.6);
+}
+
+.dialog-input {
+  width: 100%;
+  margin: 0.2rem 0 0.9rem;
+  padding: 0.6rem 0.8rem;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-align: center;
+  color: var(--ink);
+  background: var(--paper);
+  border: none;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 2px var(--ink), inset 0 3px 0 var(--paper-3);
+  outline: none;
+}
+
+.dialog-input:focus {
+  box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 3px var(--gold);
 }
 
 .dialog {
@@ -933,8 +974,10 @@
   opacity: 1;
 }
 
+/* Only the stacking is set here — the lobby's `position: fixed` in style.css is what makes it
+   a scroll container pinned to the viewport, and overriding it back to `relative` let the
+   element grow past the bottom of the screen with nothing able to scroll to it. */
 .lobby {
-  position: relative;
   z-index: 2;
 }
 
@@ -1179,6 +1222,141 @@ button.mini.secondary {
 .wheel-pointer {
   border-top-color: var(--gold);
   filter: drop-shadow(0 0 2px var(--ink));
+}
+
+/* --- End of frame ---
+   Was a headline and one Rematch button, which made changing the mode or the match length a
+   matter of leaving the table entirely. Now it reports the frame and offers somewhere to go. */
+
+.result-card {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.6rem 1.2rem;
+  width: min(520px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow:
+    inset 0 0 0 var(--frame) var(--wood),
+    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
+    0 0 0 2px var(--ink),
+    0 12px 0 rgba(26, 20, 16, 0.22),
+    0 22px 44px rgba(0, 0, 0, 0.5);
+}
+
+.result-card h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.75rem;
+  color: var(--wood-deep);
+}
+
+.result-reason {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.result-series {
+  margin: 0.5rem 0 0.9rem;
+}
+
+.series-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.series-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.series-row b {
+  min-width: 7ch;
+  text-align: right;
+}
+
+.series-row .pip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--paper-3);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.series-row .pip.won {
+  background: var(--gold);
+}
+
+.result-stats {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.4rem 0 0.8rem;
+  font-size: 0.88rem;
+}
+
+.result-stats th {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.2rem 0.4rem;
+  border-bottom: 2px solid var(--paper-3);
+}
+
+.result-stats td {
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--paper-3);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-stats td.who {
+  text-align: left;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.result-stats tr.winner td {
+  background: rgba(255, 203, 82, 0.22);
+  color: var(--wood-deep);
+}
+
+/* The reward panel was written for a dark overlay, so its values are cream on cream now that
+   the result sits on a paper card — "+30 XP" and the spin count were effectively invisible. */
+.result-card .reward-line {
+  color: var(--muted);
+}
+
+.result-card .reward-line b {
+  color: var(--wood-deep);
+  font-weight: 900;
+}
+
+.result-card .level-up {
+  color: var(--wood-deep);
+  text-shadow: 0 1px 0 var(--gold);
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.9rem;
+}
+
+.result-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 /* --- Spin control ---

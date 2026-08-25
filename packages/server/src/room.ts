@@ -178,6 +178,23 @@ export class Room {
     this.onTurnReady();
   }
 
+  /**
+   * Reopens the lobby after a game, so the table can be set up differently without everyone
+   * having to leave and rejoin with a new code. Seats, names and cosmetics all stay put; only
+   * the frame is thrown away.
+   */
+  returnToLobby(): void {
+    if (!this.started) return;
+    this.clearShotClock();
+    this.clearBotTimer();
+    this.started = false;
+    // Series score doesn't survive a trip back to the lobby — you're setting up a new match.
+    this.gameState.series = null;
+    this.rebuildGameState();
+    this.broadcastRoomState();
+    this.broadcastGameState();
+  }
+
   broadcastRoomState(): void {
     this.io.to(this.code).emit('roomState', this.roomStateDTO());
   }

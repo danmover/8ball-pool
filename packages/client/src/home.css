@@ -484,20 +484,109 @@
   gap: 0.5rem;
 }
 
+/* --- Centre HUD ---
+   Anything the player has to notice goes here, dead centre at the top of the screen. The shot
+   clock used to sit in the top-right corner beside the settings cog, and the ball-in-hand
+   prompt at the very bottom — both places the eye never goes while the balls are moving. */
+
+.centre-hud {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.callout {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 1.1rem 0.55rem 0.7rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 14px 26px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+/* A drawn cue ball, so the instruction is recognisable before it's read. */
+.callout-ball {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background:
+    radial-gradient(circle at 34% 30%, #fff 0 26%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 50% 50%, #fdfaf2 0 55%, #d9cdb6 100%);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.callout-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.callout-text b {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.callout-text small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* Only pulse when it's actually your move — otherwise it's just a status line. */
+.callout.actionable {
+  animation: calloutPulse 1.5s ease-in-out infinite;
+}
+
+.callout.actionable .callout-ball {
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px rgba(255, 203, 82, 0.45);
+}
+
+@keyframes calloutPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+body.reduce-motion .callout.actionable {
+  animation: none;
+}
+
 .shot-clock {
-  width: 54px;
-  height: 54px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Baloo 2', sans-serif;
   font-weight: 900;
-  font-size: 1.25rem;
+  font-size: 1.9rem;
   color: var(--paper);
   background:
     conic-gradient(var(--accent) calc(var(--clock, 1) * 360deg), rgba(255, 255, 255, 0.08) 0);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 6px 18px rgba(0, 0, 0, 0.55);
   position: relative;
   /* The text node paints after ::before, so the number sits over the punched-out middle. */
   isolation: isolate;

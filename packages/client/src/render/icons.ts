@@ -33,7 +33,9 @@ export type IconName =
   | 'sparkle'
   | 'edit'
   | 'play'
-  | 'close';
+  | 'close'
+  | 'replay'
+  | 'home';
 
 /** Path data drawn on a 24×24 grid, stroked unless noted. */
 const PATHS: Record<IconName, string> = {
@@ -109,6 +111,13 @@ const PATHS: Record<IconName, string> = {
     <path d="m14 6.5 3 3"/>`,
   play: `<path d="M8 5.4 18.5 12 8 18.6z"/>`,
   close: `<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>`,
+  replay: `
+    <path d="M20 12a8 8 0 1 1-2.6-5.9"/>
+    <path d="M20 4v4.5h-4.5"/>`,
+  home: `
+    <path d="M4 11.2 12 4.5l8 6.7"/>
+    <path d="M6.2 10v9.5h11.6V10"/>
+    <path d="M10 19.5v-5h4v5"/>`,
 };
 
 /** Icons that read better filled than stroked. */

@@ -261,6 +261,8 @@ export interface ClientToServerEvents {
   hostReleaseSeat: (payload: { seat: Seat }) => void;
   hostUpdateLobby: (payload: Partial<LobbySettings>) => void;
   hostStartGame: () => void;
+  /** Reopen the lobby after a game so the table can be set up differently. */
+  hostReturnToLobby: () => void;
   updateAim: (input: AimInput) => void;
   takeShot: (input: ShootInput) => void;
   placeCueBall: (payload: BallInHandPlacement) => void;

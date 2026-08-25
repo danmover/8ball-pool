@@ -74,6 +74,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let celebrator: PotCelebrator | null = null;
   /** Consecutive scoring turns per seat — drives the ON FIRE banner state. */
   const streaks: Record<Seat, number> = {};
+  /**
+   * What each seat did this frame, for the end-of-frame screen. Counted from the shot
+   * summaries the client already builds — the server sends nothing extra for this.
+   */
+  const frameStats: Record<Seat, { pots: number; shots: number; bestCombo: number }> = {};
   let shotSeat: Seat | null = null;
   let lastPotPos: { x: number; y: number } | null = null;
   let rewardsShown = false;
@@ -93,10 +98,15 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       <div class="top-bar">
         <div id="playerPanels" style="display:flex; gap:0.5rem; flex-wrap:wrap; flex:1"></div>
         <div class="top-right">
-          <div class="shot-clock" id="shotClock" style="display:none"></div>
           <button class="icon-btn" id="settingsBtn" title="Settings">${icon('settings')}</button>
           <button class="icon-btn danger" id="leaveBtn" title="Leave table">${icon('leave')}</button>
         </div>
+      </div>
+      <!-- The centre column carries anything that must be noticed: the clock counting down and
+           the prompt telling you it's your move. Both used to sit off in a corner. -->
+      <div class="centre-hud">
+        <div class="shot-clock" id="shotClock" style="display:none"></div>
+        <div id="callout"></div>
       </div>
       <div class="toast-stack" id="toastStack"></div>
       <div class="challenge-hud" id="challengeHud" style="display:none"></div>
@@ -526,18 +536,36 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     overlay.querySelector('#backToChallenges')!.addEventListener('click', () => navigate('/challenges'));
   }
 
+  /**
+   * The centre callout: the one instruction the player has to act on right now.
+   *
+   * Ball-in-hand used to be a thin line of text at the very bottom of the screen — the one
+   * place nobody is looking while the balls are on the table — so people missed their turn
+   * entirely. It's now a card in the middle, with the cue ball drawn on it.
+   */
+  function renderCallout(state: GameState): void {
+    const slot = root.querySelector<HTMLElement>('#callout')!;
+    if (state.phase !== 'ball_in_hand') {
+      slot.innerHTML = '';
+      return;
+    }
+    const mine = ownedSeat === state.currentShooter;
+    slot.innerHTML = `
+      <div class="callout${mine ? ' actionable' : ''}">
+        <span class="callout-ball"></span>
+        <span class="callout-text">
+          <b>Ball in hand</b>
+          <small>${
+            mine
+              ? 'Click anywhere on the table to place the cue ball'
+              : `${state.players[state.currentShooter].name} is placing the cue ball`
+          }</small>
+        </span>
+      </div>`;
+  }
+
   function renderBottomArea(state: GameState): void {
     bottomArea.innerHTML = '';
-    if (state.phase === 'ball_in_hand') {
-      const banner = document.createElement('div');
-      banner.className = 'turn-banner';
-      banner.style.cssText = 'position:static; margin:0 auto; width:fit-content';
-      banner.textContent =
-        ownedSeat === state.currentShooter
-          ? 'Ball in hand — tap the table to place the cue ball'
-          : `${state.players[state.currentShooter].name} is placing the cue ball`;
-      bottomArea.appendChild(banner);
-    }
 
     if (state.phase === 'game_over') {
       if (root.querySelector('#gameOverOverlay')) return;
@@ -546,39 +574,112 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         renderChallengeResult(state);
         return;
       }
-      const overlay = document.createElement('div');
-      overlay.id = 'gameOverOverlay';
-      overlay.className = 'overlay-center';
-      const winnerName = state.winner ? state.players[state.winner].name : null;
-      const headline =
-        state.mode === 'teams' && state.winningTeam
-          ? `Team ${state.winningTeam.toUpperCase()} wins!`
-          : winnerName
-            ? `${winnerName} wins!`
-            : 'Game over';
-      const scores =
-        state.mode === 'rotation'
-          ? `<p style="color:var(--muted); font-size:0.9rem">${state.seatOrder
-              .map((s) => `${state.players[s].name}: ${state.players[s].score}`)
-              .join(' &nbsp;·&nbsp; ')}</p>`
-          : '';
-      overlay.innerHTML = `
-        <div>
-          <h2>${headline}</h2>
-          ${scores}
-          ${state.lastFoulReason ? `<p style="color:var(--muted)">${state.lastFoulReason}</p>` : ''}
-          <div id="rewardSlot"></div>
-          <button id="rematchBtn">Rematch</button>
-        </div>`;
-      root.appendChild(overlay);
-      renderRewards(state, overlay.querySelector<HTMLElement>('#rewardSlot')!);
-      overlay.querySelector('#rematchBtn')!.addEventListener('click', () => {
-        socket.emit('requestRematch');
-        rewardsShown = false;
-        for (const seat of Object.keys(streaks)) streaks[seat] = 0;
-        overlay.remove();
-      });
+      renderGameOver(state);
     }
+  }
+
+  /**
+   * The end-of-frame screen.
+   *
+   * It used to be a headline and a single Rematch button, which left the only way to change
+   * anything — mode, players, match length — as leaving the table and starting again from a
+   * new code. So it now shows what actually happened in the frame and offers the three things
+   * anyone wants next: play it again, set it up differently, or stop.
+   */
+  function renderGameOver(state: GameState): void {
+    const overlay = document.createElement('div');
+    overlay.id = 'gameOverOverlay';
+    overlay.className = 'overlay-center';
+
+    const winnerName = state.winner ? state.players[state.winner].name : null;
+    const headline =
+      state.mode === 'teams' && state.winningTeam
+        ? `Team ${state.winningTeam.toUpperCase()} wins!`
+        : winnerName
+          ? `${winnerName} wins!`
+          : 'Game over';
+
+    // Series standing, when there's a match running rather than a one-off frame.
+    const series = state.series;
+    const seriesHtml = series
+      ? `<div class="result-series">
+           <span class="series-label">Frame ${series.frame} · first to ${series.target}</span>
+           <div class="series-pips">
+             ${state.seatOrder
+               .map((s) => {
+                 const won = series.wins[s] ?? 0;
+                 return `<span class="series-row"><b>${state.players[s].name}</b>${Array.from(
+                   { length: series.target },
+                   (_, i) => `<i class="pip${i < won ? ' won' : ''}"></i>`
+                 ).join('')}</span>`;
+               })
+               .join('')}
+           </div>
+         </div>`
+      : '';
+
+    // Per-player frame stats, from what the client watched happen rather than anything new
+    // from the server. Rotation scores by ball value, so it gets its own column.
+    const statRows = state.seatOrder
+      .map((seat) => {
+        const stats = frameStats[seat] ?? { pots: 0, shots: 0, bestCombo: 0 };
+        const isWinner =
+          state.mode === 'teams' && state.winningTeam
+            ? state.players[seat].team === state.winningTeam
+            : state.winner === seat;
+        return `
+          <tr class="${isWinner ? 'winner' : ''}">
+            <td class="who">${isWinner ? icon('trophy', { size: 15 }) : ''}${state.players[seat].name}</td>
+            <td>${stats.pots}</td>
+            <td>${stats.shots}</td>
+            <td>${stats.bestCombo > 1 ? `${stats.bestCombo}×` : '—'}</td>
+            ${state.mode === 'rotation' ? `<td>${state.players[seat].score}</td>` : ''}
+          </tr>`;
+      })
+      .join('');
+
+    overlay.innerHTML = `
+      <div class="result-card">
+        <h2>${headline}</h2>
+        ${state.lastFoulReason ? `<p class="result-reason">${state.lastFoulReason}</p>` : ''}
+        ${seriesHtml}
+        <table class="result-stats">
+          <thead>
+            <tr>
+              <th>Player</th><th>Potted</th><th>Shots</th><th>Best</th>
+              ${state.mode === 'rotation' ? '<th>Score</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>${statRows}</tbody>
+        </table>
+        <div id="rewardSlot"></div>
+        <div class="result-actions">
+          <button id="rematchBtn">${icon('replay', { size: 18 })}Play again</button>
+          <button class="secondary" id="setupBtn">${icon('settings', { size: 18 })}Change setup</button>
+          <button class="secondary" id="menuBtn">${icon('home', { size: 18 })}Main menu</button>
+        </div>
+      </div>`;
+    root.appendChild(overlay);
+    renderRewards(state, overlay.querySelector<HTMLElement>('#rewardSlot')!);
+
+    overlay.querySelector('#rematchBtn')!.addEventListener('click', () => {
+      socket.emit('requestRematch');
+      resetFrameBookkeeping();
+      overlay.remove();
+    });
+    overlay.querySelector('#setupBtn')!.addEventListener('click', () => {
+      socket.emit('hostReturnToLobby');
+      resetFrameBookkeeping();
+      overlay.remove();
+    });
+    overlay.querySelector('#menuBtn')!.addEventListener('click', () => navigate('/'));
+  }
+
+  /** Clears everything scoped to a single frame, so the next one starts from zero. */
+  function resetFrameBookkeeping(): void {
+    rewardsShown = false;
+    for (const seat of Object.keys(streaks)) streaks[seat] = 0;
+    for (const seat of Object.keys(frameStats)) delete frameStats[seat];
   }
 
   /**
@@ -727,6 +828,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderScoreboard(state);
     renderChallengeHud(state);
     tickShotClock();
+    renderCallout(state);
     renderBottomArea(state);
 
     const canAim =
@@ -823,6 +925,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (!summary || !shotSeat) return;
 
     streaks[shotSeat] = summary.pots > 0 ? (streaks[shotSeat] ?? 0) + 1 : 0;
+
+    const tally = (frameStats[shotSeat] ??= { pots: 0, shots: 0, bestCombo: 0 });
+    tally.shots++;
+    tally.pots += summary.pots;
+    tally.bestCombo = Math.max(tally.bestCombo, summary.pots);
 
     const shooterIsOurs = lastState?.players[shotSeat]?.isHost ?? false;
     if (shooterIsOurs) {

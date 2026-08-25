@@ -43,6 +43,64 @@ export function confirmLeave(
   });
 }
 
+/**
+ * Asks for a line of text, in the game's own chrome.
+ *
+ * Replaces `window.prompt`, which is a grey OS box in the middle of a cartoon pool hall — and
+ * worse, one that browsers are entitled to suppress outright, so the button that opened it
+ * could look like it did nothing at all.
+ *
+ * @param onSubmit called with the trimmed value; never called if the dialog is cancelled.
+ */
+export function promptText(
+  title: string,
+  value: string,
+  onSubmit: (value: string) => void,
+  opts: { placeholder?: string; maxLength?: number; confirmLabel?: string } = {}
+): void {
+  const { placeholder = '', maxLength = 24, confirmLabel = 'Save' } = opts;
+  const scrim = document.createElement('div');
+  scrim.className = 'dialog-scrim';
+  scrim.innerHTML = `
+    <div class="dialog">
+      <div class="dialog-icon">${icon('edit', { size: 28 })}</div>
+      <h2>${title}</h2>
+      <input class="dialog-input" type="text" maxlength="${maxLength}"
+             placeholder="${placeholder}" spellcheck="false" />
+      <div class="dialog-actions">
+        <button class="secondary" data-act="cancel">Cancel</button>
+        <button data-act="confirm">${confirmLabel}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(scrim);
+  requestAnimationFrame(() => scrim.classList.add('open'));
+
+  const input = scrim.querySelector<HTMLInputElement>('.dialog-input')!;
+  input.value = value;
+  input.focus();
+  input.select();
+
+  const close = (): void => {
+    scrim.classList.remove('open');
+    setTimeout(() => scrim.remove(), 200);
+  };
+  const submit = (): void => {
+    const next = input.value.trim();
+    close();
+    if (next) onSubmit(next);
+  };
+
+  scrim.querySelector('[data-act="cancel"]')!.addEventListener('click', close);
+  scrim.querySelector('[data-act="confirm"]')!.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+    if (e.key === 'Escape') close();
+  });
+  scrim.addEventListener('click', (e) => {
+    if (e.target === scrim) close();
+  });
+}
+
 export type ToastKind = 'info' | 'foul' | 'reward';
 
 const TOAST_ICONS: Record<ToastKind, IconName> = {

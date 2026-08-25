@@ -9,6 +9,7 @@ import { TableRenderer } from '../render/TableRenderer';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
 import { icon } from '../render/icons';
+import { promptText } from '../render/dialogs';
 import { challengeForToday, challengeProgress } from '../profile/dailyChallenge';
 import { navigate } from '../router';
 import * as sfx from '../render/sfx';
@@ -163,11 +164,15 @@ export function renderHomePage(root: HTMLElement): () => void {
       })}</button>`;
 
     playerEl.querySelector('#editName')!.addEventListener('click', () => {
-      const next = window.prompt('Display name', getProfile().displayName || 'Player');
-      if (next !== null) {
-        setDisplayName(next.trim());
-        drawPlayer();
-      }
+      promptText(
+        'What should we call you?',
+        getProfile().displayName || 'Player',
+        (next) => {
+          setDisplayName(next);
+          drawPlayer();
+        },
+        { placeholder: 'Player', maxLength: 18 }
+      );
     });
 
     const stars = Object.values(profile.challengeStars ?? {}).reduce((a, b) => a + b, 0);
