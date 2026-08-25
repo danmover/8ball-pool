@@ -18,8 +18,7 @@ function ball(id: number, x: number, y: number, vx = 0, vy = 0): Ball {
     kind: id === 0 ? 'cue' : 'solid',
     pos: { x, y },
     vel: { x: vx, y: vy },
-    spin: 0,
-    spinV: 0,
+    angVel: { x: 0, y: 0, z: 0 },
     pocketed: false,
   };
 }

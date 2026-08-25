@@ -1,6 +1,7 @@
 import type { GameState } from '../types.js';
 import { TABLE_LENGTH, TABLE_WIDTH } from '../constants.js';
 import { rackNineBall } from '../rack.js';
+import { restBall } from '../physics.js';
 import { endGame, lowestBallId, nextActiveSeat } from './shared.js';
 import type { ModeDescriptor, ShotContext, ShotOutcome } from './types.js';
 
@@ -37,8 +38,7 @@ function resolve(state: GameState, outcome: ShotOutcome, ctx: ShotContext): void
     if (nine) {
       nine.pocketed = false;
       nine.pos = { x: TABLE_LENGTH * 0.72, y: TABLE_WIDTH / 2 };
-      nine.vel = { x: 0, y: 0 };
-      nine.spin = 0;
+      restBall(nine);
     }
   }
 

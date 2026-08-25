@@ -4,22 +4,30 @@ import type { Loadout } from './cosmetics.js';
 export type BallGroup = 'solid' | 'stripe';
 export type BallKind = 'cue' | 'eight' | BallGroup;
 
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface Ball {
   id: number; // 0 = cue, 1-7 solids, 8 = eight, 9-15 stripes
   kind: BallKind;
   pos: Vec2;
   vel: Vec2;
   /**
-   * Side ("english") spin, -1..1. Curves the ball while it's still sliding and changes the
-   * angle it comes off a cushion.
+   * Angular velocity in radians/sec, in a right-handed frame with x right, y down the screen
+   * and **z into the table**.
+   *
+   * `x` and `y` are the rolling axes: a ball rolling naturally along +x has `y = -|v|/R`. `z`
+   * is spin about the vertical axis — english.
+   *
+   * This replaced a pair of scalars (`spin`, `spinV`) whose every effect was a separate tuned
+   * constant bolted onto the collision code. With a real angular state, draw, follow, stun,
+   * throw, swerve and cushion english all fall out of one friction model instead of being six
+   * special cases that didn't quite agree with each other — or with the aim guide.
    */
-  spin: number;
-  /**
-   * Vertical spin: -1 is full screw-back (draw), 0 is a stun, +1 is full follow (topspin).
-   * Decays toward 0 as the ball travels, because friction converts it into natural roll —
-   * which is exactly why a screw shot loses its bite across a long table.
-   */
-  spinV: number;
+  angVel: Vec3;
   pocketed: boolean;
 }
 

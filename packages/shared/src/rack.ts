@@ -1,4 +1,5 @@
 import type { Ball, BallKind } from './types.js';
+import { createBall } from './ball.js';
 import { BALL_DIAMETER, CUE_BALL_ID, TABLE_LENGTH, TABLE_WIDTH } from './constants.js';
 
 const ROW_SPACING = BALL_DIAMETER * 0.866; // sqrt(3)/2, tight triangular packing
@@ -20,7 +21,7 @@ function kindOf(id: number): BallKind {
 }
 
 function newBall(id: number, x: number, y: number): Ball {
-  return { id, kind: kindOf(id), pos: { x, y }, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
+  return createBall(id, kindOf(id), x, y);
 }
 
 function cueBall(): Ball {
@@ -94,30 +95,13 @@ export function rackBalls(): Ball[] {
 
   RACK_ROWS.forEach((row, r) => {
     row.forEach((id, k) => {
-      balls.push({
-        id,
-        kind: kindOf(id),
-        pos: {
-          x: apexX + r * ROW_SPACING,
-          y: apexY + (k - r / 2) * BALL_DIAMETER,
-        },
-        vel: { x: 0, y: 0 },
-        spin: 0,
-        spinV: 0,
-        pocketed: false,
-      });
+      balls.push(
+        createBall(id, kindOf(id), apexX + r * ROW_SPACING, apexY + (k - r / 2) * BALL_DIAMETER)
+      );
     });
   });
 
-  balls.push({
-    id: CUE_BALL_ID,
-    kind: 'cue',
-    pos: { x: TABLE_LENGTH * 0.22, y: TABLE_WIDTH / 2 },
-    vel: { x: 0, y: 0 },
-    spin: 0,
-    spinV: 0,
-    pocketed: false,
-  });
+  balls.push(createBall(CUE_BALL_ID, 'cue', TABLE_LENGTH * 0.22, TABLE_WIDTH / 2));
 
   return balls;
 }

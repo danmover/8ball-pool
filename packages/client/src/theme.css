@@ -1264,6 +1264,103 @@ button.mini.secondary {
   line-height: 1.3;
 }
 
+/* --- Spin control ---
+   The pad is a cue ball you strike; the axes are named on it, the readout says what you did in
+   words, and the three presets cover the shots you actually want without any fine dragging. */
+
+.spin-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.spin-pad {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+}
+
+.spin-axis {
+  position: absolute;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.44rem;
+  letter-spacing: 0.1em;
+  color: rgba(26, 20, 16, 0.42);
+  pointer-events: none;
+  user-select: none;
+}
+
+.spin-axis.top {
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.spin-axis.bottom {
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.spin-axis.left {
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.spin-axis.right {
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.spin-readout {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  min-height: 1em;
+  text-align: center;
+}
+
+/* Once there's spin on, say so loudly — it changes the shot and must never be a surprise. */
+.spin-control.spun .spin-readout {
+  color: var(--accent-2);
+}
+
+.spin-presets {
+  display: flex;
+  gap: 0.22rem;
+}
+
+.spin-presets button {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  padding: 0.26rem 0.34rem;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--paper-2);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--paper-3);
+  touch-action: manipulation;
+}
+
+.spin-presets button:hover {
+  background: var(--paper);
+}
+
+.spin-presets button.active {
+  background: var(--gold);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--wood-dark);
+}
+
 /* --- Controller --- */
 
 .ctrl-buttons {

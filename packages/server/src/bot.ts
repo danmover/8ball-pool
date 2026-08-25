@@ -5,6 +5,7 @@ import {
   TABLE_LENGTH,
   TABLE_WIDTH,
   Vec2,
+  createBall,
   legalTargetBallIds,
   pathIsClear,
 } from '@8ball/shared';
@@ -324,7 +325,7 @@ export class BotPlayer {
       );
       if (overlaps) continue;
 
-      const probe: Ball = { id: CUE_BALL_ID, kind: 'cue', pos, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
+      const probe: Ball = { ...createBall(CUE_BALL_ID, 'cue', pos.x, pos.y) };
       const top = this.rankShots(state, probe, targets)[0];
       const score = top?.score ?? -Infinity;
       if (score > bestScore) {

@@ -1,22 +1,45 @@
 import { Vec2 } from './vector.js';
-import type { Ball, SimEvent } from './types.js';
+import type { Ball, SimEvent, Vec3 } from './types.js';
 import { CUSHIONS, JAWS, POCKETS, mouthDepth, pocketContaining } from './table.js';
 import {
   BALL_RADIUS,
-  FRICTION_DECEL,
+  MAX_SHOT_SPEED,
+  MAX_TIP_OFFSET,
+  MIN_SHOT_SPEED,
+  MU_BALL,
+  MU_CUSHION,
   REST_EPSILON,
   RESTITUTION_BALL,
   RESTITUTION_CUSHION,
+  ROLL_DECEL,
   SIM_HZ,
-  SLIDE_SPEED,
-  SPIN_DAMPING,
-  SPIN_V_DECAY_PER_UNIT,
-  SPIN_V_TRANSFER,
-  SWERVE_ACCEL,
-  THROW_MAX,
+  SLIDE_DECEL,
+  SPIN_DECEL,
 } from './constants.js';
 
+/**
+ * Ball dynamics.
+ *
+ * Every ball carries a real angular velocity, and the cloth is the only thing that converts it
+ * into motion. That one decision is what makes draw, follow, stun, throw, swerve and cushion
+ * english behave like pool instead of like six separate tuned hacks:
+ *
+ *   - **Draw** is not a special case in the collision. The cue ball hands its forward momentum
+ *     to the object ball and stops, still spinning backwards; the cloth then drives it back.
+ *   - **Follow** is the same story with the spin the other way.
+ *   - **Stun** is what happens when there is no spin left to act on.
+ *   - **Losing bite over distance** is just sliding friction rubbing the spin off into natural
+ *     roll on the way there, so a long screw is hard for the reason it is hard in life.
+ *
+ * The frame is right-handed with x right, y **down** the screen (matching screen coordinates)
+ * and z **into** the table. So the cloth contact sits at `(0, 0, R)` from the centre, and a ball
+ * rolling naturally along +x has angular velocity `(0, -|v|/R, 0)`.
+ */
+
 const SUBSTEP_DT = 1 / SIM_HZ;
+
+/** Contact-patch speed below which the ball is treated as rolling rather than skidding. */
+const ROLL_EPSILON = 1;
 
 export function isAtRest(ball: Ball): boolean {
   return Vec2.length(ball.vel) < REST_EPSILON;
@@ -26,43 +49,77 @@ export function allBallsAtRest(balls: Ball[]): boolean {
   return balls.every((b) => b.pocketed || isAtRest(b));
 }
 
-function applyFriction(ball: Ball, dt: number): void {
+/**
+ * Velocity of the point of the ball touching the cloth: `u = v + ω × r`, with `r = (0, 0, R)`.
+ *
+ * This single quantity is the whole model. When it is zero the ball is rolling and friction has
+ * almost nothing to push against; when it is not, sliding friction acts along `-û` and changes
+ * the spin two and a half times faster than it changes the velocity — which is precisely why a
+ * ball struck below centre ends up travelling backwards.
+ */
+export function contactVelocity(ball: Ball): Vec2 {
+  return {
+    x: ball.vel.x + ball.angVel.y * BALL_RADIUS,
+    y: ball.vel.y - ball.angVel.x * BALL_RADIUS,
+  };
+}
+
+/** The angular velocity a ball would have if it were rolling at its current speed. */
+function rollingSpin(vel: Vec2): { x: number; y: number } {
+  return { x: vel.y / BALL_RADIUS, y: -vel.x / BALL_RADIUS };
+}
+
+function stop(ball: Ball): void {
+  ball.vel = Vec2.zero();
+  ball.angVel = { x: 0, y: 0, z: 0 };
+}
+
+/**
+ * One substep of cloth friction: skid, then roll.
+ *
+ * The 5/2 in the sliding branch is `mR²/I` for a uniform sphere. It is the reason spin dies so
+ * much faster than speed does, and therefore the reason draw has a range.
+ */
+function applyClothFriction(ball: Ball, dt: number): void {
   const speed = Vec2.length(ball.vel);
-  if (speed <= REST_EPSILON) {
-    ball.vel = Vec2.zero();
-    // A stopped ball has nothing left to spin against the cloth.
-    ball.spin = 0;
-    ball.spinV = 0;
-    return;
+  const u = contactVelocity(ball);
+  const skid = Vec2.length(u);
+
+  if (skid > ROLL_EPSILON) {
+    // Sliding. Friction acts on the contact patch along -û, on both the linear and the
+    // angular state, and stops the moment the patch stops skidding.
+    const dir = Vec2.scale(u, 1 / skid);
+    // The patch decelerates at (1 + 5/2) times the linear rate, so cap the step by that.
+    const dv = Math.min(SLIDE_DECEL * dt, skid / 3.5);
+    ball.vel = Vec2.sub(ball.vel, Vec2.scale(dir, dv));
+
+    // dω/dt = (r × F)/I with r = (0,0,R) gives (5/2R)·(-Fy, Fx) — a quarter turn from the
+    // friction direction, which is what tips a skidding ball into natural roll.
+    const dw = ((5 / 2) * dv) / BALL_RADIUS;
+    ball.angVel.x += dir.y * dw;
+    ball.angVel.y -= dir.x * dw;
+  } else if (speed > 0) {
+    // Rolling. Much gentler, and the spin stays locked to the speed.
+    const dir = Vec2.scale(ball.vel, 1 / speed);
+    const dv = Math.min(speed, ROLL_DECEL * dt);
+    ball.vel = Vec2.sub(ball.vel, Vec2.scale(dir, dv));
+    const roll = rollingSpin(ball.vel);
+    ball.angVel.x = roll.x;
+    ball.angVel.y = roll.y;
   }
 
-  const dir = Vec2.normalize(ball.vel);
-
-  // Swerve: while the ball is still sliding, english pushes it sideways off its line. Once
-  // it settles into natural roll the curve stops, which is why swerve only shows on firm shots.
-  if (ball.spin !== 0 && speed > SLIDE_SPEED) {
-    const slide = Math.min(1, (speed - SLIDE_SPEED) / SLIDE_SPEED);
-    const side = { x: -dir.y, y: dir.x };
-    ball.vel = Vec2.add(ball.vel, Vec2.scale(side, ball.spin * SWERVE_ACCEL * slide * dt));
+  // English is untouched by either branch above — it spins about the vertical axis, so the
+  // contact patch is twisting rather than sliding and `u` never sees it. It needs its own drag
+  // or it would last forever.
+  if (ball.angVel.z !== 0) {
+    const decay = SPIN_DECEL * dt;
+    const mag = Math.abs(ball.angVel.z);
+    ball.angVel.z = mag <= decay ? 0 : ball.angVel.z - Math.sign(ball.angVel.z) * decay;
   }
 
-  const decel = Math.min(speed, FRICTION_DECEL * dt);
-  ball.vel = Vec2.sub(ball.vel, Vec2.scale(dir, decel));
-
-  // Check again *after* decelerating: a ball that drops below the rest threshold on the final
-  // substep would otherwise settle still carrying spin, because the early-out above only sees
-  // the speed it came in with.
-  if (Vec2.length(ball.vel) <= REST_EPSILON) {
-    ball.vel = Vec2.zero();
-    ball.spin = 0;
-    ball.spinV = 0;
-    return;
+  if (Vec2.length(ball.vel) <= REST_EPSILON && Vec2.length(contactVelocity(ball)) <= ROLL_EPSILON) {
+    stop(ball);
   }
-
-  ball.spin *= Math.pow(SPIN_DAMPING, dt);
-  // Vertical spin wears off over distance travelled, not time — see SPIN_V_DECAY_PER_UNIT.
-  const travelled = speed * dt;
-  ball.spinV *= Math.max(0, 1 - SPIN_V_DECAY_PER_UNIT * travelled);
 }
 
 /**
@@ -81,30 +138,41 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
   let bounced = false;
   const speedBefore = Vec2.length(ball.vel);
 
+  /**
+   * Rebound off a cushion whose inward normal is `n`.
+   *
+   * English shows up here on its own: the ball's surface is moving sideways across the rubber
+   * at `v·t + ω_z·R`, so friction drags the rebound along the cushion — running english widens
+   * the angle, reverse english narrows it — and spends some spin doing it.
+   */
+  const rebound = (n: Vec2): void => {
+    const vn = Vec2.dot(ball.vel, n);
+    if (vn >= 0) return;
+    const t = { x: n.y, y: -n.x };
+    const surface = Vec2.dot(ball.vel, t) + ball.angVel.z * r;
+
+    const jn = -vn * (1 + RESTITUTION_CUSHION);
+    // A tangential impulse `jt` changes the surface slide by 3.5·jt (jt of velocity plus
+    // 5·jt/2R of spin acting through R), so killing it takes -2s/7. Coulomb caps it, and what
+    // the cap leaves behind is exactly the residual english that widens or narrows the angle.
+    const jt = Math.max(-MU_CUSHION * jn, Math.min(MU_CUSHION * jn, (-surface * 2) / 7));
+
+    ball.vel = Vec2.add(ball.vel, Vec2.add(Vec2.scale(n, jn), Vec2.scale(t, jt)));
+    ball.angVel.z += ((5 / 2) * jt) / r;
+    bounced = true;
+  };
+
   for (const c of CUSHIONS) {
     const along = c.axis === 'h' ? ball.pos.x : ball.pos.y;
     if (along < c.from || along > c.to) continue; // this run doesn't reach here
 
     const across = c.axis === 'h' ? ball.pos.y : ball.pos.x;
-    const vel = c.axis === 'h' ? ball.vel.y : ball.vel.x;
     // `side` is -1 for the top/left runs (play lies at larger values) and +1 for bottom/right.
-    const penetrating = c.side < 0 ? across - r < c.base && vel < 0 : across + r > c.base && vel > 0;
-    if (!penetrating) continue;
+    if (c.side < 0 ? across - r >= c.base : across + r <= c.base) continue;
 
-    const clamped = c.base - c.side * r;
-    const bounce = -vel * RESTITUTION_CUSHION;
-    // English deflects the ball along the cushion as it grips.
-    const slide = ball.spin * 60 * -c.side;
-    if (c.axis === 'h') {
-      ball.pos.y = clamped;
-      ball.vel.y = bounce;
-      ball.vel.x += slide;
-    } else {
-      ball.pos.x = clamped;
-      ball.vel.x = bounce;
-      ball.vel.y += slide;
-    }
-    bounced = true;
+    if (c.axis === 'h') ball.pos.y = c.base - c.side * r;
+    else ball.pos.x = c.base - c.side * r;
+    rebound(c.axis === 'h' ? { x: 0, y: -c.side } : { x: -c.side, y: 0 });
   }
 
   for (const jaw of JAWS) {
@@ -114,14 +182,13 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
     if (dist >= min || dist < 1e-6) continue;
 
     const normal = Vec2.scale(delta, 1 / dist);
-    const closing = Vec2.dot(ball.vel, normal);
     ball.pos = Vec2.add(jaw.pos, Vec2.scale(normal, min));
-    if (closing >= 0) continue; // already leaving; just don't let it sink in
-    ball.vel = Vec2.sub(ball.vel, Vec2.scale(normal, closing * (1 + RESTITUTION_CUSHION)));
-    bounced = true;
+    rebound(normal);
   }
 
-  if (bounced) events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: speedBefore });
+  if (bounced) {
+    events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: speedBefore });
+  }
 }
 
 /**
@@ -138,9 +205,7 @@ function resolvePocket(ball: Ball, events: SimEvent[]): boolean {
 
   const pos = { ...ball.pos };
   ball.pocketed = true;
-  ball.vel = Vec2.zero();
-  ball.spin = 0;
-  ball.spinV = 0;
+  stop(ball);
   events.push({ type: 'pot', ballId: ball.id, pos, pocketIndex: pocket.index });
   return true;
 }
@@ -160,11 +225,22 @@ function applyBagGravity(ball: Ball, dt: number): void {
     const pull = Vec2.normalize(Vec2.sub(p.capture, ball.pos));
     // Scaled by how far over the lip it already is, so it eases in rather than snatching.
     const bite = 1 - -depth / BALL_RADIUS;
-    ball.vel = Vec2.add(ball.vel, Vec2.scale(pull, FRICTION_DECEL * 1.6 * bite * dt));
+    ball.vel = Vec2.add(ball.vel, Vec2.scale(pull, ROLL_DECEL * 6 * bite * dt));
     return;
   }
 }
 
+/**
+ * Ball-on-ball contact: a normal impulse, plus a little friction across the contact.
+ *
+ * Note what is *not* here. There is no code that makes the cue ball come back on a draw shot —
+ * the collision leaves its spin completely alone, exactly as a near-instantaneous impact does,
+ * and the cloth takes over from there. The old model had to special-case that, and had to guess
+ * how much spin "survived" the hit.
+ *
+ * The friction term is throw: the two surfaces are moving across each other at the contact, so
+ * they grip, and the object ball leaves fractionally off the true line.
+ */
 function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
   const delta = Vec2.sub(b.pos, a.pos);
   const dist = Vec2.length(delta);
@@ -184,44 +260,80 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
   // fire a "hit" event on every substep for as long as anything else on the table moves.
   if (velAlongNormal > -REST_EPSILON) return;
 
-  // Direction of travel before the impulse — the spin acts along the line the striking ball
-  // was already moving on, so it has to be captured first.
-  const striker = Vec2.length(a.vel) >= Vec2.length(b.vel) ? a : b;
-  const struck = striker === a ? b : a;
-  const strikerDir = Vec2.length(striker.vel) > 1e-6 ? Vec2.normalize(striker.vel) : normal;
+  const jn = -(1 + RESTITUTION_BALL) * velAlongNormal * 0.5;
+  a.vel = Vec2.sub(a.vel, Vec2.scale(normal, jn));
+  b.vel = Vec2.add(b.vel, Vec2.scale(normal, jn));
 
-  const impulse = -(1 + RESTITUTION_BALL) * velAlongNormal * 0.5;
-  const impulseVec = Vec2.scale(normal, impulse);
-  a.vel = Vec2.sub(a.vel, impulseVec);
-  b.vel = Vec2.add(b.vel, impulseVec);
-
-  // ---- Cue ball control ----
-  // Vertical spin survives the collision and expresses itself along the original line:
-  // backspin drags the striker back off the object ball, topspin carries it through, and
-  // nothing at all leaves it stunned dead. This is the whole of position play.
-  if (striker.spinV !== 0) {
-    striker.vel = Vec2.add(striker.vel, Vec2.scale(strikerDir, striker.spinV * SPIN_V_TRANSFER));
-    // Most of it is spent in the hit; what's left keeps working on the roll afterwards.
-    striker.spinV *= 0.25;
-  }
-
-  // Throw: english on the striker rubs against the object ball and pushes it fractionally
-  // off the true contact line, in the direction the spin is turning.
-  if (striker.spin !== 0) {
-    const angle = striker.spin * THROW_MAX;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    struck.vel = {
-      x: struck.vel.x * cos - struck.vel.y * sin,
-      y: struck.vel.x * sin + struck.vel.y * cos,
-    };
-    // A little english transfers to the object ball as the surfaces grip.
-    struck.spin += striker.spin * 0.12;
-    striker.spin *= 0.7;
+  // Throw. The two surfaces are sliding across each other at the contact, and english
+  // dominates that sliding — which is why a ball struck with side spin doesn't quite go where
+  // the ghost-ball line says it should.
+  //
+  // With `t` the tangent, A's surface slides against B's at
+  //   s = (v_A - v_B)·t + (ω_Az + ω_Bz)·R
+  // and a tangential impulse `jt` on A (and -jt on B) changes that by 7·jt, since each ball
+  // picks up 5·jt/2R of spin as well as jt of velocity. So killing the slide takes -s/7,
+  // and Coulomb caps how much of that the surfaces can actually deliver.
+  const tangent = { x: -normal.y, y: normal.x };
+  const surface =
+    Vec2.dot(Vec2.sub(a.vel, b.vel), tangent) + (a.angVel.z + b.angVel.z) * BALL_RADIUS;
+  if (surface !== 0) {
+    const limit = MU_BALL * jn;
+    const jt = Math.max(-limit, Math.min(limit, -surface / 7));
+    a.vel = Vec2.add(a.vel, Vec2.scale(tangent, jt));
+    b.vel = Vec2.sub(b.vel, Vec2.scale(tangent, jt));
+    // Both balls take spin the same way round, so english is partly handed on.
+    const dw = ((5 / 2) * jt) / BALL_RADIUS;
+    a.angVel.z += dw;
+    b.angVel.z += dw;
   }
 
   const contactPoint = Vec2.add(a.pos, Vec2.scale(normal, BALL_RADIUS));
-  events.push({ type: 'ballCollision', a: a.id, b: b.id, pos: contactPoint, impulse: Math.abs(impulse) });
+  events.push({ type: 'ballCollision', a: a.id, b: b.id, pos: contactPoint, impulse: Math.abs(jn) });
+}
+
+/**
+ * Strikes the cue ball: the one place a shot turns into motion.
+ *
+ * `tip` is where the cue contacts the ball, in radii from its centre, exactly as the spin pad
+ * reports it — `x` across, `y` down the screen, so **below centre (positive y) is draw**.
+ *
+ * The two textbook relations for an impulse `J` applied at offset `r`: `Δv = J/m` and
+ * `Δω = (r × J)/I`. With `I = (2/5)mR²` those give a spin of `5·offset·speed / 2R`, which is
+ * why striking 2/5 of a radius above centre puts the ball into natural roll immediately — a
+ * result that falls out of the algebra rather than being dialled in.
+ */
+export function applyCueStrike(
+  cue: Ball,
+  angle: number,
+  power: number,
+  tip: { x: number; y: number } = { x: 0, y: 0 }
+): void {
+  const speed = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
+  const dir = Vec2.fromAngle(angle);
+
+  // Keep the tip on the ball: past about half a radius a real cue miscues.
+  let tx = tip.x;
+  let ty = tip.y;
+  const mag = Math.hypot(tx, ty);
+  if (mag > 1) {
+    tx /= mag;
+    ty /= mag;
+  }
+  const offsetX = tx * MAX_TIP_OFFSET;
+  const offsetY = ty * MAX_TIP_OFFSET;
+
+  cue.vel = Vec2.scale(dir, speed);
+
+  // Vertical offset spins the ball about the axis across the shot line. Below centre (positive
+  // screen y) has to come out as backspin, so the ball's contact patch races ahead of it.
+  const k = (5 * speed) / (2 * BALL_RADIUS);
+  const along = offsetY * k; // + is draw
+  cue.angVel = {
+    x: -along * dir.y,
+    y: along * dir.x,
+    // English: offset across the line spins the ball about the vertical axis.
+    z: offsetX * k,
+  };
 }
 
 export interface StepResult {
@@ -276,7 +388,7 @@ export function stepSimulation(balls: Ball[], dt: number): StepResult {
       resolveCushions(ball, events);
       // After the cushions, so a ball nudged over the lip by a jaw still gets drawn in.
       applyBagGravity(ball, h);
-      applyFriction(ball, h);
+      applyClothFriction(ball, h);
     }
   }
 
@@ -284,3 +396,10 @@ export function stepSimulation(balls: Ball[], dt: number): StepResult {
   if (settled) events.push({ type: 'shotSettled' });
   return { events, settled };
 }
+
+/** Re-exported so callers can zero a ball without knowing the shape of its angular state. */
+export function restBall(ball: Ball): void {
+  stop(ball);
+}
+
+export type { Vec3 };

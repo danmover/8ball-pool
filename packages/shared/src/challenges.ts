@@ -1,4 +1,5 @@
 import type { Ball, Vec2 } from './index.js';
+import { createBall } from './ball.js';
 import { BALL_RADIUS, TABLE_LENGTH, TABLE_WIDTH } from './constants.js';
 
 /**
@@ -238,24 +239,10 @@ export function challengeSets(): { name: string; challenges: Challenge[] }[] {
 
 /** Builds the ball list for a challenge, cue ball included. */
 export function challengeBalls(challenge: Challenge): Ball[] {
-  const balls: Ball[] = challenge.balls.map((b) => ({
-    id: b.id,
-    kind: b.id === 8 ? 'eight' : b.id < 8 ? 'solid' : 'stripe',
-    pos: { ...b.pos },
-    vel: { x: 0, y: 0 },
-    spin: 0,
-    spinV: 0,
-    pocketed: false,
-  }));
-  balls.push({
-    id: 0,
-    kind: 'cue',
-    pos: { ...challenge.cue },
-    vel: { x: 0, y: 0 },
-    spin: 0,
-    spinV: 0,
-    pocketed: false,
-  });
+  const balls: Ball[] = challenge.balls.map((b) =>
+    createBall(b.id, b.id === 8 ? 'eight' : b.id < 8 ? 'solid' : 'stripe', b.pos.x, b.pos.y)
+  );
+  balls.push(createBall(0, 'cue', challenge.cue.x, challenge.cue.y));
   return balls;
 }
 

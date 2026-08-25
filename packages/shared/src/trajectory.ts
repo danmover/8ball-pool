@@ -1,18 +1,11 @@
 import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
 import { CUSHIONS, JAWS, inPocketApproach } from './table.js';
-import {
-  BALL_RADIUS,
-  FRICTION_DECEL,
-  MAX_SHOT_SPEED,
-  MIN_SHOT_SPEED,
-  SPIN_V_DECAY_PER_UNIT,
-  SPIN_V_TRANSFER,
-} from './constants.js';
+import { applyCueStrike, stepSimulation } from './physics.js';
+import { BALL_RADIUS } from './constants.js';
 
 const MAX_BOUNCES_FULL = 2;
 const MAX_PREVIEW_LENGTH = 3000;
-const OBJECT_BALL_PREVIEW_LENGTH = 500;
 
 interface RayHit {
   t: number;
@@ -121,50 +114,87 @@ export function pathIsClear(
   return true;
 }
 
+/** How long a shot the preview is willing to play out, in simulated seconds. */
+const PREVIEW_SECONDS = 2.4;
+/** Sampling interval for the previewed paths. Fine enough to draw a smooth curve. */
+const PREVIEW_SAMPLE_DT = 1 / 60;
+/** Don't bother drawing a post-contact line shorter than this. */
+const MIN_PREVIEW_TRAVEL = 4;
+
+interface SimulatedPaths {
+  cueAfter: Vec2[];
+  objectBall: Vec2[];
+  cueRest: Vec2 | null;
+}
+
 /**
- * The cue ball's path after it strikes an object ball, as a single offset vector.
+ * Plays the shot out with the real engine and reports where the balls actually go.
  *
- * Mirrors what `resolveBallCollision` actually does rather than guessing: the cue ball keeps
- * the component of its motion perpendicular to the contact line (the tangent slide), and the
- * spin left on it after the trip is added along the original direction. Both use the same
- * decay constant as the simulation, so the guide and the shot agree.
+ * The guide used to *approximate* the collision with its own formula, which meant there were
+ * two models of the same event and they could disagree — and they did, most visibly on draw
+ * shots. Running the genuine simulation on a throwaway copy of the table makes that class of
+ * bug impossible: whatever the guide draws is, by construction, what the shot will do.
+ *
+ * It is affordable because previews are recomputed when the aim changes, not every frame, and
+ * because the run is capped at a couple of simulated seconds — by which point the interesting
+ * part of any shot is long over.
  */
-function cueBallAfterContact(
-  dir: Vec2,
-  objDir: Vec2,
-  spin: { x: number; y: number },
-  travelled: number,
-  power: number
-): Vec2 | null {
-  // Screen-down is positive y on the pad, so below-centre (positive) is backspin.
-  const spinV = -Math.max(-1, Math.min(1, spin.y));
-  const remaining = spinV * Math.exp(-SPIN_V_DECAY_PER_UNIT * travelled);
+function simulatePaths(
+  balls: Ball[],
+  cueBallId: number,
+  angle: number,
+  power: number,
+  tip: { x: number; y: number }
+): SimulatedPaths {
+  const clone: Ball[] = balls.map((b) => ({
+    ...b,
+    pos: { ...b.pos },
+    vel: { ...b.vel },
+    angVel: { ...b.angVel },
+  }));
+  const cue = clone.find((b) => b.id === cueBallId);
+  const out: SimulatedPaths = { cueAfter: [], objectBall: [], cueRest: null };
+  if (!cue) return out;
 
-  // Speed at contact, from the same launch speed and friction the simulation uses. Without
-  // this the guide would draw the same line for a tap and a smash.
-  const launch = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
-  const contactSpeed = Math.sqrt(Math.max(0, launch * launch - 2 * FRICTION_DECEL * travelled));
+  applyCueStrike(cue, angle, power, tip);
 
-  /** How far a ball travels from a given speed before friction stops it. */
-  const rollOut = (speed: number): number => (speed * speed) / (2 * FRICTION_DECEL);
+  let struck: Ball | null = null;
+  let elapsed = 0;
 
-  // Spin becomes velocity along the shot line at contact — the same transfer the collision
-  // applies — so the guide predicts the real distance rather than a made-up one.
-  const spinPush = Math.sign(remaining) * rollOut(Math.abs(remaining) * SPIN_V_TRANSFER);
+  while (elapsed < PREVIEW_SECONDS) {
+    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT);
+    elapsed += PREVIEW_SAMPLE_DT;
 
-  // Tangent component: whatever isn't transferred along the contact normal carries on, which
-  // is why a thin cut sends the cue ball sideways even with no spin at all.
-  const along = Vec2.dot(dir, objDir);
-  const tangent = Vec2.sub(dir, Vec2.scale(objDir, along));
-  const tangentLen = Vec2.length(tangent);
-  const slide = rollOut(tangentLen * contactSpeed);
+    if (!struck) {
+      // The first thing the cue ball touches is the shot; everything after is consequences.
+      const first = events.find((e) => e.type === 'ballCollision' && (e.a === cueBallId || e.b === cueBallId));
+      if (first && first.type === 'ballCollision') {
+        const otherId = first.a === cueBallId ? first.b : first.a;
+        struck = clone.find((b) => b.id === otherId) ?? null;
+      }
+    }
 
-  if (Math.abs(spinPush) < 4 && slide < 4) return null;
+    if (struck) {
+      if (!cue.pocketed) out.cueAfter.push({ ...cue.pos });
+      if (!struck.pocketed) out.objectBall.push({ ...struck.pos });
+    }
+    if (settled) break;
+  }
 
-  return Vec2.add(
-    Vec2.scale(dir, spinPush),
-    tangentLen > 1e-6 ? Vec2.scale(Vec2.normalize(tangent), slide) : Vec2.zero()
-  );
+  out.cueRest = cue.pocketed ? null : { ...cue.pos };
+  return out;
+}
+
+/** Turns sampled positions into drawable segments, dropping runs too short to be worth it. */
+function toSegments(points: Vec2[], from: Vec2): TrajectorySegment[] {
+  const segments: TrajectorySegment[] = [];
+  let prev = from;
+  for (const p of points) {
+    if (Vec2.distance(prev, p) < 2) continue; // skip near-duplicates while the ball crawls
+    segments.push({ from: prev, to: p });
+    prev = p;
+  }
+  return segments.length && Vec2.distance(from, prev) >= MIN_PREVIEW_TRAVEL ? segments : [];
 }
 
 function nearPocket(point: Vec2): boolean {
@@ -222,21 +252,11 @@ export function computeTrajectoryPreview(
       result.ghostBallPos = hit.point;
       result.firstContactBallId = hit.ball.id;
       if (mode === 'full') {
-        const objDir = Vec2.normalize(Vec2.sub(hit.ball.pos, hit.point));
-        result.objectBallPath.push({
-          from: hit.ball.pos,
-          to: Vec2.add(hit.ball.pos, Vec2.scale(objDir, OBJECT_BALL_PREVIEW_LENGTH)),
-        });
-
-        // Where the cue ball goes after contact. On a full-ball hit it's driven purely by the
-        // spin; on a cut it also slides off along the tangent, which is the "natural" path a
-        // stun shot takes.
-        const travelled = Vec2.distance(cue.pos, hit.point);
-        const after = cueBallAfterContact(dir, objDir, spin, travelled, power);
-        if (after) {
-          result.cueAfterPath.push({ from: hit.point, to: Vec2.add(hit.point, after) });
-          result.cueRestPos = Vec2.add(hit.point, after);
-        }
+        // Both onward paths come from actually playing the shot, cushions, spin and all.
+        const paths = simulatePaths(balls, cueBallId, angle, power, spin);
+        result.objectBallPath = toSegments(paths.objectBall, hit.ball.pos);
+        result.cueAfterPath = toSegments(paths.cueAfter, hit.point);
+        result.cueRestPos = paths.cueRest;
       }
       break;
     }

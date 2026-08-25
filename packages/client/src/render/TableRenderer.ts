@@ -1420,8 +1420,17 @@ export class TableRenderer {
       g.stroke({ width: 3, color: 0x34e2b0, alpha: 0.7 });
     }
     if (preview.cueRestPos) {
-      g.circle(preview.cueRestPos.x, preview.cueRestPos.y, BALL_RADIUS);
-      g.stroke({ width: 2.5, color: 0x34e2b0, alpha: 0.75 });
+      // A ghost cue ball rather than a thin ring. This marker is the entire feedback loop for
+      // spin — it's how you find out that below-centre brings the ball back — so it has to read
+      // as "the cue ball ends up *here*" at a glance, not as another faint guide line.
+      const { x, y } = preview.cueRestPos;
+      g.circle(x, y, BALL_RADIUS).fill({ color: 0x34e2b0, alpha: 0.16 });
+      g.circle(x, y, BALL_RADIUS).stroke({ width: 3, color: 0x34e2b0, alpha: 0.9 });
+      // Crosshair through it, so it can't be mistaken for a ball already on the table.
+      const tick = BALL_RADIUS * 0.55;
+      g.moveTo(x - tick, y).lineTo(x + tick, y);
+      g.moveTo(x, y - tick).lineTo(x, y + tick);
+      g.stroke({ width: 2, color: 0x34e2b0, alpha: 0.8 });
     }
     void cueBallId;
   }

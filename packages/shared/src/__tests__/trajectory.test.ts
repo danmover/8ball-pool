@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BALL_RADIUS,
-  MAX_SHOT_SPEED,
-  MIN_SHOT_SPEED,
+  applyCueStrike,
   computeTrajectoryPreview,
   pathIsClear,
   stepSimulation,
@@ -10,7 +9,7 @@ import {
 import type { Ball } from '../types.js';
 
 function ball(id: number, x: number, y: number): Ball {
-  return { id, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
+  return { id, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
 }
 
 describe('pathIsClear', () => {
@@ -46,10 +45,10 @@ describe('pathIsClear', () => {
 
 describe('cue ball preview', () => {
   function cueBall(x: number, y: number): Ball {
-    return { id: 0, kind: 'cue', pos: { x, y }, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
+    return { id: 0, kind: 'cue', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
   }
   function objectBall(x: number, y: number): Ball {
-    return { id: 1, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, spin: 0, spinV: 0, pocketed: false };
+    return { id: 1, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
   }
 
   it('predicts the cue ball moving backwards with draw and forwards with follow', () => {
@@ -75,15 +74,14 @@ describe('cue ball preview', () => {
     );
 
     const cue = cueBall(400, 500);
-    const speed = MIN_SHOT_SPEED + power * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
-    cue.vel = { x: speed, y: 0 };
-    cue.spinV = -spin.y;
+    applyCueStrike(cue, 0, power, spin);
     const balls = [cue, objectBall(900, 500)];
     for (let i = 0; i < 900 && !stepSimulation(balls, 1 / 60).settled; i++);
 
-    // Within a couple of ball widths is close enough to aim by; the point is that it isn't
-    // predicting the opposite end of the table.
-    expect(Math.abs(cue.pos.x - preview.cueRestPos!.x)).toBeLessThan(BALL_RADIUS * 4);
+    // The guide plays the shot out with the real engine now, so these should agree to within
+    // the little the preview's time cap can miss — not to within "the same half of the table",
+    // which is all the old approximation could promise.
+    expect(Math.abs(cue.pos.x - preview.cueRestPos!.x)).toBeLessThan(BALL_RADIUS);
   });
 
   it('sends the cue ball off sideways on a thin cut even with no spin', () => {

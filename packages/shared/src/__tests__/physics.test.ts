@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { stepSimulation } from '../physics.js';
+import { applyCueStrike, contactVelocity, stepSimulation } from '../physics.js';
+import { Vec2 } from '../vector.js';
 import { rackBalls } from '../rack.js';
 import { BALL_RADIUS, CUE_BALL_ID, TABLE_LENGTH, TABLE_WIDTH } from '../constants.js';
 import type { Ball } from '../types.js';
 
 function ball(id: number, x: number, y: number, vx = 0, vy = 0): Ball {
-  return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, spin: 0, spinV: 0, pocketed: false };
+  return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
 }
 
 describe('rackBalls', () => {
@@ -98,96 +99,161 @@ describe('cue ball control (spin)', () => {
   /**
    * Fires the cue ball straight down the table into a stationary object ball.
    *
+   * `tip` is where the cue strikes, exactly as the spin pad reports it: positive y is *below*
+   * centre, which is draw.
+   *
    * Speeds and distances here are chosen so the object ball comes to rest *before* the far
    * cushion. An earlier version of these tests used a firm shot, the object ball rebounded off
    * the end rail and struck the cue ball a second time, and every assertion about where the cue
    * ball finished was really measuring that second collision.
    */
   function shot(opts: {
-    spinV?: number;
-    spin?: number;
+    tip?: { x: number; y: number };
     cueX?: number;
     targetX?: number;
-    speed?: number;
+    power?: number;
   }): { cue: Ball; target: Ball; contactX: number } {
     const cueX = opts.cueX ?? 400;
     const targetX = opts.targetX ?? 800;
-    const cue = ball(CUE_BALL_ID, cueX, 500, opts.speed ?? 700, 0);
-    cue.spinV = opts.spinV ?? 0;
-    cue.spin = opts.spin ?? 0;
+    const cue = ball(CUE_BALL_ID, cueX, 500);
+    applyCueStrike(cue, 0, opts.power ?? 0.4, opts.tip ?? { x: 0, y: 0 });
     const target = ball(1, targetX, 500);
     const balls = [cue, target];
-    for (let i = 0; i < 900 && !stepSimulation(balls, 1 / 60).settled; i++);
+
+    // Run until the cue ball has been still for a while, rather than until it is *first* slow.
+    // A draw shot passes through zero velocity as it reverses, so an instantaneous rest test
+    // stops the clock at the moment of contact and reports no draw whatsoever.
+    let stillFor = 0;
+    for (let i = 0; i < 4000; i++) {
+      stepSimulation(balls, 1 / 240);
+      stillFor = Vec2.length(cue.vel) < 3 ? stillFor + 1 / 240 : 0;
+      if (stillFor > 0.3) break;
+    }
     return { cue, target, contactX: targetX - BALL_RADIUS * 2 };
   }
 
-  it('keeps every shot clear of the far cushion, so nothing rebounds into the cue ball', () => {
-    for (const spinV of [-1, 0, 1]) {
-      const { target } = shot({ spinV });
-      expect(target.pos.x).toBeLessThan(TABLE_LENGTH - BALL_RADIUS * 2);
+  const DRAW = { x: 0, y: 1 };
+  const FOLLOW = { x: 0, y: -1 };
+  const CENTRE = { x: 0, y: 0 };
+
+  it('strikes the object ball exactly once, so nothing rebounds back into the readings', () => {
+    // The guarantee every measurement below depends on. An earlier version of these tests let
+    // the object ball rebound off the end rail and hit the cue ball a second time, and every
+    // assertion about where the cue ball finished was really measuring that second collision.
+    for (const tip of [DRAW, CENTRE, FOLLOW]) {
+      const cue = ball(CUE_BALL_ID, 400, 500);
+      applyCueStrike(cue, 0, 0.4, tip);
+      const target = ball(1, 800, 500);
+      const balls = [cue, target];
+      let contacts = 0;
+      let stillFor = 0;
+      for (let i = 0; i < 4000; i++) {
+        const { events } = stepSimulation(balls, 1 / 240);
+        contacts += events.filter((e) => e.type === 'ballCollision').length;
+        stillFor = Vec2.length(cue.vel) < 3 ? stillFor + 1 / 240 : 0;
+        if (stillFor > 0.3) break;
+      }
+      expect(contacts).toBe(1);
     }
   });
 
   it('sends the object ball on regardless of the spin used', () => {
-    for (const spinV of [-1, 0, 1]) {
-      const { target } = shot({ spinV });
+    for (const tip of [DRAW, CENTRE, FOLLOW]) {
+      const { target } = shot({ tip });
       expect(target.pos.x).toBeGreaterThan(800);
       expect(Math.abs(target.pos.y - 500)).toBeLessThan(2);
     }
   });
 
   it('draws the cue ball back behind the contact point with backspin', () => {
-    const { cue, contactX } = shot({ spinV: -1 });
+    const { cue, contactX } = shot({ tip: DRAW });
     expect(cue.pos.x).toBeLessThan(contactX - 40);
   });
 
   it('leaves the cue ball near the contact point on a stun shot', () => {
-    const { cue, contactX } = shot({ spinV: 0 });
-    expect(Math.abs(cue.pos.x - contactX)).toBeLessThan(40);
+    // Struck at the height that makes the ball roll naturally straight away is *not* a stun —
+    // a stun is centre ball over a short distance, before the cloth has turned skid into roll.
+    const { cue, contactX } = shot({ tip: CENTRE, cueX: 780, targetX: 900, power: 0.16 });
+    expect(Math.abs(cue.pos.x - contactX)).toBeLessThan(60);
   });
 
   it('orders draw, stun and follow correctly along the shot line', () => {
-    const draw = shot({ spinV: -1 }).cue.pos.x;
-    const stun = shot({ spinV: 0 }).cue.pos.x;
-    const follow = shot({ spinV: 1 }).cue.pos.x;
+    const draw = shot({ tip: DRAW }).cue.pos.x;
+    const stun = shot({ tip: CENTRE }).cue.pos.x;
+    const follow = shot({ tip: FOLLOW }).cue.pos.x;
     expect(draw).toBeLessThan(stun);
     expect(stun).toBeLessThan(follow);
   });
 
   it('loses its bite over distance, so a long screw draws back less', () => {
-    // Both shots arrive at the object ball at the same speed; only the distance travelled to
-    // get there differs, which isolates the decay from everything else.
-    const near = shot({ spinV: -1, cueX: 790, targetX: 1100, speed: 865 });
-    const far = shot({ spinV: -1, cueX: 150, targetX: 1100, speed: 1100 });
+    // Same strike, same object ball; only the distance the cue ball covers on the way there
+    // differs. Sliding friction rubs the backspin off into natural roll as it travels, so the
+    // long one arrives with less to give — no decay constant required, it just happens.
+    const near = shot({ tip: DRAW, cueX: 800, targetX: 1000, power: 0.3 });
+    const far = shot({ tip: DRAW, cueX: 120, targetX: 1000, power: 0.3 });
     const nearDraw = near.contactX - near.cue.pos.x;
     const farDraw = far.contactX - far.cue.pos.x;
     expect(nearDraw).toBeGreaterThan(farDraw);
   });
 
-  it('curves the cue ball sideways with english on a firm shot', () => {
-    const cue = ball(CUE_BALL_ID, 200, 500, 3200, 0);
-    cue.spin = 1;
-    const balls = [cue];
-    for (let i = 0; i < 900 && !stepSimulation(balls, 1 / 60).settled; i++);
-    // Struck dead straight down the table, so any drift off the line is swerve.
-    expect(Math.abs(cue.pos.y - 500)).toBeGreaterThan(5);
+  it('sends a ball struck 2/5 of a radius above centre into natural roll immediately', () => {
+    // The textbook result, and a good check that the strike model is doing real mechanics:
+    // at that exact height there is no skid at all, so the contact patch starts still.
+    const cue = ball(CUE_BALL_ID, 400, 500);
+    applyCueStrike(cue, 0, 0.5, { x: 0, y: -0.8 }); // -0.8 of the 0.5R limit = 2/5 R above centre
+    expect(Vec2.length(contactVelocity(cue))).toBeLessThan(1);
+  });
+
+  it('skids before it grabs when struck through the centre', () => {
+    const cue = ball(CUE_BALL_ID, 400, 500);
+    applyCueStrike(cue, 0, 0.5, CENTRE);
+    // A centre-ball hit starts with no spin at all, so the whole ball is sliding.
+    expect(Vec2.length(contactVelocity(cue))).toBeCloseTo(Vec2.length(cue.vel), 5);
+  });
+
+  it('changes the angle off a cushion with english', () => {
+    const angleOff = (tipX: number): number => {
+      // Aimed at the top rail around x = 700 — comfortably between the corner mouth and the
+      // side pocket, so the ball meets cushion rather than falling in a hole.
+      const from = { x: 400, y: 800 };
+      const cue = ball(CUE_BALL_ID, from.x, from.y);
+      const angle = Math.atan2(BALL_RADIUS - from.y, 700 - from.x);
+      applyCueStrike(cue, angle, 0.5, { x: tipX, y: 0 });
+      for (let i = 0; i < 2000; i++) {
+        stepSimulation([cue], 1 / 240);
+        if (cue.vel.y > 0) break; // rebounded, now heading back down the table
+      }
+      expect(cue.pocketed).toBe(false);
+      return Math.atan2(cue.vel.y, cue.vel.x);
+    };
+    // Running and reverse english must send it off at genuinely different angles.
+    expect(Math.abs(angleOff(1) - angleOff(-1))).toBeGreaterThan(0.05);
   });
 
   it('throws the object ball off the true line when english is applied', () => {
-    const clean = shot({ spin: 0 }).target.pos.y;
-    const thrown = shot({ spin: 1 }).target.pos.y;
+    const clean = shot({ tip: CENTRE }).target.pos.y;
+    const thrown = shot({ tip: { x: 1, y: 0 } }).target.pos.y;
     expect(Math.abs(thrown - 500)).toBeGreaterThan(Math.abs(clean - 500));
   });
 
   it('clears all spin once a ball comes to rest', () => {
-    const { cue, target } = shot({ spinV: -1, spin: 1 });
-    expect(cue.spin).toBe(0);
-    expect(cue.spinV).toBe(0);
-    expect(target.spin).toBe(0);
+    // Settles everything, not just the cue ball, since this is about the resting state.
+    const cue = ball(CUE_BALL_ID, 400, 500);
+    applyCueStrike(cue, 0, 0.4, { x: 1, y: 1 });
+    const target = ball(1, 800, 500);
+    const balls = [cue, target];
+    for (let i = 0; i < 4000 && !stepSimulation(balls, 1 / 240).settled; i++);
+
+    for (const b of balls) {
+      expect(Vec2.length(b.vel)).toBe(0);
+      expect(b.angVel.x).toBe(0);
+      expect(b.angVel.y).toBe(0);
+      expect(b.angVel.z).toBe(0);
+    }
   });
 
   it('still sends a dead-straight centre-ball shot straight, as before', () => {
-    const { cue, target } = shot({ spinV: 0, spin: 0 });
+    const { cue, target } = shot({ tip: CENTRE });
     expect(Math.abs(target.pos.y - 500)).toBeLessThan(1);
     expect(Math.abs(cue.pos.y - 500)).toBeLessThan(1);
   });

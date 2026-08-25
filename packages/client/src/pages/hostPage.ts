@@ -61,6 +61,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let rendererPromise: Promise<TableRenderer> | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
+  /** Listeners registered outside the page root, to be undone when the page is torn down. */
+  const cleanups: (() => void)[] = [];
   let lastState: GameState | null = null;
   let lastRoom: RoomStateDTO | null = null;
   let placing = false;
@@ -109,7 +111,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     <div class="host-spin-wrap" id="hostSpinWrap" style="display:none">
       <div class="spin-label">SPIN</div>
       <div id="hostSpin"></div>
-      <div class="spin-hint">Below centre draws back · above follows through</div>
+      <div class="spin-hint">Arrow keys to nudge · C to centre</div>
     </div>
     <div id="lobbyWrap"></div>
   `;
@@ -286,6 +288,37 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       if (lastAimAngle !== null) renderPreview(lastAimAngle);
     });
     root.querySelector<HTMLElement>('#hostSpin')!.appendChild(spinPad.el);
+
+    // Keyboard shortcuts, because setting spin on a desktop by dragging a small circle with the
+    // mouse and *then* dragging the table to aim is two hands' worth of work for one shot.
+    const onSpinKey = (e: KeyboardEvent): void => {
+      if (hostSpinWrap.style.display === 'none') return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const step = 0.25;
+      switch (e.key) {
+        case 'ArrowUp':
+          spinPad?.nudge(0, -step);
+          break;
+        case 'ArrowDown':
+          spinPad?.nudge(0, step);
+          break;
+        case 'ArrowLeft':
+          spinPad?.nudge(-step, 0);
+          break;
+        case 'ArrowRight':
+          spinPad?.nudge(step, 0);
+          break;
+        case 'c':
+        case 'C':
+          spinPad?.reset();
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onSpinKey);
+    cleanups.push(() => window.removeEventListener('keydown', onSpinKey));
 
     aimController = new AimController(canvasEl, {
       onAimChange: (angle, power) => {
@@ -822,6 +855,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     socket.off('errorMessage');
     socket.off('emote');
     cancelAnimationFrame(clockRaf);
+    for (const undo of cleanups) undo();
     aimController?.destroy();
     renderer?.destroy();
   };
