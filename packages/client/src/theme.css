@@ -938,36 +938,65 @@
   z-index: 2;
 }
 
-/* --- Animated felt weave behind the locker --- */
+/* --- Animated backdrop behind the locker and trick shots ---
+   Two layers: a woven cloth that drifts, and pool balls floating slowly across it. The
+   previous version was a 2px hatch under a heavy vignette drifting over 40 seconds, which on
+   a real screen read as a still image. */
 
-.profile-page {
+.profile-page,
+.challenges-page {
   position: relative;
 }
 
-.profile-page::before {
+.profile-page::before,
+.challenges-page::before {
   content: '';
   position: fixed;
   inset: -10%;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
-  /* Heavy vignette over a light weave: at full strength the cross-hatch swamped the item
-     cards. It's meant to read as cloth in the room, not as a pattern you look at. */
   background-image:
-    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(6, 10, 8, 0.72), rgba(6, 10, 8, 0.94) 90%),
+    radial-gradient(ellipse 85% 75% at 50% 45%, rgba(6, 10, 8, 0.55), rgba(6, 10, 8, 0.9) 92%),
     repeating-linear-gradient(
       45deg,
-      color-mix(in srgb, var(--theme-felt) 30%, transparent) 0 2px,
-      transparent 2px 14px
+      color-mix(in srgb, var(--theme-felt) 34%, transparent) 0 2px,
+      transparent 2px 13px
     ),
     repeating-linear-gradient(
       -45deg,
-      color-mix(in srgb, var(--theme-felt-dark) 30%, transparent) 0 2px,
-      transparent 2px 14px
+      color-mix(in srgb, var(--theme-felt-dark) 34%, transparent) 0 2px,
+      transparent 2px 13px
     );
-  animation: weaveDrift 40s linear infinite;
+  animation: weaveDrift 18s linear infinite;
 }
 
-/* The vignette layer is first, so it stays put while the two weave layers drift. */
+/* Drifting balls, drawn as radial gradients so the whole layer is one element. Each is a
+   different colour from the ball palette, and they move at different rates for parallax. */
+.profile-page::after,
+.challenges-page::after {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  /* Small, soft and low-contrast on purpose: at full size and opacity these read as UI
+     elements that have gone wrong rather than as depth behind the page. */
+  opacity: 0.22;
+  background-image:
+    radial-gradient(circle 22px at 12% 22%, #ffcf2e 0 20px, transparent 22px),
+    radial-gradient(circle 17px at 78% 16%, #2a6ee0 0 15px, transparent 17px),
+    radial-gradient(circle 26px at 88% 74%, #f03a2e 0 24px, transparent 26px),
+    radial-gradient(circle 14px at 26% 82%, #8b4bd8 0 12px, transparent 14px),
+    radial-gradient(circle 19px at 58% 52%, #17a85a 0 17px, transparent 19px),
+    radial-gradient(circle 13px at 42% 12%, #ff8a1f 0 11px, transparent 13px),
+    radial-gradient(circle 16px at 8% 58%, #2a6ee0 0 14px, transparent 16px),
+    radial-gradient(circle 20px at 68% 88%, #ffcf2e 0 18px, transparent 20px),
+    radial-gradient(circle 15px at 94% 38%, #17a85a 0 13px, transparent 15px);
+  background-repeat: no-repeat;
+  filter: blur(5px);
+  animation: ballsDrift 42s ease-in-out infinite alternate;
+}
+
 @keyframes weaveDrift {
   from {
     background-position:
@@ -983,7 +1012,38 @@
   }
 }
 
-body.reduce-motion .profile-page::before {
+/* Each ball takes its own path, so the group never reads as one sliding sheet. */
+@keyframes ballsDrift {
+  from {
+    background-position:
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      90px 140px,
+      -120px 80px,
+      -70px -110px,
+      140px -60px,
+      -160px 40px,
+      60px 120px,
+      110px -70px,
+      -90px -130px,
+      -140px 90px;
+  }
+}
+
+body.reduce-motion .profile-page::before,
+body.reduce-motion .challenges-page::before,
+body.reduce-motion .profile-page::after,
+body.reduce-motion .challenges-page::after {
   animation: none;
 }
 

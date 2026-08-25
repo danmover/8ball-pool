@@ -2,26 +2,32 @@
   /* Cartoon pool hall: cream panels in maple frames, felt green and gold accents, and the
      same crisp dark ink outline the balls and cue carry. The dark tones survive only as the
      room behind the table. */
-  --ink: #1a1410;
-  --ink-soft: rgba(26, 20, 16, 0.55);
+  --ink: #21160f;
+  --ink-soft: rgba(33, 22, 15, 0.55);
 
-  --paper: #fdf3dd;
-  --paper-2: #f2e2bf;
-  --paper-3: #e4cf9f;
+  /* Warmer, creamier paper with a touch more separation between the three steps, so panels
+     read as lit rather than flat. */
+  --paper: #fff6e4;
+  --paper-2: #f6e5c4;
+  --paper-3: #e6cfa2;
 
-  --wood: #c99a63;
-  --wood-dark: #7d5533;
-  --wood-deep: #4a3120;
+  /* Richer maple with a redder heart — the old wood was close to grey-brown at small sizes. */
+  --wood: #d2a065;
+  --wood-dark: #8a5a33;
+  --wood-deep: #4d3018;
 
-  --felt: #2c9d5c;
-  --felt-dark: #17703d;
+  --felt: #2fa864;
+  --felt-dark: #157a41;
+  --felt-deep: #0d5730;
 
-  --gold: #ffc94d;
-  --gold-dark: #b8862a;
+  --gold: #ffcb52;
+  --gold-light: #ffe9a3;
+  --gold-dark: #bf8a24;
   --accent: #1f9d63;
-  --accent-2: #2a6ee0;
-  --danger: #d8443a;
-  --muted: #8a7357;
+  --accent-2: #2f77e8;
+  --plum: #7a4aad;
+  --danger: #de4a3c;
+  --muted: #8a7050;
 
   /* Set per table theme by applyTableThemeToPage; these are the Classic Green fallbacks. */
   --surround: radial-gradient(ellipse 90% 70% at 50% 40%, #2a3a2f 0%, #131a17 60%, #0a0d0c 100%);

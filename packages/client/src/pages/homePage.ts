@@ -54,7 +54,19 @@ export function renderHomePage(root: HTMLElement): () => void {
           <div class="home-player" id="homePlayer"></div>
         </header>
 
-        <section class="mode-rail" id="modeRail"></section>
+        <section class="mode-section">
+          <div class="section-head">
+            <h2>Choose a game</h2>
+            <div class="rail-nav">
+              <button class="rail-arrow" id="railPrev" title="Previous">${icon('back', { size: 18 })}</button>
+              <button class="rail-arrow" id="railNext" title="Next">${icon('back', { size: 18 })}</button>
+            </div>
+          </div>
+          <div class="mode-rail-wrap">
+            <div class="mode-rail" id="modeRail"></div>
+          </div>
+          <div class="rail-dots" id="railDots"></div>
+        </section>
 
         <section class="home-actions">
           <button class="play-btn" id="playSolo">
@@ -96,6 +108,10 @@ export function renderHomePage(root: HTMLElement): () => void {
 
   const backdrop = root.querySelector<HTMLElement>('#homeBackdrop')!;
   const railEl = root.querySelector<HTMLElement>('#modeRail')!;
+  const railWrap = root.querySelector<HTMLElement>('.mode-rail-wrap')!;
+  const dotsEl = root.querySelector<HTMLElement>('#railDots')!;
+  const prevBtn = root.querySelector<HTMLButtonElement>('#railPrev')!;
+  const nextBtn = root.querySelector<HTMLButtonElement>('#railNext')!;
   const playerEl = root.querySelector<HTMLElement>('#homePlayer')!;
   const joinError = root.querySelector<HTMLElement>('#joinError')!;
 
@@ -188,8 +204,53 @@ export function renderHomePage(root: HTMLElement): () => void {
         localStorage.setItem('8ball:lastMode', selectedMode);
         drawModes();
         updateSoloSub();
+        scrollToSelected();
       });
     });
+
+    drawDots();
+  }
+
+  /** Page dots under the rail — a readable position indicator instead of a scrollbar. */
+  function drawDots(): void {
+    dotsEl.innerHTML = modes
+      .map(
+        (mode) =>
+          `<button class="rail-dot${mode.id === selectedMode ? ' active' : ''}"
+                   data-mode="${mode.id}" title="${mode.name}"></button>`
+      )
+      .join('');
+    dotsEl.querySelectorAll<HTMLElement>('.rail-dot').forEach((dot) => {
+      dot.addEventListener('click', () => {
+        selectedMode = dot.dataset.mode as GameMode;
+        localStorage.setItem('8ball:lastMode', selectedMode);
+        drawModes();
+        updateSoloSub();
+        scrollToSelected();
+      });
+    });
+  }
+
+  /** Brings the selected tile into view, centred where there's room for it. */
+  function scrollToSelected(): void {
+    const tile = railEl.querySelector<HTMLElement>('.mode-tile.active');
+    tile?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  /** One tile's worth of scroll, so the arrows move in whole cards rather than pixels. */
+  function railStep(): number {
+    const tile = railEl.querySelector<HTMLElement>('.mode-tile');
+    const gap = parseFloat(getComputedStyle(railEl).columnGap || '12') || 12;
+    return (tile?.offsetWidth ?? 240) + gap;
+  }
+
+  /** Greys out an arrow when there's nothing further that way. */
+  function updateArrows(): void {
+    const max = railEl.scrollWidth - railEl.clientWidth;
+    prevBtn.disabled = railEl.scrollLeft <= 2;
+    nextBtn.disabled = railEl.scrollLeft >= max - 2;
+    railWrap.classList.toggle('at-start', railEl.scrollLeft <= 2);
+    railWrap.classList.toggle('at-end', railEl.scrollLeft >= max - 2);
   }
 
   function updateSoloSub(): void {
@@ -211,10 +272,47 @@ export function renderHomePage(root: HTMLElement): () => void {
       ${done ? '' : `<span class="tile-reward">+${challenge.xp} XP &amp; a spin</span>`}`;
   }
 
+  prevBtn.addEventListener('click', () => {
+    railEl.scrollBy({ left: -railStep(), behavior: 'smooth' });
+  });
+  nextBtn.addEventListener('click', () => {
+    railEl.scrollBy({ left: railStep(), behavior: 'smooth' });
+  });
+  railEl.addEventListener('scroll', updateArrows, { passive: true });
+  window.addEventListener('resize', updateArrows);
+
+  // Drag-to-scroll, so the rail feels like a carousel on a desktop too. A small threshold
+  // keeps a normal click on a tile from being swallowed as a drag.
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragging = false;
+  railEl.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartScroll = railEl.scrollLeft;
+  });
+  railEl.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    if (Math.abs(dx) < 4) return;
+    railWrap.classList.add('dragging');
+    railEl.scrollLeft = dragStartScroll - dx;
+  });
+  const endDrag = (): void => {
+    dragging = false;
+    railWrap.classList.remove('dragging');
+  };
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
   drawPlayer();
   drawModes();
   updateSoloSub();
   drawChallenge();
+  requestAnimationFrame(() => {
+    scrollToSelected();
+    updateArrows();
+  });
 
   // ---- Actions ----
 
