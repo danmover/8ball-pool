@@ -21,7 +21,26 @@ export const SIDE_MOUTH = 58;
 /** Radius of the rounded cushion nose at each mouth end — what a rattling ball bounces off. */
 export const JAW_RADIUS = 9;
 
-export const RESTITUTION_CUSHION = 0.78;
+/**
+ * Cushion liveliness, from a gentle roll to a full-power smash.
+ *
+ * This used to be one number. Real rubber returns most of a slow ball and swallows much more
+ * of a fast one, because harder compression puts more energy into deforming the cushion than
+ * into the ball — which is why a soft safety off a rail and a power break behave nothing alike.
+ */
+export const CUSHION_RESTITUTION_SLOW = 0.86;
+export const CUSHION_RESTITUTION_FAST = 0.68;
+
+/**
+ * How far above the ball's centre the cushion nose makes contact, in table units.
+ *
+ * A real cushion is set so its nose meets the ball above the equator — around 0.635 of the
+ * ball's diameter above the cloth, against a centre at 0.5. The normal impulse therefore
+ * applies a torque as well as a push, which is what sends a ball off a rail with forward roll
+ * instead of leaving it dead.
+ */
+export const CUSHION_NOSE_RISE = BALL_RADIUS * 0.27;
+
 export const RESTITUTION_BALL = 0.96;
 
 export const REST_EPSILON = 3; // below this speed (tu/s) a ball is considered stopped
@@ -79,6 +98,17 @@ export const MU_CUSHION = 0.2;
  * the contact point has to stay on the sphere.
  */
 export const MAX_TIP_OFFSET = 0.5;
+
+/**
+ * How far the pad can actually reach, past the safe grip.
+ *
+ * The spin pad used to clamp silently at the safe limit, which made maximum english a free
+ * option — there was no reason ever to use less. Letting it reach further, with a rising
+ * chance of the tip slipping, restores the trade real players actually make.
+ */
+export const MISCUE_TIP_OFFSET = 0.66;
+/** Chance of miscuing at the very edge of the pad. */
+export const MISCUE_MAX_CHANCE = 0.75;
 
 /** Deceleration while skidding, in table units/s². */
 export const SLIDE_DECEL = MU_SLIDE * GRAVITY;

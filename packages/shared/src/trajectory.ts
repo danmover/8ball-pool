@@ -156,7 +156,10 @@ function simulatePaths(
   const out: SimulatedPaths = { cueAfter: [], objectBall: [], cueRest: null };
   if (!cue) return out;
 
-  applyCueStrike(cue, angle, power, tip);
+  // Never miscue in the preview: the guide's job is to show what the shot does *if it comes
+  // off*, and a line that changed on every redraw would be worse than no line. The risk is
+  // communicated by the pad's danger band instead.
+  applyCueStrike(cue, angle, power, tip, () => 1);
 
   let struck: Ball | null = null;
   let elapsed = 0;

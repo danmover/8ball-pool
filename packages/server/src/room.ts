@@ -401,10 +401,12 @@ export class Room {
     this.preShotLowestBall = lowestBallId(this.gameState);
     // The whole shot — speed, spin, everything — comes out of where the tip meets the ball.
     // `input.spin` is that contact point, straight off the spin pad.
-    applyCueStrike(cue, input.angle, input.power, input.spin);
+    const strike = applyCueStrike(cue, input.angle, input.power, input.spin);
 
     this.gameState.phase = 'shot_in_progress';
     this.shotEvents = [];
+    // Tell everyone the tip slipped, or the shot just looks broken rather than risky.
+    if (strike.miscued) this.io.to(this.code).emit('simEvent', { type: 'miscue' });
     this.io.to(this.code).emit('shotFired', input);
     this.broadcastGameState();
     this.startSimLoop();

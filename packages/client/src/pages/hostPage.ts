@@ -911,6 +911,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       lastPotPos = ev.pos;
       // The celebrator owns the pot flash, combo callouts, sound and XP toasts.
       celebrator?.onPot(ev.pos, ev.ballId);
+    } else if (ev.type === 'miscue') {
+      // Say so out loud. A miscue looks identical to a badly played shot from the outside, and
+      // "the game is broken" is the wrong lesson to take from striking too far off centre.
+      showToast(root.querySelector<HTMLElement>('#toastStack')!, 'Miscue! Struck too far off centre', 'foul');
+      if (settings.soundEnabled) sfx.playMiscue(settings.soundVolume);
     } else if (ev.type === 'shotSettled') {
       onShotSettled();
     }

@@ -1799,3 +1799,28 @@ button.mini.secondary {
 body.reduce-motion .star.big.earned {
   animation: none;
 }
+
+/* The tip's safe grip, drawn on the pad.
+   The pad reaches past it deliberately — that outer band is where a miscue becomes possible,
+   which is what stops maximum english being a free option. The ring is sized from the same
+   shared constants the physics uses, so the picture and the rule can't drift apart. */
+.spin-safe {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(26, 20, 16, 0.3);
+  pointer-events: none;
+}
+
+.spin-control.risky .spin-pad {
+  box-shadow:
+    0 0 0 2px var(--danger),
+    inset -6px -8px 14px rgba(26, 20, 16, 0.25);
+}
+
+.spin-control.risky .spin-readout {
+  color: var(--danger);
+}
+
+.spin-control.risky .spin-safe {
+  border-color: rgba(200, 60, 45, 0.55);
+}

@@ -4,13 +4,17 @@ import { CUSHIONS, JAWS, POCKETS, mouthDepth, pocketContaining } from './table.j
 import {
   BALL_RADIUS,
   MAX_SHOT_SPEED,
+  CUSHION_NOSE_RISE,
+  CUSHION_RESTITUTION_FAST,
+  CUSHION_RESTITUTION_SLOW,
   MAX_TIP_OFFSET,
   MIN_SHOT_SPEED,
+  MISCUE_MAX_CHANCE,
+  MISCUE_TIP_OFFSET,
   MU_BALL,
   MU_CUSHION,
   REST_EPSILON,
   RESTITUTION_BALL,
-  RESTITUTION_CUSHION,
   ROLL_DECEL,
   SIM_HZ,
   SLIDE_DECEL,
@@ -133,6 +137,19 @@ function applyClothFriction(ball: Ball, dt: number): void {
  * the rail and straight into the pocket, while a ball arriving at an angle clips the inside of
  * a jaw and rattles — a real pocket, rather than a hole in a fence.
  */
+/**
+ * How lively the cushion is at a given impact speed.
+ *
+ * A single constant was wrong in both directions: real rubber returns most of a gentle roll
+ * and swallows a lot of a hard smash, because the harder you compress it the more energy goes
+ * into deforming it rather than into the ball. Getting this right is what makes soft safety
+ * play off a rail behave differently from a power break.
+ */
+function cushionRestitution(speed: number): number {
+  const t = Math.min(1, speed / MAX_SHOT_SPEED);
+  return CUSHION_RESTITUTION_SLOW + (CUSHION_RESTITUTION_FAST - CUSHION_RESTITUTION_SLOW) * t;
+}
+
 function resolveCushions(ball: Ball, events: SimEvent[]): void {
   const r = BALL_RADIUS;
   let bounced = false;
@@ -151,7 +168,7 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
     const t = { x: n.y, y: -n.x };
     const surface = Vec2.dot(ball.vel, t) + ball.angVel.z * r;
 
-    const jn = -vn * (1 + RESTITUTION_CUSHION);
+    const jn = -vn * (1 + cushionRestitution(-vn));
     // A tangential impulse `jt` changes the surface slide by 3.5·jt (jt of velocity plus
     // 5·jt/2R of spin acting through R), so killing it takes -2s/7. Coulomb caps it, and what
     // the cap leaves behind is exactly the residual english that widens or narrows the angle.
@@ -159,6 +176,19 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
 
     ball.vel = Vec2.add(ball.vel, Vec2.add(Vec2.scale(n, jn), Vec2.scale(t, jt)));
     ball.angVel.z += ((5 / 2) * jt) / r;
+
+    // The cushion nose sits *above* the ball's centre, so the normal impulse doesn't act
+    // through it — it also applies a torque. That is why a ball picks up forward roll off a
+    // rail and runs on, instead of rebounding and then sitting there. It never touches the
+    // vertical axis, so english is unaffected.
+    //
+    // Δω = (r × J)/I with I = (2/5)mR², so the divisor is R **squared** — the lever arm here
+    // is the nose rise, not the radius, unlike every other contact in this file where the two
+    // happen to be the same and one R cancels.
+    const rise = (5 * CUSHION_NOSE_RISE * jn) / (2 * r * r);
+    ball.angVel.x += rise * n.y;
+    ball.angVel.y -= rise * n.x;
+
     bounced = true;
   };
 
@@ -306,12 +336,12 @@ export function applyCueStrike(
   cue: Ball,
   angle: number,
   power: number,
-  tip: { x: number; y: number } = { x: 0, y: 0 }
-): void {
-  const speed = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
+  tip: { x: number; y: number } = { x: 0, y: 0 },
+  rng: () => number = Math.random
+): StrikeResult {
+  let speed = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
   const dir = Vec2.fromAngle(angle);
 
-  // Keep the tip on the ball: past about half a radius a real cue miscues.
   let tx = tip.x;
   let ty = tip.y;
   const mag = Math.hypot(tx, ty);
@@ -319,8 +349,31 @@ export function applyCueStrike(
     tx /= mag;
     ty /= mag;
   }
-  const offsetX = tx * MAX_TIP_OFFSET;
-  const offsetY = ty * MAX_TIP_OFFSET;
+
+  // The pad's full travel reaches past the tip's safe grip, so the outer band is a gamble
+  // rather than a free upgrade. Beyond MAX_TIP_OFFSET the chance of slipping climbs steeply,
+  // which is exactly why real players respect extreme english instead of always using it.
+  const offset = Math.min(1, mag) * MISCUE_TIP_OFFSET;
+  let miscued = false;
+  if (offset > MAX_TIP_OFFSET) {
+    const over = (offset - MAX_TIP_OFFSET) / (MISCUE_TIP_OFFSET - MAX_TIP_OFFSET);
+    miscued = rng() < over * MISCUE_MAX_CHANCE;
+  }
+
+  let offsetX = tx * MISCUE_TIP_OFFSET;
+  let offsetY = ty * MISCUE_TIP_OFFSET;
+
+  if (miscued) {
+    // A miscue is the tip skidding off the side of the ball: most of the power is lost, the
+    // spin that survives is nothing like what was asked for, and the ball wanders off line.
+    speed *= 0.22 + rng() * 0.16;
+    const scatter = (rng() - 0.5) * 0.16;
+    const off = Vec2.fromAngle(angle + scatter);
+    dir.x = off.x;
+    dir.y = off.y;
+    offsetX = (rng() - 0.5) * MAX_TIP_OFFSET;
+    offsetY = (rng() - 0.5) * MAX_TIP_OFFSET;
+  }
 
   cue.vel = Vec2.scale(dir, speed);
 
@@ -334,6 +387,13 @@ export function applyCueStrike(
     // English: offset across the line spins the ball about the vertical axis.
     z: offsetX * k,
   };
+
+  return { miscued };
+}
+
+export interface StrikeResult {
+  /** The tip slipped off the ball — the shot went nowhere near what was asked for. */
+  miscued: boolean;
 }
 
 export interface StepResult {

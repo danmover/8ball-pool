@@ -276,8 +276,8 @@ export class BotPlayer {
     const spins = this.tuning.playsPosition
       ? [
           { x: 0, y: 0 },
-          { x: 0, y: 0.85 },
-          { x: 0, y: -0.85 },
+          { x: 0, y: 0.7 },
+          { x: 0, y: -0.7 },
         ]
       : [{ x: 0, y: 0 }];
 
@@ -393,7 +393,9 @@ export class BotPlayer {
     const cue = balls.find((b) => b.id === CUE_BALL_ID);
     if (!cue) return -Infinity;
 
-    applyCueStrike(cue, candidate.shot.angle, candidate.shot.power, candidate.shot.spin);
+    // Plans the intended shot — see the note in trajectory.ts. The bot's spin values are kept
+    // inside the tip's safe grip, so it is never gambling on a miscue it can't foresee.
+    applyCueStrike(cue, candidate.shot.angle, candidate.shot.power, candidate.shot.spin, () => 1);
 
     const events: SimEvent[] = [];
     for (let i = 0; i < MAX_SIM_FRAMES; i++) {
@@ -466,7 +468,7 @@ export class BotPlayer {
     const best = Math.min(drawDist, followDist, stunDist);
     if (best === stunDist) return { x: 0, y: 0 };
     // Pad y is screen-down, so positive y is below centre — backspin.
-    return { x: 0, y: best === drawDist ? 0.8 : -0.8 };
+    return { x: 0, y: best === drawDist ? 0.7 : -0.7 };
   }
 
   /**

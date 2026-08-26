@@ -289,4 +289,6 @@ export type SimEvent =
   | { type: 'pot'; ballId: number; pos: Vec2; pocketIndex: number }
   | { type: 'cushion'; ballId: number; pos: Vec2; speed: number }
   | { type: 'ballCollision'; a: number; b: number; pos: Vec2; impulse: number }
+  /** The tip slipped off the ball — struck too far off centre to hold. */
+  | { type: 'miscue' }
   | { type: 'shotSettled' };

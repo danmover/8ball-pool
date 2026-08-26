@@ -8,6 +8,9 @@ import {
 } from '../index.js';
 import type { Ball } from '../types.js';
 
+/** Forces `applyCueStrike` never to miscue, so these tests measure mechanics, not dice. */
+const NO_MISCUE = (): number => 1;
+
 function ball(id: number, x: number, y: number): Ball {
   return { id, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
 }
@@ -74,7 +77,7 @@ describe('cue ball preview', () => {
     );
 
     const cue = cueBall(400, 500);
-    applyCueStrike(cue, 0, power, spin);
+    applyCueStrike(cue, 0, power, spin, NO_MISCUE);
     const balls = [cue, objectBall(900, 500)];
     for (let i = 0; i < 900 && !stepSimulation(balls, 1 / 60).settled; i++);
 

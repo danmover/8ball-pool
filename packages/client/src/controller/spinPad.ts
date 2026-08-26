@@ -1,3 +1,5 @@
+import { MAX_TIP_OFFSET, MISCUE_MAX_CHANCE, MISCUE_TIP_OFFSET } from '@8ball/shared';
+
 export interface SpinPad {
   el: HTMLElement;
   getValue: () => { x: number; y: number };
@@ -25,6 +27,7 @@ export function createSpinPad(onChange?: (value: { x: number; y: number }) => vo
   const pad = document.createElement('div');
   pad.className = 'spin-pad';
   pad.innerHTML = `
+    <span class="spin-safe" style="inset:${(1 - MAX_TIP_OFFSET / MISCUE_TIP_OFFSET) * 50}%"></span>
     <span class="spin-axis top">FOLLOW</span>
     <span class="spin-axis bottom">DRAW</span>
     <span class="spin-axis left">◀</span>
@@ -44,13 +47,33 @@ export function createSpinPad(onChange?: (value: { x: number; y: number }) => vo
 
   let value = { x: 0, y: 0 };
 
-  /** Plain English for where the tip is, because "0.8, -0.4" teaches nobody anything. */
+  /**
+   * Plain English for where the tip is, because "0.8, -0.4" teaches nobody anything.
+   *
+   * Percentages are of the tip's *safe grip*, not of the pad's full reach — so the one-tap DRAW
+   * preset reads "Draw 100%" rather than a baffling 76%. Past 100% you are into the band where
+   * the tip can slip, and the miscue warning appended by the caller says so.
+   */
   function describe(v: { x: number; y: number }): string {
     const parts: string[] = [];
-    const pct = (n: number): string => `${Math.round(Math.abs(n) * 100)}%`;
+    const safe = MAX_TIP_OFFSET / MISCUE_TIP_OFFSET;
+    const pct = (n: number): string => `${Math.round((Math.abs(n) / safe) * 100)}%`;
     if (Math.abs(v.y) > 0.05) parts.push(`${v.y > 0 ? 'Draw' : 'Follow'} ${pct(v.y)}`);
     if (Math.abs(v.x) > 0.05) parts.push(`${v.x > 0 ? 'Right' : 'Left'} ${pct(v.x)}`);
     return parts.length ? parts.join(' · ') : 'Centre ball';
+  }
+
+  /**
+   * How likely the tip is to slip at this offset — mirrors `applyCueStrike`'s miscue roll.
+   *
+   * The pad now reaches past the tip's safe grip, which is what stops maximum english being a
+   * free option. That trade only works if the risk is visible before you take it, so the ring
+   * turns red and the readout says so.
+   */
+  function miscueRisk(v: { x: number; y: number }): number {
+    const offset = Math.min(1, Math.hypot(v.x, v.y)) * MISCUE_TIP_OFFSET;
+    if (offset <= MAX_TIP_OFFSET) return 0;
+    return ((offset - MAX_TIP_OFFSET) / (MISCUE_TIP_OFFSET - MAX_TIP_OFFSET)) * MISCUE_MAX_CHANCE;
   }
 
   function apply(next: { x: number; y: number }, notify = true): void {
@@ -68,10 +91,15 @@ export function createSpinPad(onChange?: (value: { x: number; y: number }) => vo
       y /= mag;
     }
     value = { x, y };
-    dot.style.left = `${50 + x * 33}%`;
-    dot.style.top = `${50 + y * 33}%`;
-    readout.textContent = describe(value);
+    dot.style.left = `${50 + x * 40}%`;
+    dot.style.top = `${50 + y * 40}%`;
+
+    const risk = miscueRisk(value);
+    readout.textContent = risk > 0
+      ? `${describe(value)} — ${Math.round(risk * 100)}% miscue`
+      : describe(value);
     el.classList.toggle('spun', mag > 0.05);
+    el.classList.toggle('risky', risk > 0);
     for (const button of presets.querySelectorAll('button')) {
       button.classList.toggle('active', button.dataset.spin === `${value.x},${value.y}`);
     }
@@ -79,10 +107,14 @@ export function createSpinPad(onChange?: (value: { x: number; y: number }) => vo
   }
 
   // The three shots that matter, one tap each. Fine dragging is for everything else.
+  //
+  // These stop exactly at the edge of the tip's safe grip rather than at the edge of the pad:
+  // a one-tap preset that carried a 75% chance of miscuing would be a trap, not a shortcut.
+  const SAFE = MAX_TIP_OFFSET / MISCUE_TIP_OFFSET;
   for (const [label, x, y] of [
-    ['DRAW', 0, 1],
+    ['DRAW', 0, SAFE],
     ['STUN', 0, 0],
-    ['FOLLOW', 0, -1],
+    ['FOLLOW', 0, -SAFE],
   ] as const) {
     const button = document.createElement('button');
     button.type = 'button';

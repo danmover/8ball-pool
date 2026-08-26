@@ -227,6 +227,19 @@ export function playCushionThud(volume: number, intensity = 1): void {
   noise({ duration: 0.08, volume: 0.1 * volume * i, freq: 1400, to: 400, q: 0.6 });
 }
 
+/**
+ * Miscue: the tip skidding off the side of the ball.
+ *
+ * Deliberately ugly and unlike every other contact sound in the game — a scrape rather than a
+ * click — because the whole point is that you can tell instantly it wasn't the shot you played.
+ */
+export function playMiscue(volume: number): void {
+  // The scrape: broad noise sliding down, with no tonal centre to it.
+  noise({ duration: 0.22, volume: 0.3 * volume, freq: 3200, to: 700, q: 0.35 });
+  // A dull, wrong-sounding knock underneath.
+  tone({ freq: 150, to: 60, duration: 0.16, volume: 0.18 * volume, type: 'square' });
+}
+
 /** Pot: the ball disappears, drops, then rattles down the return. */
 export function playPocketSwish(volume: number): void {
   // Falling away into the pocket.

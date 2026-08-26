@@ -3,6 +3,7 @@ import type { Ball, Loadout, TrajectoryPreview } from '@8ball/shared';
 import {
   BALL_RADIUS,
   CORNER_MOUTH,
+  CUE_BALL_ID,
   DEFAULT_LOADOUT,
   SIDE_MOUTH,
   TABLE_LENGTH,
@@ -12,6 +13,7 @@ import {
   stepSimulation,
 } from '@8ball/shared';
 import { styleForBall } from './ballStyle';
+import { integrate, project, randomOrientation, type Mat3 } from './orientation';
 import { ParticleSystem } from './Particles';
 import { ballSetFor, styleForBallInSet, type BallSet } from './cosmetics/ballSets';
 import { cueSkinFor, type CueSkin } from './cosmetics/cueSkins';
@@ -555,16 +557,44 @@ function generateWoodCanvas(rail: string, railDark: string): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * One marking stuck to the ball's surface.
+ *
+ * The holder carries position and the radial squash; the sprite inside it carries the marking's
+ * own rotation. Splitting them is what lets a marking both foreshorten correctly as it nears
+ * the rim *and* twist on the spot when the ball is spinning about the vertical axis — a single
+ * sprite can only do one of those, because non-uniform scale and rotation don't commute.
+ */
+interface BallMarking {
+  holder: Container;
+  sprite: Sprite;
+  /** Body-fixed surface point (unit vector) and the marking's own "up" axis. */
+  point: [number, number, number];
+  up: [number, number, number];
+  /** Drawn size as a fraction of the ball's diameter. */
+  scale: number;
+}
+
 interface BallVisual {
   sprite: Sprite;
-  /** Number patch, projected onto the rolling sphere surface. Null for the cue ball. */
-  numberSprite: Sprite | null;
-  /** Accumulated roll as a surface angle vector (radians) — drives the 3D number motion. */
-  surface: { x: number; y: number };
+  /**
+   * Markings fixed to the ball's surface — the number on an object ball, or the spots on the
+   * cue ball. Each is a holder whose transform carries the foreshortening, with the artwork
+   * inside it free to twist, which is what makes english visible.
+   */
+  markings: BallMarking[];
+  /**
+   * True 3D orientation, integrated from `Ball.angVel`.
+   *
+   * This replaced a scalar "surface" vector rolled by distance travelled, which was only ever
+   * correct for a ball in natural roll: a ball carrying backspin drew itself rolling forwards,
+   * and english drew nothing at all.
+   */
+  orient: Mat3;
+  /** Latest angular velocity from the server, in rad/s. */
+  angVel: { x: number; y: number; z: number };
   /** Recent screen positions, newest last, used to draw the speed trail. */
   trail: { x: number; y: number }[];
-  /** Surface pose this ball is easing toward while at rest; re-rolled on each stop. */
-  restTarget: { x: number; y: number } | null;
   /** Mirrors the server's pocketed flag so tick() can skip pocketed balls entirely. */
   pocketed: boolean;
   /** Active squash-and-stretch from a recent impact, oriented along the contact normal. */
@@ -1096,6 +1126,78 @@ export class TableRenderer {
     return tex;
   }
 
+  /**
+   * The surface markings for a ball.
+   *
+   * Object balls get their number. The cue ball gets six red spots on the three body axes — a
+   * measle ball, exactly the training cue ball real players use for the same reason: a plain
+   * white sphere gives you no way to see what its spin is doing, which is precisely the
+   * information draw, follow and english are made of. At least one spot always faces you.
+   */
+  private buildMarkings(id: number): BallMarking[] {
+    const out: BallMarking[] = [];
+    const add = (
+      texture: Texture,
+      point: [number, number, number],
+      up: [number, number, number],
+      scale: number
+    ): void => {
+      const holder = new Container();
+      const sprite = new Sprite(texture);
+      sprite.anchor.set(0.5);
+      holder.addChild(sprite);
+      this.ballLayer.addChild(holder);
+      out.push({ holder, sprite, point, up, scale });
+    };
+
+    if (id === CUE_BALL_ID) {
+      const spot = this.cueSpotTexture();
+      const axes: [number, number, number][] = [
+        [0, 0, -1],
+        [0, 0, 1],
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+      ];
+      // Each spot's "up" just has to be perpendicular to it; a dot has no orientation of its
+      // own, but the twist still drives how the pair of spots swing around each other.
+      for (const axis of axes) {
+        const up: [number, number, number] = Math.abs(axis[1]) > 0.5 ? [0, 0, 1] : [0, 1, 0];
+        add(spot, axis, up, 0.4);
+      }
+      return out;
+    }
+
+    const numTex = this.numberTextureFor(id);
+    if (numTex) add(numTex, [0, 0, -1], [0, -1, 0], 0.86);
+    return out;
+  }
+
+  /** The red spot on the cue ball — drawn once and shared by all six. */
+  private cueSpotTexture(): Texture {
+    const key = 'cue:spot';
+    let tex = this.textureCache.get(key);
+    if (!tex) {
+      const size = 48;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d')!;
+      const r = size / 2;
+      const g = ctx.createRadialGradient(r * 0.8, r * 0.75, r * 0.1, r, r, r);
+      g.addColorStop(0, '#e8564a');
+      g.addColorStop(1, '#b02b22');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.86, 0, Math.PI * 2);
+      ctx.fill();
+      tex = Texture.from(canvas);
+      this.textureCache.set(key, tex);
+    }
+    return tex;
+  }
+
   private ensureVisual(id: number): BallVisual {
     let visual = this.ballVisuals.get(id);
     if (!visual) {
@@ -1105,20 +1207,15 @@ export class TableRenderer {
       sprite.height = BALL_RADIUS * 2;
       this.ballLayer.addChild(sprite);
 
-      const numTex = this.numberTextureFor(id);
-      let numberSprite: Sprite | null = null;
-      if (numTex) {
-        numberSprite = new Sprite(numTex);
-        numberSprite.anchor.set(0.5);
-        this.ballLayer.addChild(numberSprite);
-      }
+      const markings = this.buildMarkings(id);
 
       visual = {
         sprite,
-        numberSprite,
-        surface: { x: 0, y: 0 },
+        markings,
+        // A fresh rack shouldn't be sixteen balls stamped identically.
+        orient: randomOrientation(),
+        angVel: { x: 0, y: 0, z: 0 },
         trail: [],
-        restTarget: null,
         pocketed: false,
         squash: null,
         serverPos: { x: sprite.x, y: sprite.y },
@@ -1159,6 +1256,9 @@ export class TableRenderer {
       visual.serverPos.y = ball.pos.y;
       visual.serverVel.x = ball.vel.x;
       visual.serverVel.y = ball.vel.y;
+      visual.angVel.x = ball.angVel.x;
+      visual.angVel.y = ball.angVel.y;
+      visual.angVel.z = ball.angVel.z;
       visual.receivedAt = performance.now();
       if (visual.sprite.x === 0 && visual.sprite.y === 0) {
         visual.sprite.position.set(ball.pos.x, ball.pos.y);
@@ -1823,7 +1923,7 @@ export class TableRenderer {
       // and a trail at its last table position forever.
       if (visual.pocketed) {
         visual.trail.length = 0;
-        if (visual.numberSprite) visual.numberSprite.visible = false;
+        for (const marking of visual.markings) marking.holder.visible = false;
 
         if (visual.potStart !== null) {
           const t = (performance.now() - visual.potStart) / POT_ANIM_MS;
@@ -1850,38 +1950,15 @@ export class TableRenderer {
       const predictedX = visual.serverPos.x + visual.serverVel.x * age;
       const predictedY = visual.serverPos.y + visual.serverVel.y * age;
 
-      const prevX = visual.sprite.x;
-      const prevY = visual.sprite.y;
       visual.sprite.x += (predictedX - visual.sprite.x) * posLerp;
       visual.sprite.y += (predictedY - visual.sprite.y) * posLerp;
 
-      // Roll the ball's surface by however far it actually moved this frame. A rolling
-      // sphere turns by (distance / radius) radians about the axis perpendicular to travel,
-      // so the surface point tracking the number moves opposite the direction of travel.
-      const movedX = visual.sprite.x - prevX;
-      const movedY = visual.sprite.y - prevY;
-      if (Math.hypot(movedX, movedY) > 0.01) {
-        visual.surface.x -= movedX / BALL_RADIUS;
-        visual.surface.y -= movedY / BALL_RADIUS;
-      }
+      // Turn the ball by its actual angular velocity, not by how far it travelled. That
+      // distinction is the whole point: a ball with backspin moves forwards while turning
+      // backwards, and a ball with english turns without its markings going anywhere.
+      visual.orient = integrate(visual.orient, visual.angVel, deltaSeconds);
 
       const speed = Math.hypot(visual.serverVel.x, visual.serverVel.y);
-
-      // Once a ball is nearly stopped, ease its number toward a resting pose. Each stop
-      // picks a fresh random-ish pose (biased toward camera so most numbers stay readable)
-      // so a settled table doesn't look like every ball is stamped identically.
-      if (speed < 120) {
-        if (visual.restTarget === null) {
-          const angle = Math.random() * 0.7;
-          const dir = Math.random() * Math.PI * 2;
-          visual.restTarget = { x: Math.cos(dir) * angle, y: Math.sin(dir) * angle };
-        }
-        const settle = 1 - Math.exp(-deltaSeconds * 3.5);
-        visual.surface.x += (visual.restTarget.x - visual.surface.x) * settle;
-        visual.surface.y += (visual.restTarget.y - visual.surface.y) * settle;
-      } else {
-        visual.restTarget = null; // moving again: re-roll the pose next time it stops
-      }
 
       this.applySquash(visual);
       this.updateTrail(visual, speed);
@@ -1890,7 +1967,7 @@ export class TableRenderer {
         .ellipse(visual.sprite.x + 4, visual.sprite.y + 6, BALL_RADIUS * 0.95, BALL_RADIUS * 0.7)
         .fill({ color: 0x000000, alpha: 0.3 });
 
-      this.positionNumber(visual);
+      this.positionMarkings(visual);
 
       if (this.legalTargets.has(id)) {
         visual.highlightPhase += deltaSeconds * 3.2;
@@ -2006,44 +2083,38 @@ export class TableRenderer {
   }
 
   /**
-   * Projects the number patch onto the ball's surface for the current roll state, so the
-   * number slides across the face, foreshortens toward the edge, and disappears round the
-   * back — instead of just spinning flat with the sprite.
+   * Draws each surface marking for the ball's current orientation, so markings slide across
+   * the face, foreshorten toward the rim, twist on the spot, and disappear round the back.
+   *
+   * The holder is rotated to the radial direction and squashed along it, which is the correct
+   * compression for something lying on a curved surface seen from directly above. The sprite
+   * inside then carries the marking's own twist. Doing both on one sprite is impossible —
+   * non-uniform scale and rotation don't commute — and the twist is not a detail: it is the
+   * only way spin about the vertical axis is visible at all.
    */
-  private positionNumber(visual: BallVisual): void {
-    const num = visual.numberSprite;
-    if (!num) return;
+  private positionMarkings(visual: BallVisual): void {
+    for (const marking of visual.markings) {
+      const p = project(visual.orient, marking.point, marking.up);
 
-    const ax = visual.surface.x;
-    const ay = visual.surface.y;
-    const angle = Math.hypot(ax, ay);
+      if (p.depth <= 0.05 || !visual.sprite.visible) {
+        marking.holder.visible = false;
+        continue;
+      }
 
-    // Surface point on a unit sphere: rotate the "front" pole (0,0,1) by `angle` about the
-    // axis perpendicular to (ax, ay). depth > 0 means it's on the visible near hemisphere.
-    const sinA = Math.sin(angle);
-    const dirX = angle > 1e-6 ? ax / angle : 0;
-    const dirY = angle > 1e-6 ? ay / angle : 0;
-    const offX = dirX * sinA;
-    const offY = dirY * sinA;
-    const depth = Math.cos(angle);
+      const radial = Math.atan2(p.y, p.x);
+      marking.holder.visible = true;
+      marking.holder.x = visual.sprite.x + p.x * BALL_RADIUS;
+      marking.holder.y = visual.sprite.y + p.y * BALL_RADIUS;
+      marking.holder.rotation = radial;
+      marking.holder.scale.set(p.depth, 1);
+      marking.holder.alpha = visual.sprite.alpha * Math.min(1, p.depth * 4);
 
-    if (depth <= 0.05) {
-      num.visible = false;
-      return;
+      const size = BALL_RADIUS * marking.scale;
+      marking.sprite.width = size;
+      marking.sprite.height = size;
+      // The sprite's rotation is relative to the holder, which is already at `radial`.
+      marking.sprite.rotation = p.twist - radial;
     }
-
-    num.visible = visual.sprite.visible;
-    num.x = visual.sprite.x + offX * BALL_RADIUS;
-    num.y = visual.sprite.y + offY * BALL_RADIUS;
-
-    // Foreshortening: the patch is rotated so its local X axis points radially outward
-    // from the ball's centre, so squashing width by `depth` (and leaving height alone)
-    // gives the correct "lying on a curved surface" compression as it nears the edge.
-    const base = BALL_RADIUS * 0.86;
-    num.rotation = Math.atan2(offY, offX);
-    num.width = base * depth;
-    num.height = base;
-    num.alpha = visual.sprite.alpha * Math.min(1, depth * 4);
   }
 
   private drawCue(): void {

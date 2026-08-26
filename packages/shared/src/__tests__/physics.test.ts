@@ -2,8 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { applyCueStrike, contactVelocity, stepSimulation } from '../physics.js';
 import { Vec2 } from '../vector.js';
 import { rackBalls } from '../rack.js';
-import { BALL_RADIUS, CUE_BALL_ID, TABLE_LENGTH, TABLE_WIDTH } from '../constants.js';
+import {
+  BALL_RADIUS,
+  CUE_BALL_ID,
+  MAX_TIP_OFFSET,
+  MISCUE_TIP_OFFSET,
+  TABLE_LENGTH,
+  TABLE_WIDTH,
+} from '../constants.js';
 import type { Ball } from '../types.js';
+
+/** Forces `applyCueStrike` never to miscue, so these tests measure mechanics, not dice. */
+const NO_MISCUE = (): number => 1;
 
 function ball(id: number, x: number, y: number, vx = 0, vy = 0): Ball {
   return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
@@ -113,10 +123,13 @@ describe('cue ball control (spin)', () => {
     targetX?: number;
     power?: number;
   }): { cue: Ball; target: Ball; contactX: number } {
+    // Short and soft on purpose. The pad's reach grew when the miscue band was added, so a
+    // firm follow shot now genuinely catches the object ball a second time off the far rail —
+    // correct physics, but it would contaminate every reading below.
     const cueX = opts.cueX ?? 400;
-    const targetX = opts.targetX ?? 800;
+    const targetX = opts.targetX ?? 700;
     const cue = ball(CUE_BALL_ID, cueX, 500);
-    applyCueStrike(cue, 0, opts.power ?? 0.4, opts.tip ?? { x: 0, y: 0 });
+    applyCueStrike(cue, 0, opts.power ?? 0.35, opts.tip ?? { x: 0, y: 0 }, NO_MISCUE);
     const target = ball(1, targetX, 500);
     const balls = [cue, target];
 
@@ -142,8 +155,8 @@ describe('cue ball control (spin)', () => {
     // assertion about where the cue ball finished was really measuring that second collision.
     for (const tip of [DRAW, CENTRE, FOLLOW]) {
       const cue = ball(CUE_BALL_ID, 400, 500);
-      applyCueStrike(cue, 0, 0.4, tip);
-      const target = ball(1, 800, 500);
+      applyCueStrike(cue, 0, 0.35, tip, NO_MISCUE);
+      const target = ball(1, 700, 500);
       const balls = [cue, target];
       let contacts = 0;
       let stillFor = 0;
@@ -160,7 +173,7 @@ describe('cue ball control (spin)', () => {
   it('sends the object ball on regardless of the spin used', () => {
     for (const tip of [DRAW, CENTRE, FOLLOW]) {
       const { target } = shot({ tip });
-      expect(target.pos.x).toBeGreaterThan(800);
+      expect(target.pos.x).toBeGreaterThan(700);
       expect(Math.abs(target.pos.y - 500)).toBeLessThan(2);
     }
   });
@@ -200,13 +213,14 @@ describe('cue ball control (spin)', () => {
     // The textbook result, and a good check that the strike model is doing real mechanics:
     // at that exact height there is no skid at all, so the contact patch starts still.
     const cue = ball(CUE_BALL_ID, 400, 500);
-    applyCueStrike(cue, 0, 0.5, { x: 0, y: -0.8 }); // -0.8 of the 0.5R limit = 2/5 R above centre
+    // 2/5 R above centre, expressed against the pad's full reach.
+    applyCueStrike(cue, 0, 0.5, { x: 0, y: -0.4 / MISCUE_TIP_OFFSET }, NO_MISCUE);
     expect(Vec2.length(contactVelocity(cue))).toBeLessThan(1);
   });
 
   it('skids before it grabs when struck through the centre', () => {
     const cue = ball(CUE_BALL_ID, 400, 500);
-    applyCueStrike(cue, 0, 0.5, CENTRE);
+    applyCueStrike(cue, 0, 0.5, CENTRE, NO_MISCUE);
     // A centre-ball hit starts with no spin at all, so the whole ball is sliding.
     expect(Vec2.length(contactVelocity(cue))).toBeCloseTo(Vec2.length(cue.vel), 5);
   });
@@ -218,7 +232,7 @@ describe('cue ball control (spin)', () => {
       const from = { x: 400, y: 800 };
       const cue = ball(CUE_BALL_ID, from.x, from.y);
       const angle = Math.atan2(BALL_RADIUS - from.y, 700 - from.x);
-      applyCueStrike(cue, angle, 0.5, { x: tipX, y: 0 });
+      applyCueStrike(cue, angle, 0.5, { x: tipX, y: 0 }, NO_MISCUE);
       for (let i = 0; i < 2000; i++) {
         stepSimulation([cue], 1 / 240);
         if (cue.vel.y > 0) break; // rebounded, now heading back down the table
@@ -239,7 +253,7 @@ describe('cue ball control (spin)', () => {
   it('clears all spin once a ball comes to rest', () => {
     // Settles everything, not just the cue ball, since this is about the resting state.
     const cue = ball(CUE_BALL_ID, 400, 500);
-    applyCueStrike(cue, 0, 0.4, { x: 1, y: 1 });
+    applyCueStrike(cue, 0, 0.4, { x: 1, y: 1 }, NO_MISCUE);
     const target = ball(1, 800, 500);
     const balls = [cue, target];
     for (let i = 0; i < 4000 && !stepSimulation(balls, 1 / 240).settled; i++);
@@ -250,6 +264,89 @@ describe('cue ball control (spin)', () => {
       expect(b.angVel.y).toBe(0);
       expect(b.angVel.z).toBe(0);
     }
+  });
+
+  it('never miscues inside the tip\'s safe grip, however hard the shot', () => {
+    // `() => 0` makes every miscue roll succeed, so anything that *can* slip, will. Nothing
+    // inside the safe band may — otherwise centre-ball play would be a gamble.
+    const alwaysSlip = (): number => 0;
+    const safe = MAX_TIP_OFFSET / MISCUE_TIP_OFFSET;
+    for (const tip of [CENTRE, { x: 0, y: safe }, { x: safe, y: 0 }, { x: 0, y: -safe }]) {
+      const cue = ball(CUE_BALL_ID, 400, 500);
+      expect(applyCueStrike(cue, 0, 1, tip, alwaysSlip).miscued).toBe(false);
+    }
+  });
+
+  it('can miscue out past it, and wastes the shot when it does', () => {
+    const cue = ball(CUE_BALL_ID, 400, 500);
+    const clean = ball(CUE_BALL_ID, 400, 500);
+    const edge = { x: 0.72, y: 0.72 }; // magnitude 1: the very edge of the pad
+
+    expect(applyCueStrike(cue, 0, 1, edge, () => 0).miscued).toBe(true);
+    expect(applyCueStrike(clean, 0, 1, edge, () => 1).miscued).toBe(false);
+
+    // A slipped tip has to actually cost something, or the risk is decorative.
+    expect(Vec2.length(cue.vel)).toBeLessThan(Vec2.length(clean.vel) * 0.5);
+  });
+
+  it('scales the miscue chance with how far past the grip you strike', () => {
+    // Exactly at the safe edge nothing slips; at the pad's edge most attempts do.
+    const chance = (mag: number): number => {
+      let slips = 0;
+      for (let i = 0; i < 400; i++) {
+        const cue = ball(CUE_BALL_ID, 400, 500);
+        if (applyCueStrike(cue, 0, 0.5, { x: 0, y: mag }).miscued) slips++;
+      }
+      return slips / 400;
+    };
+    const safe = MAX_TIP_OFFSET / MISCUE_TIP_OFFSET;
+    expect(chance(safe)).toBe(0);
+    expect(chance((safe + 1) / 2)).toBeGreaterThan(0.1);
+    expect(chance(1)).toBeGreaterThan(chance((safe + 1) / 2));
+  });
+
+  it('picks up forward roll off a cushion, the way a real rail sends a ball on', () => {
+    // The cushion nose meets the ball above its centre, so the rebound impulse applies a torque
+    // as well as a push. Without it a ball comes off a rail carrying its old roll — which is
+    // now backspin relative to the new direction — and just sits down.
+    const cue = ball(CUE_BALL_ID, 500, 300, 0, -900);
+    let before = 0;
+    for (let i = 0; i < 400; i++) {
+      before = cue.angVel.x;
+      stepSimulation([cue], 1 / 240);
+      if (cue.vel.y > 0) break; // rebounded off the top rail, now heading back down
+    }
+    // Rolling into the rail along -y means angVel.x was negative; the nose torque must swing
+    // it forwards. It won't reach full natural roll immediately — the cloth finishes the job,
+    // which is exactly why a ball skids briefly coming off a cushion.
+    expect(before).toBeLessThan(0);
+    expect(cue.angVel.x).toBeGreaterThan(before);
+    expect(cue.angVel.x).toBeGreaterThan(0);
+  });
+
+  it('returns more of a slow ball off the cushion than a fast one', () => {
+    /**
+     * Speed retained *across the cushion*, measured against the velocity in the instant before
+     * impact rather than the launch speed. Measuring end-to-end reports approach friction
+     * instead of restitution, and a slow ball skidding to the rail loses most of its speed on
+     * the way — which made the gentle bounce look like the deader one.
+     */
+    const bounce = (speed: number): number => {
+      const b = ball(1, 500, BALL_RADIUS + 60, 0, -speed);
+      let incoming = speed;
+      for (let i = 0; i < 900; i++) {
+        const before = b.vel.y;
+        stepSimulation([b], 1 / 240);
+        if (b.vel.y > 0) return b.vel.y / Math.abs(incoming);
+        incoming = before;
+      }
+      return 0;
+    };
+    // Real rubber swallows more of a hard hit — one flat restitution got both ends wrong.
+    const slow = bounce(400);
+    const fast = bounce(3800);
+    expect(slow).toBeGreaterThan(0);
+    expect(slow).toBeGreaterThan(fast);
   });
 
   it('still sends a dead-straight centre-ball shot straight, as before', () => {

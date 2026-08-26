@@ -13,7 +13,7 @@
     "dev:client": "npm run dev -w @8ball/client",
     "build": "npm run build -w @8ball/shared && npm run build -w @8ball/client && npm run build -w @8ball/server",
     "start": "node packages/server/dist/index.js",
-    "test": "npm run test -w @8ball/shared && npm run test -w @8ball/server"
+    "test": "npm run test -w @8ball/shared && npm run test -w @8ball/server && npm run test -w @8ball/client"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
