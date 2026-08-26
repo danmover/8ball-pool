@@ -1,3 +1,11 @@
+/** The signed shortest way round from `a` to `b`, so nudging never spins the long way. */
+function shortestTurn(a: number, b: number): number {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
 export interface AimControllerCallbacks {
   /** Fired continuously while dragging; power is 0..1 for cue pull-back visuals only. */
   onAimChange: (angle: number, power: number) => void;
@@ -22,6 +30,7 @@ export class AimController {
   private lastAngle = 0;
   private lastPower = 0;
   private enabled = true;
+  private precise = false;
 
   constructor(el: HTMLElement, cb: AimControllerCallbacks) {
     this.el = el;
@@ -50,10 +59,33 @@ export class AimController {
     const dy = this.anchor.y - e.clientY;
     const dist = Math.hypot(dx, dy);
     const maxPull = this.cb.maxPullPx ?? 220;
-    if (dist > 4) this.lastAngle = Math.atan2(dy, dx);
+
+    if (dist > 4) {
+      const raw = Math.atan2(dy, dx);
+      // Precision mode: move only a fraction of the way toward the pointer's angle, so the
+      // same wrist movement covers a much smaller arc. Once side spin can deflect a shot by a
+      // couple of degrees, "as fine as your mouse hand" stopped being fine enough.
+      this.lastAngle = this.precise ? this.lastAngle + shortestTurn(this.lastAngle, raw) * 0.15 : raw;
+    }
     this.lastPower = Math.max(0, Math.min(1, dist / maxPull));
     this.cb.onAimChange(this.lastAngle, this.lastPower);
   };
+
+  /** Fine-aim toggle — held shift on desktop, a button on the phone. */
+  setPrecise(precise: boolean): void {
+    this.precise = precise;
+  }
+
+  /** Turns the aim by a fixed amount, for keyboard nudging. */
+  nudge(radians: number): void {
+    this.lastAngle += radians;
+    this.cb.onAimChange(this.lastAngle, this.lastPower);
+  }
+
+  /** The current aim, so callers can keep their own copy in step after a nudge. */
+  get angle(): number {
+    return this.lastAngle;
+  }
 
   private onUp = (): void => {
     if (!this.dragging) return;

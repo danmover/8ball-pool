@@ -7,6 +7,10 @@ import {
   CUSHION_NOSE_RISE,
   CUSHION_RESTITUTION_FAST,
   CUSHION_RESTITUTION_SLOW,
+  CLOTH_REBOUND,
+  GRAVITY,
+  LANDING_RESTITUTION,
+  MAX_ELEVATION,
   MAX_TIP_OFFSET,
   MIN_SHOT_SPEED,
   MISCUE_MAX_CHANCE,
@@ -19,6 +23,7 @@ import {
   SIM_HZ,
   SLIDE_DECEL,
   SPIN_DECEL,
+  SQUIRT_MAX,
 } from './constants.js';
 
 /**
@@ -46,6 +51,9 @@ const SUBSTEP_DT = 1 / SIM_HZ;
 const ROLL_EPSILON = 1;
 
 export function isAtRest(ball: Ball): boolean {
+  // A ball in mid-air has to count as moving even when its horizontal speed is nil, or a
+  // straight-up jump would end the shot while the ball was still off the cloth.
+  if (ball.z > 1e-4 || ball.vz !== 0) return false;
   return Vec2.length(ball.vel) < REST_EPSILON;
 }
 
@@ -76,6 +84,8 @@ function rollingSpin(vel: Vec2): { x: number; y: number } {
 function stop(ball: Ball): void {
   ball.vel = Vec2.zero();
   ball.angVel = { x: 0, y: 0, z: 0 };
+  ball.z = 0;
+  ball.vz = 0;
 }
 
 /**
@@ -84,6 +94,32 @@ function stop(ball: Ball): void {
  * The 5/2 in the sliding branch is `mR²/I` for a uniform sphere. It is the reason spin dies so
  * much faster than speed does, and therefore the reason draw has a range.
  */
+/** A ball off the cloth — it can't be rubbed by it, potted, or struck by a ball beneath it. */
+export function isAirborne(ball: Ball): boolean {
+  return ball.z > 1e-4;
+}
+
+/**
+ * Flight and landing.
+ *
+ * A ball in the air is only acted on by gravity, which is what lets a jump shot pass clean over
+ * an obstruction. Landing keeps very little of the vertical speed — real balls thud and settle
+ * rather than bouncing on down the table — and each landing leaves the ball skidding, because
+ * it arrives with whatever spin it took off with and none of it matched to the cloth.
+ */
+function applyFlight(ball: Ball, dt: number): void {
+  ball.vz -= GRAVITY * dt;
+  ball.z += ball.vz * dt;
+  if (ball.z > 0) return;
+
+  ball.z = 0;
+  if (ball.vz < 0) {
+    ball.vz = -ball.vz * LANDING_RESTITUTION;
+    // Below a token hop, settle rather than jittering along the cloth forever.
+    if (ball.vz < GRAVITY * dt * 2) ball.vz = 0;
+  }
+}
+
 function applyClothFriction(ball: Ball, dt: number): void {
   const speed = Vec2.length(ball.vel);
   const u = contactVelocity(ball);
@@ -277,6 +313,12 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
   const minDist = BALL_RADIUS * 2;
   if (dist >= minDist || dist < 1e-6) return;
 
+  // Two spheres only touch if they're within a diameter in *three* dimensions. Checking the
+  // height as well is the entire mechanic of a jump shot: a ball far enough off the cloth
+  // passes clean over the one blocking it instead of crashing into it.
+  const dz = a.z - b.z;
+  if (dist * dist + dz * dz >= minDist * minDist) return;
+
   const normal = Vec2.scale(delta, 1 / dist);
   const overlap = minDist - dist;
   const correction = Vec2.scale(normal, overlap / 2);
@@ -332,15 +374,33 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
  * why striking 2/5 of a radius above centre puts the ball into natural roll immediately — a
  * result that falls out of the algebra rather than being dialled in.
  */
+/**
+ * The direction the cue ball actually leaves on, which is not the direction you aimed.
+ *
+ * Squirt: the tip has mass, so striking off centre shoves the ball away from the english
+ * instead of sending it straight along the cue. It eases off as the cue is raised, where the
+ * swerve elevation induces pulls the other way.
+ *
+ * Exported because the aim guide has to trace the same line the shot will take. Working it out
+ * in two places is how a guide starts quietly lying about where the ball is going.
+ */
+export function strikeAngle(angle: number, tip: { x: number; y: number }, elevation = 0): number {
+  const mag = Math.hypot(tip.x, tip.y);
+  const tx = mag > 1 ? tip.x / mag : tip.x;
+  const lift = Math.max(0, Math.min(MAX_ELEVATION, elevation));
+  return angle + SQUIRT_MAX * tx * Math.cos(lift);
+}
+
 export function applyCueStrike(
   cue: Ball,
   angle: number,
   power: number,
   tip: { x: number; y: number } = { x: 0, y: 0 },
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  elevation = 0
 ): StrikeResult {
   let speed = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
-  const dir = Vec2.fromAngle(angle);
+  const lift = Math.max(0, Math.min(MAX_ELEVATION, elevation));
 
   let tx = tip.x;
   let ty = tip.y;
@@ -349,6 +409,8 @@ export function applyCueStrike(
     tx /= mag;
     ty /= mag;
   }
+
+  const dir = Vec2.fromAngle(strikeAngle(angle, { x: tx, y: ty }, lift));
 
   // The pad's full travel reaches past the tip's safe grip, so the outer band is a gamble
   // rather than a free upgrade. Beyond MAX_TIP_OFFSET the chance of slipping climbs steeply,
@@ -375,17 +437,34 @@ export function applyCueStrike(
     offsetY = (rng() - 0.5) * MAX_TIP_OFFSET;
   }
 
-  cue.vel = Vec2.scale(dir, speed);
+  // The cue points forwards and *downwards*. Only the horizontal part drives the ball along
+  // the cloth; the downward part is pressed into the table, and the cloth throwing it back is
+  // what a jump shot actually is.
+  const along = Math.cos(lift);
+  const down = Math.sin(lift);
+  cue.vel = Vec2.scale(dir, speed * along);
+  cue.vz = speed * down * CLOTH_REBOUND;
+  cue.z = 0;
 
-  // Vertical offset spins the ball about the axis across the shot line. Below centre (positive
-  // screen y) has to come out as backspin, so the ball's contact patch races ahead of it.
+  /**
+   * Spin from an off-centre strike, with the cue raised.
+   *
+   * `Δω = (r × J)/I` as before, but now `r` lies in the plane perpendicular to the *cue*, not
+   * to the table. Writing `s` for the side direction and `u = s × ĉ` for the cue-plane "down"
+   * direction, `r × ĉ = a·u − b·s`, which expands to the three lines below.
+   *
+   * The `-a·sin(lift)` terms are the whole point: they put a component of the spin axis
+   * *along the direction of travel*. A ball spinning about the way it is going drags its
+   * contact patch sideways, so the cloth pushes it sideways — and it curves. That is a massé,
+   * and it emerges from the same friction model as everything else rather than being drawn on
+   * top. It is also why level-cue english cannot curve a ball, which is why the old hand-rolled
+   * swerve constant had to go.
+   */
   const k = (5 * speed) / (2 * BALL_RADIUS);
-  const along = offsetY * k; // + is draw
   cue.angVel = {
-    x: -along * dir.y,
-    y: along * dir.x,
-    // English: offset across the line spins the ball about the vertical axis.
-    z: offsetX * k,
+    x: k * (-offsetX * dir.x * down - offsetY * dir.y),
+    y: k * (-offsetX * dir.y * down + offsetY * dir.x),
+    z: k * offsetX * along,
   };
 
   return { miscued };
@@ -444,6 +523,18 @@ export function stepSimulation(balls: Ball[], dt: number): StepResult {
     }
 
     for (const ball of active) {
+      if (isAirborne(ball) || ball.vz !== 0) {
+        applyFlight(ball, h);
+        if (isAirborne(ball)) {
+          // In the air it can't be potted and the cloth can't touch it. Cushions stay solid
+          // at every height on purpose: a ball that could fly off the table would need rules
+          // for where it lands and how it comes back, and the point of a jump shot — clearing
+          // an obstructing *ball* — works perfectly well without opening that door.
+          resolveCushions(ball, events);
+          continue;
+        }
+        events.push({ type: 'land', ballId: ball.id, pos: { ...ball.pos } });
+      }
       if (resolvePocket(ball, events)) continue;
       resolveCushions(ball, events);
       // After the cushions, so a ball nudged over the lip by a jaw still gets drawn in.

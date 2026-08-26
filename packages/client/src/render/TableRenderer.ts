@@ -593,6 +593,8 @@ interface BallVisual {
   orient: Mat3;
   /** Latest angular velocity from the server, in rad/s. */
   angVel: { x: number; y: number; z: number };
+  /** Height above the cloth. Non-zero only while a jumped ball is in the air. */
+  height: number;
   /** Recent screen positions, newest last, used to draw the speed trail. */
   trail: { x: number; y: number }[];
   /** Mirrors the server's pocketed flag so tick() can skip pocketed balls entirely. */
@@ -1215,6 +1217,7 @@ export class TableRenderer {
         // A fresh rack shouldn't be sixteen balls stamped identically.
         orient: randomOrientation(),
         angVel: { x: 0, y: 0, z: 0 },
+        height: 0,
         trail: [],
         pocketed: false,
         squash: null,
@@ -1259,6 +1262,7 @@ export class TableRenderer {
       visual.angVel.x = ball.angVel.x;
       visual.angVel.y = ball.angVel.y;
       visual.angVel.z = ball.angVel.z;
+      visual.height = ball.z;
       visual.receivedAt = performance.now();
       if (visual.sprite.x === 0 && visual.sprite.y === 0) {
         visual.sprite.position.set(ball.pos.x, ball.pos.y);
@@ -1504,6 +1508,14 @@ export class TableRenderer {
     const g = this.guideLayer;
     g.clear();
     if (!preview) return;
+
+    // Where you pointed, when english has deflected the real line off it. Drawn first and
+    // faintly, so the gap between intention and outcome is legible without competing with the
+    // path the ball is actually going to take.
+    if (preview.aimLine) {
+      this.dashedLine(g, preview.aimLine.from, preview.aimLine.to);
+      g.stroke({ width: 2, color: 0xffffff, alpha: 0.22 });
+    }
 
     for (const seg of preview.cueBallPath) {
       this.dashedLine(g, seg.from, seg.to);
@@ -1963,11 +1975,25 @@ export class TableRenderer {
       this.applySquash(visual);
       this.updateTrail(visual, speed);
 
-      this.shadowLayer
-        .ellipse(visual.sprite.x + 4, visual.sprite.y + 6, BALL_RADIUS * 0.95, BALL_RADIUS * 0.7)
-        .fill({ color: 0x000000, alpha: 0.3 });
+      // A jumped ball is drawn bigger and its shadow smaller and further off, which is the only
+      // cue a fixed top-down camera can give for height. Without it a jump shot just looks like
+      // a ball passing impossibly through another.
+      const lift = visual.height / (BALL_RADIUS * 4);
+      const grow = 1 + Math.min(0.5, lift * 0.5);
+      visual.sprite.width = BALL_RADIUS * 2 * grow;
+      visual.sprite.height = BALL_RADIUS * 2 * grow;
 
-      this.positionMarkings(visual);
+      const drop = Math.min(26, visual.height * 0.5);
+      this.shadowLayer
+        .ellipse(
+          visual.sprite.x + 4 + drop,
+          visual.sprite.y + 6 + drop,
+          BALL_RADIUS * 0.95 * (1 - Math.min(0.45, lift * 0.45)),
+          BALL_RADIUS * 0.7 * (1 - Math.min(0.45, lift * 0.45))
+        )
+        .fill({ color: 0x000000, alpha: 0.3 - Math.min(0.16, lift * 0.16) });
+
+      this.positionMarkings(visual, grow);
 
       if (this.legalTargets.has(id)) {
         visual.highlightPhase += deltaSeconds * 3.2;
@@ -2092,7 +2118,7 @@ export class TableRenderer {
    * non-uniform scale and rotation don't commute — and the twist is not a detail: it is the
    * only way spin about the vertical axis is visible at all.
    */
-  private positionMarkings(visual: BallVisual): void {
+  private positionMarkings(visual: BallVisual, scale = 1): void {
     for (const marking of visual.markings) {
       const p = project(visual.orient, marking.point, marking.up);
 
@@ -2103,13 +2129,13 @@ export class TableRenderer {
 
       const radial = Math.atan2(p.y, p.x);
       marking.holder.visible = true;
-      marking.holder.x = visual.sprite.x + p.x * BALL_RADIUS;
-      marking.holder.y = visual.sprite.y + p.y * BALL_RADIUS;
+      marking.holder.x = visual.sprite.x + p.x * BALL_RADIUS * scale;
+      marking.holder.y = visual.sprite.y + p.y * BALL_RADIUS * scale;
       marking.holder.rotation = radial;
       marking.holder.scale.set(p.depth, 1);
       marking.holder.alpha = visual.sprite.alpha * Math.min(1, p.depth * 4);
 
-      const size = BALL_RADIUS * marking.scale;
+      const size = BALL_RADIUS * marking.scale * scale;
       marking.sprite.width = size;
       marking.sprite.height = size;
       // The sprite's rotation is relative to the holder, which is already at `radial`.

@@ -14,6 +14,8 @@ export function createBall(id: number, kind: BallKind, x: number, y: number): Ba
     pos: { x, y },
     vel: { x: 0, y: 0 },
     angVel: { x: 0, y: 0, z: 0 },
+    z: 0,
+    vz: 0,
     pocketed: false,
   };
 }

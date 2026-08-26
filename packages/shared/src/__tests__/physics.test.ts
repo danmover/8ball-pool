@@ -10,13 +10,14 @@ import {
   TABLE_LENGTH,
   TABLE_WIDTH,
 } from '../constants.js';
+import { POCKETS } from '../table.js';
 import type { Ball } from '../types.js';
 
 /** Forces `applyCueStrike` never to miscue, so these tests measure mechanics, not dice. */
 const NO_MISCUE = (): number => 1;
 
 function ball(id: number, x: number, y: number, vx = 0, vy = 0): Ball {
-  return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
+  return { id, kind: id === 0 ? 'cue' : 'solid', pos: { x, y }, vel: { x: vx, y: vy }, angVel: { x: 0, y: 0, z: 0 }, z: 0, vz: 0, pocketed: false };
 }
 
 describe('rackBalls', () => {
@@ -347,6 +348,132 @@ describe('cue ball control (spin)', () => {
     const fast = bounce(3800);
     expect(slow).toBeGreaterThan(0);
     expect(slow).toBeGreaterThan(fast);
+  });
+
+  it('leaves the cloth when the cue is steep enough, and only then', () => {
+    const peak = (elevation: number): number => {
+      const cue = ball(CUE_BALL_ID, 400, 500);
+      applyCueStrike(cue, 0, 0.8, CENTRE, NO_MISCUE, elevation);
+      let highest = 0;
+      for (let i = 0; i < 900; i++) {
+        stepSimulation([cue], 1 / 240);
+        highest = Math.max(highest, cue.z);
+      }
+      return highest;
+    };
+    // A level cue can't lift the ball, however hard it's hit — the jump comes from driving the
+    // ball *into* the cloth and the cloth throwing it back, not from the cue lifting anything.
+    expect(peak(0)).toBe(0);
+    expect(peak(Math.PI / 9)).toBeLessThan(peak(Math.PI / 4));
+    // Steep and firm has to clear a ball, or the shot is pointless.
+    expect(peak(Math.PI / 3)).toBeGreaterThan(BALL_RADIUS * 2);
+  });
+
+  it('jumps clean over a blocking ball and reaches the one behind it', () => {
+    const cue = ball(CUE_BALL_ID, 400, 500);
+    applyCueStrike(cue, 0, 0.85, CENTRE, NO_MISCUE, Math.PI / 3);
+    const blocker = ball(1, 620, 500);
+    const target = ball(2, 1000, 500);
+    const balls = [cue, blocker, target];
+
+    const events = [];
+    for (let i = 0; i < 2000; i++) {
+      const step = stepSimulation(balls, 1 / 240);
+      events.push(...step.events);
+      if (step.settled) break;
+    }
+
+    const hits = events.filter((e) => e.type === 'ballCollision');
+    expect(hits.length).toBeGreaterThan(0);
+    // The first thing it touches must be the far ball. Clearing the blocker is the whole shot.
+    const first = hits[0];
+    expect(first.type === 'ballCollision' && (first.a === 2 || first.b === 2)).toBe(true);
+    expect(events.some((e) => e.type === 'land')).toBe(true);
+  });
+
+  it('cannot be potted while it is still in the air', () => {
+    // Hanging directly over a pocket, on the way up. Real balls fly over pockets; a ball that
+    // dropped in mid-flight would make every jump across the table a lottery.
+    const pocket = POCKETS[0];
+    const b = ball(CUE_BALL_ID, pocket.capture.x, pocket.capture.y);
+    b.z = BALL_RADIUS * 2;
+    b.vz = 260;
+
+    let steps = 0;
+    while (b.z > 0 && steps < 2000) {
+      stepSimulation([b], 1 / 240);
+      steps++;
+      // Checked after the step, so a ball that landed during it is no longer "in the air".
+      if (b.z > 0) expect(b.pocketed).toBe(false);
+    }
+
+    // And once it does land on top of the pocket, it goes in like anything else.
+    stepSimulation([b], 1 / 240);
+    expect(b.pocketed).toBe(true);
+  });
+
+  it('never lets a jumped ball leave the table', () => {
+    // Cushions stay solid at every height on purpose — see the note in stepSimulation.
+    for (let i = 0; i < 24; i++) {
+      const angle = (i / 24) * Math.PI * 2;
+      const b = ball(CUE_BALL_ID, 300, 300);
+      applyCueStrike(b, angle, 1, { x: 0.7, y: -0.7 }, NO_MISCUE, Math.PI / 3);
+      for (let s = 0; s < 2000 && !stepSimulation([b], 1 / 240).settled; s++);
+      if (b.pocketed) continue;
+      expect(b.pos.x).toBeGreaterThan(-1);
+      expect(b.pos.x).toBeLessThan(TABLE_LENGTH + 1);
+      expect(b.pos.y).toBeGreaterThan(-1);
+      expect(b.pos.y).toBeLessThan(TABLE_WIDTH + 1);
+      expect(b.z).toBe(0);
+    }
+  });
+
+  it('curves the ball with side spin off a raised cue — and not off a level one', () => {
+    /**
+     * How far the ball strays from its launch line, measured only up to the first cushion.
+     *
+     * Squirt is already in the launch direction, so it doesn't count as curve. A rail does
+     * though: english changes the rebound angle, and letting the ball reach one reported
+     * hundreds of units of "curve" on a level-cue shot that had travelled dead straight.
+     */
+    const curve = (elevation: number): number => {
+      const start = { x: 300, y: 500 };
+      const b = ball(CUE_BALL_ID, start.x, start.y);
+      applyCueStrike(b, 0, 0.5, { x: 1, y: 0 }, NO_MISCUE, elevation);
+      const launch = Vec2.normalize(b.vel);
+      let worst = 0;
+      for (let i = 0; i < 3000; i++) {
+        const { events } = stepSimulation([b], 1 / 240);
+        if (events.some((e) => e.type === 'cushion')) break;
+        const off = Vec2.sub(b.pos, start);
+        worst = Math.max(worst, Math.abs(off.x * launch.y - off.y * launch.x));
+        if (Vec2.length(b.vel) < 3 && b.z === 0) break;
+      }
+      return worst;
+    };
+
+    // Level-cue english genuinely cannot curve a ball: its spin is about the vertical axis, so
+    // the contact patch only twists. Elevation tilts that axis along the direction of travel,
+    // the patch starts dragging sideways, and the cloth pushes the ball off its line — massé.
+    expect(curve(0)).toBeLessThan(2);
+    expect(curve(Math.PI / 4)).toBeGreaterThan(20);
+  });
+
+  it('deflects the cue ball away from the english — squirt', () => {
+    const launchAngle = (tipX: number, elevation = 0): number => {
+      const b = ball(CUE_BALL_ID, 400, 500);
+      applyCueStrike(b, 0, 0.6, { x: tipX, y: 0 }, NO_MISCUE, elevation);
+      return Math.atan2(b.vel.y, b.vel.x);
+    };
+
+    // Right-hand english pushes the ball off the aim line, and left-hand the other way.
+    expect(launchAngle(0)).toBeCloseTo(0, 6);
+    expect(launchAngle(0.7)).toBeGreaterThan(0);
+    expect(launchAngle(-0.7)).toBeLessThan(0);
+    // Proportional to how far off centre you strike...
+    expect(Math.abs(launchAngle(0.7))).toBeGreaterThan(Math.abs(launchAngle(0.35)));
+    // ...and reduced by elevation, where squirt and the swerve it induces partly cancel.
+    expect(Math.abs(launchAngle(0.7, Math.PI / 3))).toBeLessThan(Math.abs(launchAngle(0.7)));
   });
 
   it('still sends a dead-straight centre-ball shot straight, as before', () => {

@@ -28,6 +28,17 @@ export interface Ball {
    * special cases that didn't quite agree with each other — or with the aim guide.
    */
   angVel: Vec3;
+  /**
+   * Height above the cloth, in table units. Zero for a ball on the table.
+   *
+   * Note the axis: this one is **positive upward**, unlike `angVel`'s z which points into the
+   * table. They describe different things — one is where the ball is, the other is how it
+   * turns — and "the ball is 40 units in the air" reading as -40 would be worse than having
+   * two conventions clearly labelled.
+   */
+  z: number;
+  /** Vertical speed, positive upward. */
+  vz: number;
   pocketed: boolean;
 }
 
@@ -146,6 +157,14 @@ export interface AimInput {
   seat: Seat;
   angle: number; // radians
   spin: { x: number; y: number }; // -1..1 each, tip offset on cue ball
+  /**
+   * How far the butt of the cue is raised, in radians. 0 is level.
+   *
+   * Elevation is what makes a blocked table a decision rather than a dead end: past ~45° the
+   * ball leaves the cloth and jumps an obstruction, and any side spin becomes a spin axis
+   * pointing along the shot, which curves the ball — a massé.
+   */
+  elevation?: number;
 }
 
 export interface ShootInput extends AimInput {
@@ -224,6 +243,13 @@ export interface TrajectoryPreview {
   cueAfterPath: TrajectorySegment[];
   /** Resting place of the cue ball, drawn as a ghost. */
   cueRestPos: Vec2 | null;
+  /**
+   * The line you pointed at, when side spin has deflected the real one off it.
+   *
+   * Squirt is real and it is punishing, so it has to be *visible*: drawn faintly beside the
+   * actual path, the gap between the two is the whole lesson.
+   */
+  aimLine?: TrajectorySegment;
 }
 
 // ---- Socket event contracts ----
@@ -291,4 +317,6 @@ export type SimEvent =
   | { type: 'ballCollision'; a: number; b: number; pos: Vec2; impulse: number }
   /** The tip slipped off the ball — struck too far off centre to hold. */
   | { type: 'miscue' }
+  /** A jumped ball came back down onto the cloth. */
+  | { type: 'land'; ballId: number; pos: Vec2 }
   | { type: 'shotSettled' };

@@ -12,7 +12,7 @@ import type { Ball } from '../types.js';
 const NO_MISCUE = (): number => 1;
 
 function ball(id: number, x: number, y: number): Ball {
-  return { id, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
+  return { id, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, z: 0, vz: 0, pocketed: false };
 }
 
 describe('pathIsClear', () => {
@@ -48,10 +48,10 @@ describe('pathIsClear', () => {
 
 describe('cue ball preview', () => {
   function cueBall(x: number, y: number): Ball {
-    return { id: 0, kind: 'cue', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
+    return { id: 0, kind: 'cue', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, z: 0, vz: 0, pocketed: false };
   }
   function objectBall(x: number, y: number): Ball {
-    return { id: 1, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, pocketed: false };
+    return { id: 1, kind: 'solid', pos: { x, y }, vel: { x: 0, y: 0 }, angVel: { x: 0, y: 0, z: 0 }, z: 0, vz: 0, pocketed: false };
   }
 
   it('predicts the cue ball moving backwards with draw and forwards with follow', () => {

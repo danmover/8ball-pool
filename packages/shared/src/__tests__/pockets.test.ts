@@ -19,6 +19,8 @@ function ball(id: number, x: number, y: number, vx = 0, vy = 0): Ball {
     pos: { x, y },
     vel: { x: vx, y: vy },
     angVel: { x: 0, y: 0, z: 0 },
+    z: 0,
+    vz: 0,
     pocketed: false,
   };
 }

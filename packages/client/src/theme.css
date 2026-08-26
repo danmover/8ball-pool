@@ -1824,3 +1824,99 @@ body.reduce-motion .star.big.earned {
 .spin-control.risky .spin-safe {
   border-color: rgba(200, 60, 45, 0.55);
 }
+
+/* --- Cue elevation ---
+   Drawn from the side, because a raised cue is invisible in a top-down game: the gauge shows a
+   cue resting on the cloth against a ball, pivoting at the contact point. Drag it up, or take
+   one of the three presets. */
+
+.elev-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.elev-gauge {
+  position: relative;
+  width: 108px;
+  height: 62px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 -4px 8px rgba(26, 20, 16, 0.15);
+  cursor: ns-resize;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.elev-cloth {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  height: 3px;
+  background: var(--felt);
+}
+
+.elev-ball {
+  position: absolute;
+  left: 24px;
+  bottom: 13px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #fff, #d9cdb6);
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+
+/* Pivots at the ball, so raising the angle lifts the butt exactly as a real cue does. */
+.elev-cue {
+  position: absolute;
+  left: 32px;
+  bottom: 20px;
+  width: 68px;
+  height: 4px;
+  border-radius: 2px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #5aa9d8 0 6%, var(--wood) 6% 62%, #2a1c12 62% 100%);
+  box-shadow: 0 0 0 1.2px var(--ink);
+  transition: transform 0.08s linear;
+}
+
+.elev-readout {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  min-height: 1em;
+}
+
+.elev-control.raised .elev-readout {
+  color: var(--accent-2);
+}
+
+.elev-presets {
+  display: flex;
+  gap: 0.22rem;
+}
+
+.elev-presets button {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.48rem;
+  letter-spacing: 0.05em;
+  padding: 0.24rem 0.3rem;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--paper-2);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--paper-3);
+  touch-action: manipulation;
+}
+
+.elev-presets button.active {
+  background: var(--gold);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--wood-dark);
+}

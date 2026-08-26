@@ -18,6 +18,7 @@ import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
+import { createElevationDial } from '../controller/elevationDial';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
 import { icon } from '../render/icons';
@@ -35,6 +36,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   let renderer: TableRenderer | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
+  let elevationDial: ReturnType<typeof createElevationDial> | null = null;
   let placing = false;
   let lastAimAngle = 0;
   /** Latest drag power, so the cue-ball preview scales with how hard the shot will be. */
@@ -134,7 +136,8 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       angle,
       settings.trajectoryPreview,
       spinPad?.getValue() ?? { x: 0, y: 0 },
-      lastAimPower
+      lastAimPower,
+      elevationDial?.getValue() ?? 0
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
   }
@@ -323,6 +326,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     Object.assign(spinPad.el.style, { position: 'absolute', bottom: '54px', right: '18px' });
     controlArea.appendChild(spinPad.el);
 
+    elevationDial = createElevationDial(() => renderPreview(lastAimAngle));
+    Object.assign(elevationDial.el.style, { position: 'absolute', bottom: '54px', left: '18px' });
+    controlArea.appendChild(elevationDial.el);
+
     root.querySelector('#leaveBtn')!.addEventListener('click', () => {
       confirmLeave('Leave this table?', 'Your seat opens up for whoever is waiting.', () => {
         socket.disconnect();
@@ -365,7 +372,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         lastAimPower = power;
         setPowerHud(power);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
-        socket.emit('updateAim', { seat, angle, spin });
+        socket.emit('updateAim', { seat, angle, spin, elevation: elevationDial?.getValue() ?? 0 });
         renderer?.setAimVisual(angle, power, true);
         renderPreview(angle);
       },
@@ -373,8 +380,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         if (!seat) return;
         setPowerHud(0);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
-        socket.emit('takeShot', { seat, angle, power, spin });
+        socket.emit('takeShot', {
+          seat, angle, power, spin, elevation: elevationDial?.getValue() ?? 0,
+        });
         spinPad?.reset();
+        elevationDial?.reset();
       },
     });
 

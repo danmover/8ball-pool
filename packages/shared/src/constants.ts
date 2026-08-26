@@ -110,6 +110,33 @@ export const MISCUE_TIP_OFFSET = 0.66;
 /** Chance of miscuing at the very edge of the pad. */
 export const MISCUE_MAX_CHANCE = 0.75;
 
+// ---- Cue elevation ----
+
+/** The steepest the cue may be raised, in radians. Past this a real player is on the rail. */
+export const MAX_ELEVATION = Math.PI / 3; // 60°
+
+/**
+ * How much of the downward part of an elevated strike comes back as upward speed.
+ *
+ * A jump shot isn't the cue lifting the ball — it's the cue driving it *into* the cloth and the
+ * cloth throwing it back. That's why jumping needs a steep cue and real pace, and why a soft
+ * elevated shot just squirts along the table.
+ */
+export const CLOTH_REBOUND = 0.52;
+
+/** How much vertical speed survives each landing. Low, so balls settle rather than bouncing on. */
+export const LANDING_RESTITUTION = 0.32;
+
+/**
+ * Cue-ball deflection — "squirt" — at maximum side offset, in radians.
+ *
+ * The tip has mass, so striking off centre shoves the ball slightly away from the english
+ * rather than sending it straight down the cue's line. About two degrees at full offset for a
+ * normal cue. It falls off as the cue is raised, where squirt and the swerve it induces
+ * partially cancel — which is exactly the trade real players make when they elevate.
+ */
+export const SQUIRT_MAX = 0.035;
+
 /** Deceleration while skidding, in table units/s². */
 export const SLIDE_DECEL = MU_SLIDE * GRAVITY;
 /**

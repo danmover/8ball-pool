@@ -40,6 +40,7 @@ import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
+import { createElevationDial } from '../controller/elevationDial';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
@@ -61,6 +62,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let rendererPromise: Promise<TableRenderer> | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
+  let elevation: ReturnType<typeof createElevationDial> | null = null;
   /** Listeners registered outside the page root, to be undone when the page is torn down. */
   const cleanups: (() => void)[] = [];
   let lastState: GameState | null = null;
@@ -121,7 +123,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     <div class="host-spin-wrap" id="hostSpinWrap" style="display:none">
       <div class="spin-label">SPIN</div>
       <div id="hostSpin"></div>
-      <div class="spin-hint">Arrow keys to nudge · C to centre</div>
+      <div class="spin-hint">Arrows nudge spin · Shift+arrows fine-aim · C to centre</div>
+      <div class="spin-label">CUE</div>
+      <div id="hostElevation"></div>
     </div>
     <div id="lobbyWrap"></div>
   `;
@@ -137,6 +141,27 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
   const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
   const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
+
+  /**
+   * Turns the aim by a hair, and pushes it everywhere the drag would have.
+   *
+   * Aiming by dragging can't resolve a third of a degree, which is roughly what squirt moves a
+   * shot by — so without this the deflection would be visible in the guide and impossible to
+   * correct for.
+   */
+  function nudgeAim(radians: number): void {
+    if (!aimController || !ownedSeat || lastAimAngle === null) return;
+    aimController.nudge(radians);
+    lastAimAngle = aimController.angle;
+    renderer?.setAimVisual(lastAimAngle, lastAimPower, true);
+    socket.emit('updateAim', {
+      seat: ownedSeat,
+      angle: lastAimAngle,
+      spin: spinPad?.getValue() ?? ZERO_SPIN,
+      elevation: elevation?.getValue() ?? 0,
+    });
+    renderPreview(lastAimAngle);
+  }
 
   function setPowerHud(power: number): void {
     const pct = Math.round(power * 100);
@@ -299,36 +324,63 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     });
     root.querySelector<HTMLElement>('#hostSpin')!.appendChild(spinPad.el);
 
+    // Raising the cue changes where the ball goes, so the guide has to be recomputed for it
+    // exactly as it is for spin.
+    elevation = createElevationDial(() => {
+      if (lastAimAngle !== null) renderPreview(lastAimAngle);
+    });
+    root.querySelector<HTMLElement>('#hostElevation')!.appendChild(elevation.el);
+
     // Keyboard shortcuts, because setting spin on a desktop by dragging a small circle with the
     // mouse and *then* dragging the table to aim is two hands' worth of work for one shot.
-    const onSpinKey = (e: KeyboardEvent): void => {
+    //
+    // Arrows move the spin tip; holding shift turns them into a fine aim nudge instead, which
+    // matters now that english can deflect a shot by a couple of degrees and a mouse drag
+    // can't reliably resolve that.
+    const AIM_NUDGE = 0.005; // radians — about a third of a degree
+    const onShotKey = (e: KeyboardEvent): void => {
       if (hostSpinWrap.style.display === 'none') return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const step = 0.25;
+      const aiming = e.shiftKey;
       switch (e.key) {
         case 'ArrowUp':
-          spinPad?.nudge(0, -step);
+          if (aiming) elevation?.setValue((elevation?.getValue() ?? 0) + 0.08);
+          else spinPad?.nudge(0, -step);
           break;
         case 'ArrowDown':
-          spinPad?.nudge(0, step);
+          if (aiming) elevation?.setValue((elevation?.getValue() ?? 0) - 0.08);
+          else spinPad?.nudge(0, step);
           break;
         case 'ArrowLeft':
-          spinPad?.nudge(-step, 0);
+          if (aiming) nudgeAim(-AIM_NUDGE);
+          else spinPad?.nudge(-step, 0);
           break;
         case 'ArrowRight':
-          spinPad?.nudge(step, 0);
+          if (aiming) nudgeAim(AIM_NUDGE);
+          else spinPad?.nudge(step, 0);
           break;
         case 'c':
         case 'C':
           spinPad?.reset();
+          elevation?.reset();
           break;
         default:
           return;
       }
       e.preventDefault();
     };
-    window.addEventListener('keydown', onSpinKey);
-    cleanups.push(() => window.removeEventListener('keydown', onSpinKey));
+    window.addEventListener('keydown', onShotKey);
+    cleanups.push(() => window.removeEventListener('keydown', onShotKey));
+
+    // Holding shift also slows the aim drag itself, for the same reason.
+    const onShift = (e: KeyboardEvent): void => aimController?.setPrecise(e.shiftKey);
+    window.addEventListener('keydown', onShift);
+    window.addEventListener('keyup', onShift);
+    cleanups.push(() => {
+      window.removeEventListener('keydown', onShift);
+      window.removeEventListener('keyup', onShift);
+    });
 
     aimController = new AimController(canvasEl, {
       onAimChange: (angle, power) => {
@@ -337,7 +389,12 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         lastAimPower = power;
         renderer?.setAimVisual(angle, power, true);
         setPowerHud(power);
-        socket.emit('updateAim', { seat: ownedSeat, angle, spin: spinPad?.getValue() ?? ZERO_SPIN });
+        socket.emit('updateAim', {
+          seat: ownedSeat,
+          angle,
+          spin: spinPad?.getValue() ?? ZERO_SPIN,
+          elevation: elevation?.getValue() ?? 0,
+        });
         renderPreview(angle);
       },
       onShoot: (angle, power) => {
@@ -348,8 +405,10 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
           angle,
           power,
           spin: spinPad?.getValue() ?? ZERO_SPIN,
+          elevation: elevation?.getValue() ?? 0,
         });
         spinPad?.reset();
+        elevation?.reset();
       },
     });
     aimController.setEnabled(false);
@@ -808,7 +867,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       angle,
       settings.trajectoryPreview,
       spinPad?.getValue() ?? ZERO_SPIN,
-      lastAimPower
+      lastAimPower,
+      elevation?.getValue() ?? 0
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
   }

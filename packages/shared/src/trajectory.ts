@@ -1,11 +1,13 @@
 import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
 import { CUSHIONS, JAWS, inPocketApproach } from './table.js';
-import { applyCueStrike, stepSimulation } from './physics.js';
+import { applyCueStrike, stepSimulation, strikeAngle } from './physics.js';
 import { BALL_RADIUS } from './constants.js';
 
 const MAX_BOUNCES_FULL = 2;
 const MAX_PREVIEW_LENGTH = 3000;
+/** How far the intended-aim line is drawn when squirt pulls the real one off it. */
+const AIM_LINE_LENGTH = 420;
 
 interface RayHit {
   t: number;
@@ -144,7 +146,8 @@ function simulatePaths(
   cueBallId: number,
   angle: number,
   power: number,
-  tip: { x: number; y: number }
+  tip: { x: number; y: number },
+  elevation: number
 ): SimulatedPaths {
   const clone: Ball[] = balls.map((b) => ({
     ...b,
@@ -159,7 +162,7 @@ function simulatePaths(
   // Never miscue in the preview: the guide's job is to show what the shot does *if it comes
   // off*, and a line that changed on every redraw would be worse than no line. The risk is
   // communicated by the pad's danger band instead.
-  applyCueStrike(cue, angle, power, tip, () => 1);
+  applyCueStrike(cue, angle, power, tip, () => 1, elevation);
 
   let struck: Ball | null = null;
   let elapsed = 0;
@@ -217,7 +220,9 @@ export function computeTrajectoryPreview(
   /** Cue tip offset: x is english, y is draw (positive) / follow (negative), as sent by the pad. */
   spin: { x: number; y: number } = { x: 0, y: 0 },
   /** Shot power 0..1, so the post-contact line scales with how hard you're about to hit it. */
-  power = 0.5
+  power = 0.5,
+  /** Cue elevation in radians — a raised cue curves the ball, so the guide has to know. */
+  elevation = 0
 ): TrajectoryPreview {
   const cue = balls.find((b) => b.id === cueBallId);
   const path: TrajectorySegment[] = [];
@@ -231,8 +236,21 @@ export function computeTrajectoryPreview(
   };
   if (!cue || cue.pocketed) return result;
 
+  // Trace the line the ball will *actually* take. Side spin deflects it off the aim line by a
+  // couple of degrees, and a guide drawn along the angle you pointed at would quietly disagree
+  // with the shot — the exact class of bug that made the old approximated guide untrustworthy.
+  const launched = strikeAngle(angle, spin, elevation);
   let origin: Vec2 = { ...cue.pos };
-  let dir = Vec2.fromAngle(angle);
+  let dir = Vec2.fromAngle(launched);
+
+  // The line you pointed at, kept separately so the deflection is visible and learnable
+  // rather than just a shot that mysteriously missed.
+  if (Math.abs(launched - angle) > 1e-4) {
+    result.aimLine = {
+      from: { ...cue.pos },
+      to: Vec2.add(cue.pos, Vec2.scale(Vec2.fromAngle(angle), AIM_LINE_LENGTH)),
+    };
+  }
   let remaining = MAX_PREVIEW_LENGTH;
   const maxBounces = mode === 'full' ? MAX_BOUNCES_FULL : 0;
   let bounces = 0;
@@ -256,7 +274,7 @@ export function computeTrajectoryPreview(
       result.firstContactBallId = hit.ball.id;
       if (mode === 'full') {
         // Both onward paths come from actually playing the shot, cushions, spin and all.
-        const paths = simulatePaths(balls, cueBallId, angle, power, spin);
+        const paths = simulatePaths(balls, cueBallId, angle, power, spin, elevation);
         result.objectBallPath = toSegments(paths.objectBall, hit.ball.pos);
         result.cueAfterPath = toSegments(paths.cueAfter, hit.point);
         result.cueRestPos = paths.cueRest;
