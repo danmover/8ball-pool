@@ -25,10 +25,23 @@ let store: ProfileStore = new LocalProfileStore();
 let cached: Profile | null = null;
 const listeners = new Set<(profile: Profile) => void>();
 
-/** Swap in a different backing store (the seam for a future server-backed profile). */
+/** Swap in a different backing store — the seam the server-backed profile hangs on. */
 export function useProfileStore(next: ProfileStore): void {
   store = next;
   cached = null;
+}
+
+/**
+ * Replaces the profile wholesale with one that arrived from elsewhere.
+ *
+ * Used when the server turns out to have a newer copy than this device, or when a transfer
+ * code adopts another device's profile. It deliberately does *not* write back through the
+ * store: the caller has already persisted it, and saving here would bump the revision and
+ * start a pointless round trip.
+ */
+export function adoptProfile(profile: Profile): void {
+  cached = profile;
+  for (const listener of listeners) listener(profile);
 }
 
 export function getProfile(): Profile {

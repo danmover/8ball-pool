@@ -13,8 +13,29 @@ import { unlockAudio } from './render/audio';
 import { startMusic } from './render/music';
 import { tableThemeFor } from './render/cosmetics/tableThemes';
 import { loadSettings } from './settings/settingsStore';
+import { SyncedProfileStore } from './profile/syncedProfileStore';
+import { adoptProfile, useProfileStore } from './profile/profile';
 
 const app = document.getElementById('app')!;
+
+/**
+ * Profiles live on the server now, but nothing waits for them.
+ *
+ * The store is local-first: the game reads and writes localStorage immediately and reconciles
+ * with the server in the background, so a slow or absent server costs nothing. `hydrate` runs
+ * without being awaited for the same reason — the menu draws from the local copy, and the
+ * server's version replaces it a moment later if it turns out to be newer.
+ *
+ * In dev the client and server are on different ports; in production the server serves the
+ * client, so a relative URL is right.
+ */
+const profileStore = new SyncedProfileStore(
+  import.meta.env.DEV ? `http://${window.location.hostname}:8787` : ''
+);
+useProfileStore(profileStore);
+export { profileStore };
+
+void profileStore.hydrate((profile) => adoptProfile(profile));
 
 /**
  * Browsers refuse to start audio until the user has interacted, so the music can't begin at

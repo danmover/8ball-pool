@@ -4,3 +4,7 @@ dist/
 *.log
 .env
 .env.local
+
+# Local profile database (dev)
+profiles.db
+profiles.db-*

@@ -7,6 +7,8 @@ import cors from 'cors';
 import type { ClientToServerEvents, ServerToClientEvents } from '@8ball/shared';
 import { RoomManager } from './roomManager.js';
 import { registerSocketHandlers } from './socketHandlers.js';
+import { SqliteProfileRepository } from './profiles/sqliteRepository.js';
+import { registerProfileRoutes } from './profiles/routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +21,9 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 const rooms = new RoomManager();
 registerSocketHandlers(io, rooms);
+
+const profiles = new SqliteProfileRepository();
+registerProfileRoutes(app, profiles);
 
 app.get('/healthz', (_req, res) => {
   res.json({ ok: true });

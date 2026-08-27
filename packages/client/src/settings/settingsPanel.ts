@@ -1,6 +1,9 @@
 import type { BotDifficulty, PlayerSettings } from '@8ball/shared';
 import { navigate } from '../router';
 import { icon } from '../render/icons';
+import { openTransferDialog } from '../profile/transferDialog';
+import { promptText } from '../render/dialogs';
+import { getProfile, setDisplayName } from '../profile/profile';
 import { TABLE_THEMES } from '../render/cosmetics/tableThemes';
 
 const BOT_LABELS: Record<BotDifficulty, string> = {
@@ -10,13 +13,14 @@ const BOT_LABELS: Record<BotDifficulty, string> = {
   legend: 'Legend',
 };
 
-type TabId = 'game' | 'table' | 'audio' | 'access';
+type TabId = 'game' | 'table' | 'audio' | 'access' | 'profile';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'game', label: 'Game' },
   { id: 'table', label: 'Table' },
   { id: 'audio', label: 'Audio' },
   { id: 'access', label: 'Access' },
+  { id: 'profile', label: 'You' },
 ];
 
 function row(label: string, desc: string, control: string): string {
@@ -172,6 +176,29 @@ export function openSettingsPanel(
     ].join('');
   }
 
+  /**
+   * Everything about *you* rather than about the game: your name, your collection, and moving
+   * your progress to another device. Its own tab because a profile transfer buried at the
+   * bottom of "Access" is one nobody would ever find.
+   */
+  function profilePanel(): string {
+    return [
+      row('Display name', 'What other players see at the table', `<button id="editProfileName" class="mini">Change</button>`),
+      row(
+        'Locker',
+        'Cues, ball sets, trails, banners and the prize wheel',
+        `<button id="openLocker" class="mini">Open</button>`
+      ),
+      // Progress lives on the server now, so it can follow you. There's no account to log
+      // into, which is deliberate — see the note in profiles/routes.ts.
+      row(
+        'Play on another device',
+        'Get a code to carry this profile to your phone, or enter one from another device',
+        `<button id="transferProfile" class="mini">Transfer</button>`
+      ),
+    ].join('');
+  }
+
   function render(): void {
     drawer.innerHTML = `
       <header class="drawer-head">
@@ -184,7 +211,7 @@ export function openSettingsPanel(
             `<button class="settings-tab${t.id === tab ? ' active' : ''}" data-tab="${t.id}">${t.label}</button>`
         ).join('')}
       </div>
-      <div class="settings-body">${panelFor(tab)}</div>`;
+      <div class="settings-body">${tab === 'profile' ? profilePanel() : panelFor(tab)}</div>`;
 
     drawer.querySelectorAll<HTMLElement>('.segmented, .theme-grid').forEach((seg) => {
       const key = seg.dataset.key as keyof PlayerSettings;
@@ -205,6 +232,14 @@ export function openSettingsPanel(
   }
 
   function bind(): void {
+    drawer.querySelector('#transferProfile')?.addEventListener('click', () => openTransferDialog());
+    drawer.querySelector('#editProfileName')?.addEventListener('click', () => {
+      promptText('What should we call you?', getProfile().displayName || 'Player', (next) => {
+        setDisplayName(next);
+        render();
+      }, { placeholder: 'Player', maxLength: 18 });
+    });
+
     drawer.querySelectorAll<HTMLElement>('.settings-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         tab = btn.dataset.tab as TabId;
