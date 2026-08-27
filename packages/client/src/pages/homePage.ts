@@ -10,6 +10,7 @@ import {
 import { getSocket } from '../net/socket';
 import { loadSettings, saveSession, saveSettings } from '../settings/settingsStore';
 import { equippedLoadout, getProfile, setDisplayName } from '../profile/profile';
+import { achievementSummary, weeklyMissions } from '../profile/progression';
 import { openWheel } from '../profile/wheel';
 import { playerBannerHtml } from '../render/banner';
 import { modeArtSvg } from '../render/modeArt';
@@ -115,6 +116,11 @@ export function renderHomePage(root: HTMLElement): () => void {
             <span class="tile-label">Trick Shots</span>
             <span class="tile-sub" id="trickSub"></span>
           </button>
+          <button class="tile-btn" id="progressBtn">
+            <span class="tile-icon">${icon('star', { size: 26 })}</span>
+            <span class="tile-label">Progress</span>
+            <span class="tile-sub" id="progressSub"></span>
+          </button>
           <div class="tile-btn challenge" id="challengeTile"></div>
         </section>
       </div>
@@ -193,6 +199,13 @@ export function renderHomePage(root: HTMLElement): () => void {
     root.querySelector<HTMLElement>('#careerSub')!.textContent = nextUp
       ? `${career.beaten} / ${career.total} · next: ${nextUp.name}`
       : 'Ladder complete';
+
+    const ach = achievementSummary();
+    const ready = weeklyMissions().filter((m) => m.progress >= m.mission.target && !m.claimed).length;
+    root.querySelector<HTMLElement>('#progressSub')!.textContent = ready
+      ? `${ready} reward${ready === 1 ? '' : 's'} to claim!`
+      : `${ach.earned} / ${ach.total} achievements`;
+    root.querySelector<HTMLElement>('#progressBtn')!.classList.toggle('has-reward', ready > 0);
 
     const stars = Object.values(profile.challengeStars ?? {}).reduce((a, b) => a + b, 0);
     const possible = CHALLENGES.length * 3;
@@ -392,6 +405,7 @@ export function renderHomePage(root: HTMLElement): () => void {
   });
 
   root.querySelector('#careerBtn')!.addEventListener('click', () => navigate('/career'));
+  root.querySelector('#progressBtn')!.addEventListener('click', () => navigate('/progress'));
   root.querySelector('#trickShotsBtn')!.addEventListener('click', () => navigate('/challenges'));
 
   root.querySelector('#settingsBtn')!.addEventListener('click', () => {

@@ -110,6 +110,14 @@ const ART: Record<GameMode, string> = {
     <path d="M18 60 H100" stroke="#fff" stroke-width="2" stroke-dasharray="5 4" opacity="0.6"/>`),
 
   // Cue lined up on a lone ball with an aim line.
+  // One player against nobody: a lone ball on a cleared table, and the ghost's outline behind.
+  ghost: frame(`
+    <circle cx="46" cy="42" r="15" fill="#fbf8ef" opacity="0.16"/>
+    <circle cx="46" cy="42" r="15" fill="none" stroke="#fbf8ef" stroke-width="2"
+            stroke-dasharray="4 4" opacity="0.5"/>
+    ${ball(88, 34, '#f03a2e', '1')}
+    ${ball(104, 56, '#2a6ee0', '2')}
+    <path d="M22 62 H120" stroke="#fff" stroke-width="2" stroke-dasharray="5 4" opacity="0.35"/>`),
   sandbox: frame(`
     <path d="M18 62 L58 34" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
     <path d="M18 62 L58 34" stroke="${RAIL}" stroke-width="4" stroke-linecap="round"/>

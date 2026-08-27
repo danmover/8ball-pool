@@ -2272,3 +2272,263 @@ body.reduce-motion .star.big.earned {
   font-size: 0.76rem;
   font-weight: 800;
 }
+
+/* --- Progress page ---
+   Achievements, weekly missions and the season track. All three were awarding before this
+   screen existed, which meant rewards arrived with no explanation attached. */
+
+.progress-page {
+  min-height: 100%;
+  padding: 1.2rem clamp(1rem, 4vw, 3rem) 3rem;
+  overflow-y: auto;
+}
+
+.progress-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.progress-head h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.progress-rating {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
+}
+
+.progress-rating b {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.4rem;
+}
+
+.progress-rating span {
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0.6rem 0 0.9rem;
+}
+
+/* --- Achievements --- */
+
+.ach-group h2 {
+  font-size: 1rem;
+  color: var(--paper);
+  margin: 1rem 0 0.5rem;
+}
+
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.55rem;
+}
+
+.ach-card {
+  padding: 0.6rem 0.7rem;
+  border-radius: 13px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--paper-3);
+}
+
+/* Unearned cards are dimmed rather than hidden: seeing what's next is the point. */
+.ach-card:not(.earned) {
+  filter: brightness(0.9) saturate(0.65);
+}
+
+.ach-card.earned {
+  background: linear-gradient(180deg, #ffeec0 0%, var(--paper-2) 100%);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--wood-dark);
+}
+
+.ach-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.ach-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.9rem;
+}
+
+.ach-pct {
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.ach-blurb {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-height: 2.2em;
+}
+
+.ach-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--paper-3);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  overflow: hidden;
+}
+
+.ach-bar div {
+  height: 100%;
+  background: var(--gold);
+}
+
+.ach-reward {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--wood-deep);
+}
+
+/* --- Missions --- */
+
+.mission-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mission-card {
+  display: grid;
+  grid-template-columns: 1fr minmax(140px, 220px) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
+}
+
+.mission-card.ready {
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--wood-dark), 0 0 22px rgba(255, 203, 82, 0.4);
+}
+
+.mission-card.claimed {
+  filter: brightness(0.92) saturate(0.6);
+}
+
+.mission-text b {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.mission-text small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.mission-bar {
+  position: relative;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--paper-3);
+  box-shadow: inset 0 0 0 2px var(--ink);
+  overflow: hidden;
+}
+
+.mission-bar div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--felt), var(--gold));
+}
+
+.mission-bar span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .mission-card {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+}
+
+/* --- Season track --- */
+
+.season-track {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.6rem;
+}
+
+.season-tier {
+  flex: 0 0 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.7rem 0.5rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
+  filter: brightness(0.88) saturate(0.6);
+}
+
+.season-tier.reached {
+  filter: none;
+}
+
+.season-tier.taken {
+  background: linear-gradient(180deg, #ffeec0 0%, var(--paper-2) 100%);
+}
+
+.tier-num {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.tier-art {
+  height: 48px;
+  display: grid;
+  place-items: center;
+}
+
+.tier-label {
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.tier-xp {
+  font-size: 0.64rem;
+  color: var(--muted);
+}
+
+.season-tier button {
+  margin-top: 0.2rem;
+  width: 100%;
+  font-size: 0.68rem;
+  padding: 0.3em 0.4em;
+}

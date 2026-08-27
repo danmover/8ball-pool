@@ -10,12 +10,14 @@ import { renderControllerPage } from './pages/controllerPage';
 import { renderProfilePage } from './pages/profilePage';
 import { renderChallengesPage } from './pages/challengesPage';
 import { renderCareerPage } from './pages/careerPage';
+import { renderProgressPage } from './pages/progressPage';
 import { unlockAudio } from './render/audio';
 import { startMusic } from './render/music';
 import { tableThemeFor } from './render/cosmetics/tableThemes';
 import { loadSettings } from './settings/settingsStore';
 import { SyncedProfileStore } from './profile/syncedProfileStore';
 import { adoptProfile, useProfileStore } from './profile/profile';
+import { checkAchievements } from './profile/progression';
 
 const app = document.getElementById('app')!;
 
@@ -36,7 +38,27 @@ const profileStore = new SyncedProfileStore(
 useProfileStore(profileStore);
 export { profileStore };
 
-void profileStore.hydrate((profile) => adoptProfile(profile));
+void profileStore.hydrate((profile) => {
+  adoptProfile(profile);
+  backfillAchievements();
+});
+
+/**
+ * Award anything already earned but never granted.
+ *
+ * Achievements are pure predicates over a stats snapshot precisely so this is possible: a
+ * player who potted their five-hundredth ball before the achievement existed should be given
+ * it, not locked out of it. Runs at boot and after the server's copy lands, since either can
+ * be the moment the stats first become known.
+ */
+function backfillAchievements(): void {
+  const earned = checkAchievements();
+  if (earned.length > 0) {
+    console.info(`Awarded ${earned.length} achievement(s) earned before they existed.`);
+  }
+}
+
+backfillAchievements();
 
 /**
  * Browsers refuse to start audio until the user has interacted, so the music can't begin at
@@ -63,6 +85,8 @@ startRouter(app, (path) => {
     setCleanup(renderHostPage(app, tableMatch[1].toUpperCase()));
   } else if (playMatch) {
     setCleanup(renderControllerPage(app, playMatch[1].toUpperCase()));
+  } else if (path === '/progress') {
+    setCleanup(renderProgressPage(app));
   } else if (path === '/career') {
     setCleanup(renderCareerPage(app));
   } else if (path === '/profile') {

@@ -5,6 +5,7 @@ import { nineBallMode } from './nineball.js';
 import { cutthroatMode } from './cutthroat.js';
 import { killerMode } from './killer.js';
 import { sandboxMode } from './sandbox.js';
+import { ghostMode } from './ghost.js';
 import { challengeMode } from './challenge.js';
 import type { ModeDescriptor } from './types.js';
 
@@ -27,6 +28,7 @@ export const MODES: Record<GameMode, ModeDescriptor> = {
   cutthroat: cutthroatMode,
   killer: killerMode,
   sandbox: sandboxMode,
+  ghost: ghostMode,
   challenge: challengeMode,
 };
 
@@ -42,6 +44,7 @@ export const MODE_ORDER: GameMode[] = [
   'cutthroat',
   'killer',
   'rotation',
+  'ghost',
   'sandbox',
 ];
 

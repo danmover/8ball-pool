@@ -68,6 +68,7 @@ export function seatIndex(seat: Seat): number {
  * - `cutthroat` : 3-5 players each own a group of balls; you're out when your last one drops,
  *                 and the last player with a ball still on the table wins.
  * - `killer`    : everyone starts with lives; fail to pot on your turn and you lose one.
+ * - `ghost`     : solo. Clear the whole table in one visit or the rack is lost.
  * - `sandbox`   : no turns, no fouls, no winner — a practice table.
  */
 export type GameMode =
@@ -77,6 +78,7 @@ export type GameMode =
   | 'nineball'
   | 'cutthroat'
   | 'killer'
+  | 'ghost'
   | 'sandbox'
   | 'challenge';
 
