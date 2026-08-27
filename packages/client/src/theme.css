@@ -2532,3 +2532,99 @@ body.reduce-motion .star.big.earned {
   font-size: 0.68rem;
   padding: 0.3em 0.4em;
 }
+
+/* --- Tournament bracket ---
+   Down the left of the table and visible throughout, not just between matches: half the fun of
+   a knockout is the people who aren't playing watching their next opponent take shape. */
+
+.bracket-wrap {
+  position: fixed;
+  left: 12px;
+  top: 96px;
+  z-index: 4;
+  pointer-events: none;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.bracket {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3), 0 12px 22px rgba(0, 0, 0, 0.45);
+}
+
+.bracket-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--wood-deep);
+}
+
+.round-label {
+  display: block;
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bracket-match {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1.5px var(--ink);
+  min-width: 132px;
+}
+
+.bracket-match .side {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.18rem 0.4rem;
+  font-size: 0.72rem;
+  background: var(--paper-2);
+}
+
+.bracket-match .side + .side {
+  border-top: 1.5px solid var(--ink);
+}
+
+.bracket-match .side b {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.bracket-match .side.won {
+  background: var(--gold);
+  font-weight: 800;
+}
+
+/* The match actually being played, so the eye finds it without reading every row. */
+.bracket-match.live {
+  box-shadow: 0 0 0 2px var(--accent-2), 0 0 12px rgba(42, 110, 224, 0.5);
+}
+
+.bracket-match.done .side:not(.won) {
+  opacity: 0.5;
+}
+
+@media (max-width: 900px) {
+  .bracket-wrap {
+    display: none;
+  }
+}
