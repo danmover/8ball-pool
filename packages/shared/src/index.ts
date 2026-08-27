@@ -1,6 +1,7 @@
 export * from './vector.js';
 export * from './constants.js';
 export * from './table.js';
+export * from './ruleSets.js';
 export * from './ball.js';
 export * from './cosmetics.js';
 export * from './progression.js';

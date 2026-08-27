@@ -11,6 +11,8 @@ function outcome(over: Partial<ShotOutcome> = {}): ShotOutcome {
     firstBallContacted: 1,
     anyCushionAfterContact: true,
     cushionsBeforeContact: 0,
+    objectBallsToRail: 4,
+    pottedIn: {},
     ...over,
   };
 }

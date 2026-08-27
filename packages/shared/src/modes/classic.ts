@@ -1,4 +1,6 @@
 import type { GameState, Seat } from '../types.js';
+import { CUE_BALL_ID } from '../constants.js';
+import { BREAK_BALLS_TO_RAIL } from '../ruleSets.js';
 import { rackBalls } from '../rack.js';
 import { basicFoul, endGame, nextActiveSeat } from './shared.js';
 import type { ModeDescriptor, ShotContext, ShotOutcome } from './types.js';
@@ -72,12 +74,38 @@ function resolve(state: GameState, outcome: ShotOutcome, ctx: ShotContext): void
   if (!foulReason && outcome.potted.length === 0 && !outcome.anyCushionAfterContact) {
     foulReason = 'No rail after contact';
   }
+  // The break has to actually break: four balls to a rail, or something down. Otherwise a
+  // player can tap the rack and leave the table dead for the opponent.
+  if (!foulReason && wasBreak && ctx.rules.breakRequirement) {
+    const potted = outcome.potted.some((id) => id !== CUE_BALL_ID);
+    if (!potted && outcome.objectBallsToRail < BREAK_BALLS_TO_RAIL) {
+      foulReason = `Illegal break: needs ${BREAK_BALLS_TO_RAIL} balls to a rail or a pot`;
+    }
+  }
   const foul = foulReason !== null;
+
+  /**
+   * With call shot on, only the nominated ball in the nominated pocket keeps your visit alive.
+   * Everything else on the table still counts as potted — it doesn't come back up — but it
+   * doesn't earn you another shot, which is the whole point: flukes stop paying.
+   */
+  const calledBallDropped = (): boolean => {
+    if (!ctx.rules.callShot) return true;
+    if (!ctx.call) return false;
+    return outcome.pottedIn[ctx.call.ballId] === ctx.call.pocketIndex;
+  };
 
   // --- 8-ball resolution takes priority over everything else ---
   if (outcome.eightBallPocketed) {
-    const legalEightPot = !foul && ctx.groupCleared && shooterInfo.group !== null;
-    endGame(state, legalEightPot ? shooter : advance(), foulReason);
+    // Calling the 8 matters more than calling anything else: dropping it in the wrong pocket
+    // is a loss in every serious rule set, not merely a missed chance.
+    const called = !ctx.rules.callShot || outcome.pottedIn[8] === ctx.call?.pocketIndex;
+    const legalEightPot = !foul && called && ctx.groupCleared && shooterInfo.group !== null;
+    endGame(
+      state,
+      legalEightPot ? shooter : advance(),
+      legalEightPot ? foulReason : (foulReason ?? (called ? null : '8-ball in the wrong pocket'))
+    );
     return;
   }
 
@@ -86,6 +114,10 @@ function resolve(state: GameState, outcome: ShotOutcome, ctx: ShotContext): void
     if (foul) {
       state.currentShooter = advance();
       state.phase = 'ball_in_hand';
+      // A scratch on the break costs the incoming player the whole table: they're stuck
+      // behind the head string, which is what makes breaking badly genuinely expensive.
+      state.ballInHandBehindLine =
+        ctx.rules.kitchenAfterBreakScratch && outcome.cueBallPocketed;
     } else if (outcome.potted.length > 0) {
       state.phase = 'aiming'; // shooter continues, table still open
     } else {
@@ -125,7 +157,8 @@ function resolve(state: GameState, outcome: ShotOutcome, ctx: ShotContext): void
 
   state.phase = 'aiming';
   state.lastFoulReason = null;
-  if (!pottedOwnBall) state.currentShooter = advance();
+  // Keeping the table needs a ball of yours *and*, under call shot, the one you nominated.
+  if (!pottedOwnBall || !calledBallDropped()) state.currentShooter = advance();
   state.turnNumber++;
 }
 

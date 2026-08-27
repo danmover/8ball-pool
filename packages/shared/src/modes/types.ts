@@ -1,4 +1,5 @@
 import type { Ball, GameMode, GameState, Seat } from '../types.js';
+import type { RuleOptions } from '../ruleSets.js';
 
 /** Everything the rules engine learns about a shot once the balls have stopped. */
 export interface ShotOutcome {
@@ -9,6 +10,14 @@ export interface ShotOutcome {
   anyCushionAfterContact: boolean;
   /** Rails the cue ball struck *before* touching any object ball — the bank-shot test. */
   cushionsBeforeContact: number;
+  /**
+   * How many distinct *object* balls reached a rail after the first contact. The break rule
+   * wants four; counting rail *hits* rather than balls would let one ball rattling around a
+   * corner satisfy it on its own.
+   */
+  objectBallsToRail: number;
+  /** Which pocket each potted ball went into, so a called shot can be judged. */
+  pottedIn: Record<number, number>;
 }
 
 /**
@@ -19,6 +28,10 @@ export interface ShotOutcome {
 export interface ShotContext {
   /** Was the shooter's group already cleared before this shot? */
   groupCleared: boolean;
+  /** Which optional rules are in force — see `ruleSets.ts`. */
+  rules: RuleOptions;
+  /** The ball and pocket the shooter nominated, when call shot is on. */
+  call?: { ballId: number; pocketIndex: number } | null;
   /** Lowest ball on the table before the shot (rotation / 9-ball legal contact). */
   lowestBefore: number | null;
   /** The clock ran out instead of a shot being taken. */

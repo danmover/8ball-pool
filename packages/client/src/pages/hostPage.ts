@@ -16,6 +16,8 @@ import {
   levelProgress,
   activeChallenge,
   modeDescriptor,
+  predictedPocket,
+  ruleOptions,
   seatIndex,
   xpForResult,
 } from '@8ball/shared';
@@ -71,6 +73,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let lastAimAngle: number | null = null;
   /** Latest drag power, so the cue-ball preview scales with how hard the shot will be. */
   let lastAimPower = 0.5;
+  /** The nomination for the shot being aimed, when call shot is on. */
+  let calledBall: number | null = null;
+  let calledPocket: number | null = null;
   let booted = false;
   let qrDataUrl = '';
   let celebrator: PotCelebrator | null = null;
@@ -109,6 +114,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       <div class="centre-hud">
         <div class="shot-clock" id="shotClock" style="display:none"></div>
         <div id="callout"></div>
+        <div id="callHud"></div>
       </div>
       <div class="toast-stack" id="toastStack"></div>
       <div class="challenge-hud" id="challengeHud" style="display:none"></div>
@@ -235,6 +241,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         onAddBot: (seat, difficulty) => socket.emit('hostAddBot', { seat, difficulty }),
         onRemoveBot: (seat) => socket.emit('hostRemoveBot', { seat }),
         onShotClockChange: (shotClockSeconds) => socket.emit('hostUpdateLobby', { shotClockSeconds }),
+        onRuleSetChange: (ruleSet) => socket.emit('hostUpdateLobby', { ruleSet }),
         onSeriesChange: (seriesTarget) => socket.emit('hostUpdateLobby', { seriesTarget }),
         onStart: () => socket.emit('hostStartGame'),
       },
@@ -406,9 +413,15 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
           power,
           spin: spinPad?.getValue() ?? ZERO_SPIN,
           elevation: elevation?.getValue() ?? 0,
+          call:
+            calledBall !== null && calledPocket !== null
+              ? { ballId: calledBall, pocketIndex: calledPocket }
+              : null,
         });
         spinPad?.reset();
         elevation?.reset();
+        calledBall = null;
+        calledPocket = null;
       },
     });
     aimController.setEnabled(false);
@@ -616,7 +629,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
           <b>Ball in hand</b>
           <small>${
             mine
-              ? 'Click anywhere on the table to place the cue ball'
+              ? state.ballInHandBehindLine
+                ? 'Scratched on the break — place it behind the line'
+                : 'Click anywhere on the table to place the cue ball'
               : `${state.players[state.currentShooter].name} is placing the cue ball`
           }</small>
         </span>
@@ -856,6 +871,60 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     step();
   }
 
+  /** Pocket names in `POCKETS` order, for the call readout. */
+  const POCKET_NAMES = ['top-left', 'top-middle', 'top-right', 'bottom-left', 'bottom-middle', 'bottom-right'];
+
+  /**
+   * Shows what's being called, when call shot is in force.
+   *
+   * Read off the aim guide rather than demanded as a second gesture: the guide already
+   * simulates where the object ball goes, so for the great majority of shots the nomination is
+   * simply "yes, that one". The override buttons cover banks and doubles, where the guess is
+   * either wrong or genuinely ambiguous.
+   */
+  function renderCallHud(preview: TrajectoryPreview | null): void {
+    const slot = root.querySelector<HTMLElement>('#callHud')!;
+    const rules = lastState ? ruleOptions(lastState.ruleSet) : null;
+    const myTurn = ownedSeat !== null && lastState?.currentShooter === ownedSeat;
+
+    if (!rules?.callShot || !myTurn || !preview?.firstContactBallId) {
+      slot.innerHTML = '';
+      if (!rules?.callShot) calledPocket = null;
+      return;
+    }
+
+    calledBall = preview.firstContactBallId;
+    // A manual override sticks until the aim changes which ball is being struck.
+    if (calledPocket === null) calledPocket = predictedPocket(preview);
+
+    // No nomination is a *safety*, not a mistake: you're playing for position and accepting
+    // that the visit ends. That's the real rule, and saying so turns a confusing state into a
+    // deliberate option.
+    const called = calledPocket;
+    const safety = called === null;
+    slot.innerHTML = `
+      <div class="call-hud${safety ? ' safety' : ''}">
+        <span class="call-label">${safety ? 'SAFETY' : 'CALLING'}</span>
+        <span class="call-ball">${ballChipHtml(calledBall, false)}</span>
+        <span class="call-arrow">→</span>
+        <div class="call-pockets">
+          ${POCKET_NAMES.map(
+            (name, i) => `
+            <button class="call-pocket${called === i ? ' active' : ''}" data-pocket="${i}"
+                    title="${name}"></button>`
+          ).join('')}
+        </div>
+        <span class="call-where">${safety ? 'no pocket called' : POCKET_NAMES[called]}</span>
+      </div>`;
+
+    slot.querySelectorAll<HTMLButtonElement>('[data-pocket]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        calledPocket = Number(btn.dataset.pocket);
+        renderCallHud(preview);
+      });
+    });
+  }
+
   function renderPreview(angle: number): void {
     if (!renderer || !lastState || settings.trajectoryPreview === 'off') {
       renderer?.setAimPreview(CUE_BALL_ID, null);
@@ -871,6 +940,10 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       elevation?.getValue() ?? 0
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
+
+    // A new target ball means the previous nomination is stale — re-read it from the guide.
+    if (preview.firstContactBallId !== calledBall) calledPocket = null;
+    renderCallHud(preview);
   }
 
   function applyState(state: GameState): void {
@@ -911,6 +984,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
     placing = ownedSeat !== null && state.phase === 'ball_in_hand' && state.currentShooter === ownedSeat;
     if (!placing) renderer?.setPlacementGhost(null);
+    renderer?.setKitchenOnly(state.phase === 'ball_in_hand' && state.ballInHandBehindLine);
 
     if (state.phase === 'shot_in_progress') {
       renderer?.setAimVisual(0, 0, false);

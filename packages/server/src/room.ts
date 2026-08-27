@@ -40,6 +40,7 @@ import type {
   ShootInput,
   SimEvent,
 } from '@8ball/shared';
+import { HEAD_STRING_X, RULE_SETS } from '@8ball/shared';
 import { generateToken } from './roomCode.js';
 import { BotPlayer } from './bot.js';
 
@@ -68,6 +69,8 @@ export class Room {
   spectatorSocketIds = new Set<string>();
 
   private preShotGroupCleared = false;
+  /** The ball and pocket nominated for the shot in flight, when call shot is on. */
+  private preShotCall: { ballId: number; pocketIndex: number } | null = null;
   private preShotLowestBall: number | null = null;
   private shotEvents: SimEvent[] = [];
   private loopHandle: ReturnType<typeof setInterval> | null = null;
@@ -110,6 +113,7 @@ export class Room {
   updateLobby(patch: Partial<LobbySettings>): void {
     if (this.started) return;
     if (patch.mode) this.lobby.mode = patch.mode;
+    if (patch.ruleSet && RULE_SETS[patch.ruleSet]) this.lobby.ruleSet = patch.ruleSet;
     if (patch.shotClockSeconds !== undefined) {
       this.lobby.shotClockSeconds =
         patch.shotClockSeconds === null
@@ -150,7 +154,7 @@ export class Room {
       (seat, i) => this.gameState.players[seat]?.name ?? `Player ${i + 1}`
     );
     const series = this.gameState.series;
-    const next = createInitialGameState(this.lobby.mode, names, startingIndex);
+    const next = createInitialGameState(this.lobby.mode, names, startingIndex, this.lobby.ruleSet);
     for (const seat of next.seatOrder) {
       const conn = this.connections.get(seat);
       const prev = this.gameState.players[seat];
@@ -398,6 +402,7 @@ export class Room {
     this.clearShotClock();
     this.clearBotTimer();
     this.preShotGroupCleared = isGroupCleared(this.gameState, input.seat);
+    this.preShotCall = input.call ?? null;
     this.preShotLowestBall = lowestBallId(this.gameState);
     // The whole shot — speed, spin, everything — comes out of where the tip meets the ball.
     // `input.spin` is that contact point, straight off the spin pad.
@@ -428,6 +433,14 @@ export class Room {
       if (seatSocket) this.io.to(seatSocket).emit('errorMessage', 'Cue ball must stay on the table.');
       return;
     }
+    // After a scratch on the break the incoming player is confined to the kitchen. Checked
+    // here rather than trusted from the client, like every other rule.
+    if (this.gameState.ballInHandBehindLine && x > HEAD_STRING_X) {
+      if (seatSocket) {
+        this.io.to(seatSocket).emit('errorMessage', 'Behind the head string only.');
+      }
+      return;
+    }
     const overlaps = this.gameState.balls.some(
       (b) => !b.pocketed && b.id !== CUE_BALL_ID && Vec2.distance(b.pos, payload.pos) < BALL_RADIUS * 2
     );
@@ -440,6 +453,7 @@ export class Room {
     cue.pos = { x, y };
     restBall(cue);
     cue.pocketed = false;
+    this.gameState.ballInHandBehindLine = false;
     this.gameState.phase = 'aiming';
     this.broadcastGameState();
     this.onTurnReady();
@@ -458,7 +472,8 @@ export class Room {
     const next = createInitialGameState(
       this.lobby.mode,
       prev.seatOrder.map((seat) => prev.players[seat].name),
-      nextBreakIndex
+      nextBreakIndex,
+      this.lobby.ruleSet
     );
     for (const seat of next.seatOrder) {
       const before = prev.players[seat];
@@ -525,6 +540,8 @@ export class Room {
         firstBallContacted: null,
         anyCushionAfterContact: false,
         cushionsBeforeContact: 0,
+        objectBallsToRail: 0,
+        pottedIn: {},
       },
       isGroupCleared(this.gameState, this.gameState.currentShooter),
       lowestBallId(this.gameState),
@@ -618,7 +635,14 @@ export class Room {
       if (settled) {
         this.stopSimLoop();
         const outcome = summarizeShot(this.shotEvents);
-        resolveShot(this.gameState, outcome, this.preShotGroupCleared, this.preShotLowestBall);
+        resolveShot(
+          this.gameState,
+          outcome,
+          this.preShotGroupCleared,
+          this.preShotLowestBall,
+          false,
+          this.preShotCall
+        );
         if (this.gameState.phase === 'game_over') this.recordFrameResult();
         this.broadcastGameState();
         this.onTurnReady();

@@ -4,6 +4,7 @@ import {
   BALL_RADIUS,
   CORNER_MOUTH,
   CUE_BALL_ID,
+  HEAD_STRING_X,
   DEFAULT_LOADOUT,
   SIDE_MOUTH,
   TABLE_LENGTH,
@@ -661,6 +662,8 @@ export class TableRenderer {
   private scale = 1;
   private aim: { angle: number; power: number; visible: boolean } = { angle: 0, power: 0, visible: false };
   private placementGhost: { x: number; y: number } | null = null;
+  /** Ball in hand is restricted to behind the head string. */
+  private kitchenOnly = false;
   private colorblind = false;
   private theme: TableTheme = tableThemeFor(undefined);
   /** Table-wide ball art (the host's set) and the current shooter's cue/trail. */
@@ -1659,6 +1662,17 @@ export class TableRenderer {
     };
   }
 
+  /**
+   * Shows where the cue ball would be placed, and — after a scratch on the break — which half
+   * of the table you're allowed to place it in.
+   *
+   * Shading the kitchen matters as much as enforcing it: a rejected click with a toast is a
+   * far worse way to learn a rule than simply seeing where you may go.
+   */
+  setKitchenOnly(behindLine: boolean): void {
+    this.kitchenOnly = behindLine;
+  }
+
   setPlacementGhost(pos: { x: number; y: number } | null): void {
     this.placementGhost = pos;
   }
@@ -2148,6 +2162,13 @@ export class TableRenderer {
     const glow = this.cueGlowLayer;
     g.clear();
     glow.clear();
+
+    // The legal half, drawn before the ghost so the ghost sits on top of it.
+    if (this.kitchenOnly) {
+      g.rect(0, 0, HEAD_STRING_X, TABLE_WIDTH).fill({ color: 0x7fe0a0, alpha: 0.12 });
+      g.moveTo(HEAD_STRING_X, 0).lineTo(HEAD_STRING_X, TABLE_WIDTH);
+      g.stroke({ width: 3, color: 0xffffff, alpha: 0.5 });
+    }
 
     if (this.placementGhost) {
       g.circle(this.placementGhost.x, this.placementGhost.y, BALL_RADIUS).fill({ color: 0xffffff, alpha: 0.55 });

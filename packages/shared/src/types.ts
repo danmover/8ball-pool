@@ -1,5 +1,6 @@
 import type { Vec2 } from './vector.js';
 import type { Loadout } from './cosmetics.js';
+import { DEFAULT_RULE_SET, type RuleSetId } from './ruleSets.js';
 
 export type BallGroup = 'solid' | 'stripe';
 export type BallKind = 'cue' | 'eight' | BallGroup;
@@ -83,6 +84,8 @@ export type BotDifficulty = 'rookie' | 'club' | 'shark' | 'legend';
 
 export interface LobbySettings {
   mode: GameMode;
+  /** Which optional rules are in force. */
+  ruleSet: RuleSetId;
   maxPlayers: number;
   /** Per-shot countdown in seconds; null disables the clock. */
   shotClockSeconds: number | null;
@@ -92,6 +95,7 @@ export interface LobbySettings {
 
 export const DEFAULT_LOBBY: LobbySettings = {
   mode: 'classic',
+  ruleSet: DEFAULT_RULE_SET,
   maxPlayers: 2,
   shotClockSeconds: null,
   seriesTarget: 1,
@@ -135,6 +139,17 @@ export interface GameState {
   winner: Seat | null;
   winningTeam: Team | null;
   lastFoulReason: string | null;
+  /** Who took the shot that just resolved — the three-foul counter needs it after the turn passes. */
+  lastShooter: Seat | null;
+  /** Consecutive fouls per seat, for the three-foul rule. Reset by any legal shot. */
+  consecutiveFouls: Record<Seat, number>;
+  /** How strictly this frame is refereed. */
+  ruleSet: RuleSetId;
+  /**
+   * Ball in hand is restricted to behind the head string — the "kitchen" — which is what a
+   * scratch on the break costs you in every serious rule set.
+   */
+  ballInHandBehindLine: boolean;
   turnNumber: number;
   /**
    * Shot clock deadline as an absolute epoch-millis timestamp rather than a countdown, so
@@ -169,6 +184,13 @@ export interface AimInput {
 
 export interface ShootInput extends AimInput {
   power: number; // 0..1
+  /**
+   * The ball and pocket being nominated, when call shot is in force.
+   *
+   * Derived from the aim guide and confirmable by the player, rather than a second gesture —
+   * the guide already knows which ball is being struck and where it is headed.
+   */
+  call?: { ballId: number; pocketIndex: number } | null;
 }
 
 export interface BallInHandPlacement {

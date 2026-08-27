@@ -1,5 +1,14 @@
-import type { BotDifficulty, GameMode, RoomStateDTO, Seat } from '@8ball/shared';
-import { MAX_SEATS, allModes, modeDescriptor, resolveLoadout, seatId, seatIndex } from '@8ball/shared';
+import type { BotDifficulty, GameMode, RoomStateDTO, RuleSetId, Seat } from '@8ball/shared';
+import {
+  MAX_SEATS,
+  RULE_SETS,
+  allModes,
+  modeDescriptor,
+  resolveLoadout,
+  ruleSetOrder,
+  seatId,
+  seatIndex,
+} from '@8ball/shared';
 import { avatarSvg } from '../render/avatar';
 import { modeArtSvg } from '../render/modeArt';
 import { icon } from '../render/icons';
@@ -22,6 +31,7 @@ export interface LobbyCallbacks {
   onRemoveBot: (seat: Seat) => void;
   onShotClockChange: (seconds: number | null) => void;
   onSeriesChange: (target: number) => void;
+  onRuleSetChange: (id: RuleSetId) => void;
   onStart: () => void;
 }
 
@@ -66,6 +76,22 @@ export function renderLobby(
               <div class="mode-desc">${m.blurb}</div>
             </button>`
             )
+            .join('')}
+        </div>
+      </div>
+
+      <div class="lobby-card">
+        <h2 style="margin:0 0 0.25rem; font-size:0.78rem; letter-spacing:0.1em; color:var(--muted)">RULES</h2>
+        <div class="rules-row">
+          ${ruleSetOrder()
+            .map((id) => {
+              const set = RULE_SETS[id];
+              return `
+            <button class="rule-card${lobby.ruleSet === id ? ' active' : ''}" data-ruleset="${id}">
+              <div class="rule-name">${set.name}</div>
+              <div class="rule-blurb">${set.blurb}</div>
+            </button>`;
+            })
             .join('')}
         </div>
       </div>
@@ -185,6 +211,10 @@ export function renderLobby(
       </button>
     </div>
   `;
+
+  container.querySelectorAll<HTMLButtonElement>('[data-ruleset]').forEach((btn) => {
+    btn.addEventListener('click', () => cb.onRuleSetChange(btn.dataset.ruleset as RuleSetId));
+  });
 
   container.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
     btn.addEventListener('click', () => cb.onModeChange(btn.dataset.mode as GameMode));

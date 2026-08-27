@@ -1,6 +1,6 @@
 import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
-import { CUSHIONS, JAWS, inPocketApproach } from './table.js';
+import { CUSHIONS, JAWS, POCKETS, inPocketApproach, mouthDepth, pocketContaining } from './table.js';
 import { applyCueStrike, stepSimulation, strikeAngle } from './physics.js';
 import { BALL_RADIUS } from './constants.js';
 
@@ -205,6 +205,22 @@ function toSegments(points: Vec2[], from: Vec2): TrajectorySegment[] {
 
 function nearPocket(point: Vec2): boolean {
   return inPocketApproach(point);
+}
+
+/**
+ * Which pocket the previewed object ball is heading for, if any.
+ *
+ * Call shot needs a nomination, and asking for a second gesture — aim, then tap a pocket —
+ * would be tiresome for the ninety per cent of shots where the intended pocket is obvious. The
+ * guide already simulates the object ball's whole path, so the call can be *read off it* and
+ * simply confirmed, with an override for the times it guesses wrong.
+ */
+export function predictedPocket(preview: TrajectoryPreview): number | null {
+  const path = preview.objectBallPath;
+  if (path.length === 0) return null;
+  const end = path[path.length - 1].to;
+  const pocket = pocketContaining(end) ?? POCKETS.find((p) => mouthDepth(p, end) > -BALL_RADIUS * 1.5);
+  return pocket ? pocket.index : null;
 }
 
 /**

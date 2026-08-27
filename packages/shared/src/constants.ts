@@ -152,5 +152,13 @@ export const MIN_SHOT_SPEED = 150;
 export const SIM_HZ = 240; // physics substep rate
 export const BROADCAST_HZ = 45; // network tick rate while balls are moving
 
+/**
+ * The head string — the line across the table a quarter of the way down, behind which the cue
+ * ball must be placed after a scratch on the break.
+ *
+ * Already drawn on the cloth by the renderer; until now it was decoration.
+ */
+export const HEAD_STRING_X = TABLE_LENGTH * 0.25;
+
 export const CUE_BALL_ID = 0;
 export const EIGHT_BALL_ID = 8;

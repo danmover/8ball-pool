@@ -1920,3 +1920,110 @@ body.reduce-motion .star.big.earned {
   background: var(--gold);
   box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--wood-dark);
 }
+
+/* --- Rule set picker ---
+   Three presets rather than eight tick-boxes: nobody wants to configure a referee before
+   playing a frame with their mates, but the difference between "pot anything" and "call your
+   shots" is worth one deliberate choice. */
+
+.rules-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.rule-card {
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--paper-3);
+}
+
+.rule-card.active {
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--wood-dark);
+}
+
+.rule-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.95rem;
+}
+
+.rule-blurb {
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.rule-card.active .rule-blurb {
+  color: var(--wood-deep);
+}
+
+/* --- Call shot ---
+   Read off the aim guide and shown for confirmation, rather than demanded as a second gesture.
+   The six dots are the pockets, laid out as they sit on the table, for the shots where the
+   guess is wrong or genuinely ambiguous. */
+
+.call-hud {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  pointer-events: auto;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3), 0 12px 22px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.call-label {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.call-arrow {
+  color: var(--muted);
+}
+
+.call-where {
+  font-size: 0.72rem;
+  font-weight: 800;
+  min-width: 8ch;
+}
+
+/* Laid out as the pockets actually sit: three across the top, three across the bottom. */
+.call-pockets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.call-pocket {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--paper-3);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.call-pocket.active {
+  background: var(--gold);
+}
+
+/* No nomination is a declared safety rather than an error — different word, calmer colour. */
+.call-hud.safety .call-label,
+.call-hud.safety .call-where {
+  color: var(--muted);
+}
