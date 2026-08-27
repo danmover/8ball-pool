@@ -15,6 +15,7 @@ import {
   legalTargetBallIds,
   levelProgress,
   activeChallenge,
+  cosmeticById,
   modeDescriptor,
   predictedPocket,
   ruleOptions,
@@ -34,6 +35,7 @@ import {
   recordStats,
 } from '../profile/profile';
 import { recordChallengeEvent } from '../profile/dailyChallenge';
+import { addSeasonXp, recordFrameResult, recordShotFeats } from '../profile/progression';
 import { openWheel } from '../profile/wheel';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
@@ -87,6 +89,15 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
    */
   const frameStats: Record<Seat, { pots: number; shots: number; bestCombo: number }> = {};
   let shotSeat: Seat | null = null;
+  /**
+   * What the shot in flight was played with, captured at the moment it was fired.
+   *
+   * The feats can't be reconstructed afterwards — by the time the balls stop, the elevation
+   * dial has been reset and the nomination cleared.
+   */
+  let shotKind = { elevated: 0, called: false, miscued: false };
+  /** Balls potted in the current unbroken visit, for the "clearance" feats. */
+  let visitRun = 0;
   let lastPotPos: { x: number; y: number } | null = null;
   let rewardsShown = false;
   let winCelebrated = false;
@@ -95,6 +106,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let clockRaf = 0;
   /** Tracks the "win without fouling" daily objective across the frame. */
   let fouledThisFrame = false;
+  /** Set when this table was launched from the career ladder, so a win counts toward it. */
+  const careerOpponent = new URLSearchParams(window.location.search).get('career');
 
   const joinUrl = `${window.location.origin}/play/${code}`;
 
@@ -259,6 +272,9 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (!raw) return;
     autostarted = true;
     sessionStorage.removeItem(`8ball:autostart:${code}`);
+    // The career ladder names its own opponent; ordinary solo play uses your default.
+    const note = JSON.parse(raw) as { solo?: boolean; botDifficulty?: string };
+    const difficulty = (note.botDifficulty ?? settings.defaultBotDifficulty) as typeof settings.defaultBotDifficulty;
 
     const seats = Object.keys(room.players);
     socket.emit('hostClaimSeat', {
@@ -267,7 +283,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       name: getProfile().displayName,
     });
     for (const seat of seats.slice(1)) {
-      socket.emit('hostAddBot', { seat, difficulty: settings.defaultBotDifficulty });
+      socket.emit('hostAddBot', { seat, difficulty });
     }
     // Give the seat claims a beat to land before the server checks the lobby is full.
     setTimeout(() => socket.emit('hostStartGame'), 220);
@@ -418,6 +434,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
               ? { ballId: calledBall, pocketIndex: calledPocket }
               : null,
         });
+        shotKind = {
+          elevated: elevation?.getValue() ?? 0,
+          called: calledBall !== null && calledPocket !== null,
+          miscued: false,
+        };
         spinPad?.reset();
         elevation?.reset();
         calledBall = null;
@@ -760,6 +781,18 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
    * Post-match rewards for the seats this device actually played. XP is awarded once per
    * game (guarded by `rewardsShown`) so a re-render of the overlay can't double-pay.
    */
+  /** Tells the player what they just earned, one toast at a time so none of it is missed. */
+  function announceUnlocks(outcome: ReturnType<typeof recordFrameResult>): void {
+    const stack = root.querySelector<HTMLElement>('#toastStack')!;
+    if (outcome.careerReward) {
+      const item = cosmeticById(outcome.careerReward);
+      showToast(stack, `Won from the ladder: ${item?.name ?? outcome.careerReward}`, 'reward', 4200);
+    }
+    outcome.achievements.forEach((a, i) => {
+      setTimeout(() => showToast(stack, `${a.name} — ${a.blurb}`, 'reward', 4000), 700 * (i + 1));
+    });
+  }
+
   function renderRewards(state: GameState, slot: HTMLElement): void {
     const mySeats = state.seatOrder.filter((s) => state.players[s].isHost);
     if (mySeats.length === 0) return;
@@ -781,7 +814,20 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       const vsBot = state.seatOrder.some((s) => state.players[s].isBot);
       const done = recordChallengeEvent({ frameWon: iWon, frameClean: !fouledThisFrame, vsBot });
       if (done.justCompleted) showChallengeToast(done.challenge.xp);
+
+      // Career, achievements, missions and the season all resolve off one frame result.
+      const botSeat = state.seatOrder.find((s) => state.players[s].isBot);
+      const outcome = recordFrameResult({
+        won: iWon,
+        clean: !fouledThisFrame,
+        botTier: botSeat ? state.players[botSeat].botDifficulty : null,
+        careerOpponentId: careerOpponent,
+      });
+      addSeasonXp(award.xp);
+      announceUnlocks(outcome);
+
       fouledThisFrame = false;
+      visitRun = 0;
     }
 
     const profile = getProfile();
@@ -1046,6 +1092,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       // The celebrator owns the pot flash, combo callouts, sound and XP toasts.
       celebrator?.onPot(ev.pos, ev.ballId);
     } else if (ev.type === 'miscue') {
+      shotKind.miscued = true;
       // Say so out loud. A miscue looks identical to a badly played shot from the outside, and
       // "the game is broken" is the wrong lesson to take from striking too far off centre.
       showToast(root.querySelector<HTMLElement>('#toastStack')!, 'Miscue! Struck too far off centre', 'foul');
@@ -1074,8 +1121,23 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (shooterIsOurs) {
       if (summary.pots > 0) {
         grantXp(summary.xp);
+        addSeasonXp(summary.xp);
         recordStats({ pots: summary.pots, bestCombo: summary.bestCombo });
       }
+      // A visit is an unbroken run of scoring shots — the moment one fails to pot, it's over.
+      visitRun = summary.pots > 0 ? visitRun + summary.pots : 0;
+      recordShotFeats({
+        pots: summary.pots,
+        runSoFar: visitRun,
+        // Elevation is one dial with two effects, so which one it was depends on how steep it
+        // was: past 45° the ball leaves the cloth, below that it curves.
+        jumped: shotKind.elevated >= Math.PI / 4,
+        curved: shotKind.elevated > 0.1 && shotKind.elevated < Math.PI / 4,
+        called: shotKind.called,
+        miscued: shotKind.miscued,
+      });
+      shotKind = { elevated: 0, called: false, miscued: false };
+
       if (summary.pots === 0 || lastState?.lastFoulReason) fouledThisFrame = true;
       const result = recordChallengeEvent({
         potsThisShot: summary.pots,

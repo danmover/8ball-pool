@@ -136,6 +136,19 @@ export function challengeStars(challengeId: string): number {
   return getProfile().challengeStars?.[challengeId] ?? 0;
 }
 
+/**
+ * Applies an in-place edit to the profile and persists it.
+ *
+ * The progression systems each touch several fields at once and read what the others just
+ * wrote. Threading that through a dozen single-purpose setters would mean a dozen saves per
+ * frame and a real chance of one of them reading a stale copy, so they get a draft instead.
+ */
+export function mutateProfile(edit: (draft: Profile) => void): Profile {
+  const draft = structuredClone(getProfile());
+  edit(draft);
+  return commit(draft);
+}
+
 export function setDailyProgress(daily: NonNullable<Profile['daily']>): Profile {
   return commit({ ...getProfile(), daily: { ...daily } });
 }

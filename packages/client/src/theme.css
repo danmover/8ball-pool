@@ -2107,3 +2107,168 @@ body.reduce-motion .star.big.earned {
   line-height: 1.4;
   color: var(--muted);
 }
+
+/* --- Career ladder ---
+   Chapters stack down the page, opponents run across. Locked chapters stay visible but dimmed,
+   because seeing what's ahead is most of why a ladder works. */
+
+.career-page {
+  min-height: 100%;
+  padding: 1.2rem clamp(1rem, 4vw, 3rem) 3rem;
+  overflow-y: auto;
+}
+
+.career-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.career-head h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.career-head .tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.career-progress {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
+}
+
+.career-progress b {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.6rem;
+}
+
+.career-progress span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.career-chapter {
+  margin-bottom: 1.5rem;
+}
+
+.career-chapter.locked {
+  opacity: 0.45;
+}
+
+.chapter-head h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.career-chapter.cleared .chapter-head h2 {
+  color: var(--gold);
+}
+
+.chapter-head p {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.opponent-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.7rem;
+}
+
+.opponent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3), 0 12px 22px rgba(0, 0, 0, 0.35);
+}
+
+.opponent-card:disabled {
+  cursor: not-allowed;
+  filter: brightness(0.86) saturate(0.5);
+}
+
+.opponent-card.beaten {
+  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--wood-dark), 0 12px 22px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(180deg, #ffeec0 0%, var(--paper-2) 100%);
+}
+
+.opponent-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.opponent-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.opponent-done {
+  color: var(--wood-deep);
+}
+
+.opponent-taunt {
+  margin: 0;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--muted);
+  min-height: 2.4em;
+}
+
+.opponent-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.opponent-meta span {
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  background: var(--paper-3);
+}
+
+.opponent-meta .rules-chip {
+  background: var(--wood);
+  color: var(--paper);
+}
+
+.opponent-reward {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  padding-top: 0.5rem;
+  border-top: 2px dashed rgba(26, 20, 16, 0.14);
+}
+
+.reward-name {
+  font-size: 0.76rem;
+  font-weight: 800;
+}

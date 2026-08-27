@@ -20,6 +20,31 @@ export interface Profile {
   daily?: { date: string; value: number; completed: boolean; claimed: boolean };
   /** Best stars earned per trick-shot challenge, keyed by challenge id. */
   challengeStars?: Record<string, number>;
+  /** Career opponents beaten, by id. */
+  careerBeaten?: string[];
+  /** Achievement ids earned. */
+  achievements?: string[];
+  /**
+   * Counters the achievement predicates read. Separate from `stats` because that is what the
+   * profile card has always shown, and widening it would change every existing save's meaning.
+   */
+  feats?: {
+    bestRun: number;
+    cleanFrames: number;
+    winStreak: number;
+    bestWinStreak: number;
+    beatenTiers: string[];
+    jumpPots: number;
+    massePots: number;
+    calledPots: number;
+    miscues: number;
+  };
+  /** This week's mission progress, stamped with the week so it self-resets. */
+  weekly?: { week: string; progress: Record<string, number>; claimed: string[] };
+  /** Season XP and which tiers have been collected, stamped with the season. */
+  season?: { season: string; xp: number; claimed: number[] };
+  /** Elo against the bots — "am I actually getting better" needs an answer. */
+  rating?: number;
 }
 
 export interface ProfileStore {
@@ -41,6 +66,21 @@ export function createDefaultProfile(): Profile {
     loadout: { ...DEFAULT_LOADOUT },
     stats: { pots: 0, wins: 0, games: 0, bestCombo: 0 },
     challengeStars: {},
+    careerBeaten: [],
+    achievements: [],
+    feats: {
+      bestRun: 0,
+      cleanFrames: 0,
+      winStreak: 0,
+      bestWinStreak: 0,
+      beatenTiers: [],
+      jumpPots: 0,
+      massePots: 0,
+      calledPots: 0,
+      miscues: 0,
+    },
+    // 1000 is the conventional Elo starting point, and "beat Club to climb" is a fair floor.
+    rating: 1000,
   };
 }
 
@@ -60,6 +100,10 @@ export class LocalProfileStore implements ProfileStore {
         loadout: { ...DEFAULT_LOADOUT, ...(parsed.loadout ?? {}) },
         stats: { ...fallback.stats, ...(parsed.stats ?? {}) },
         challengeStars: { ...(parsed.challengeStars ?? {}) },
+        careerBeaten: [...(parsed.careerBeaten ?? [])],
+        achievements: [...(parsed.achievements ?? [])],
+        feats: { ...fallback.feats!, ...(parsed.feats ?? {}) },
+        rating: parsed.rating ?? fallback.rating,
       };
     } catch {
       return fallback;
