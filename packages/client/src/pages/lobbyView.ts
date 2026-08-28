@@ -34,7 +34,7 @@ export interface LobbyCallbacks {
   onRuleSetChange: (id: RuleSetId) => void;
   onStart: () => void;
   onStartTournament: (target: number, entrants: number) => void;
-  onStartKing: () => void;
+  onStartKing: (entrants: number) => void;
   /** Claim every remaining seat for this screen — one device, players taking turns. */
   onPassAndPlay: () => void;
   onHandicapChange: (seat: Seat, spots: number) => void;
@@ -231,7 +231,7 @@ export function renderLobby(
       <button id="startKing" class="secondary" ${filled >= 2 ? '' : 'disabled'}
               style="min-width:210px"
               title="Winner stays on; everyone else queues. Empty places are filled by bots">
-        King of the Table
+        ${filled >= 2 ? `King of the Table · ${Math.max(3, tournamentEntrants)}` : 'King of the Table'}
       </button>
       <button id="passAndPlay" class="secondary" style="min-width:210px"
               title="Everyone plays from this screen, taking turns — no phones needed">
@@ -287,7 +287,7 @@ export function renderLobby(
       cb.onHandicapChange(seat, next);
     });
   });
-  container.querySelector('#startKing')?.addEventListener('click', () => cb.onStartKing());
+  container.querySelector('#startKing')?.addEventListener('click', () => cb.onStartKing(tournamentEntrants));
   container.querySelector('#passAndPlay')?.addEventListener('click', () => cb.onPassAndPlay());
   container.querySelector('#startGame')?.addEventListener('click', () => cb.onStart());
   container

@@ -375,7 +375,7 @@ export interface ClientToServerEvents {
   hostReleaseSeat: (payload: { seat: Seat }) => void;
   hostUpdateLobby: (payload: Partial<LobbySettings>) => void;
   hostStartGame: () => void;
-  hostStartKing: () => void;
+  hostStartKing: (payload: { entrants: number }) => void;
   /** Spend one handicap ball-in-hand token. */
   useSpot: (payload: { seat: Seat }) => void;
   /** Reopen the lobby after a game so the table can be set up differently. */

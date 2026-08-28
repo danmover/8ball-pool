@@ -128,10 +128,10 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       room.startTournament(target, entrants);
     });
 
-    socket.on('hostStartKing', () => {
+    socket.on('hostStartKing', ({ entrants }) => {
       const room = rooms.get(socket.data.roomCode);
       if (!room || room.hostSocketId !== socket.id) return;
-      room.startKingOfTable();
+      room.startKingOfTable(entrants);
     });
 
     socket.on('hostReturnToLobby', () => {

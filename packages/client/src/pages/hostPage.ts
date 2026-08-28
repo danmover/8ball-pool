@@ -272,7 +272,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         onStartTournament: (target, entrants) =>
           socket.emit('hostStartTournament', { target, entrants }),
         onSeriesChange: (seriesTarget) => socket.emit('hostUpdateLobby', { seriesTarget }),
-        onStartKing: () => socket.emit('hostStartKing'),
+        onStartKing: (entrants) => socket.emit('hostStartKing', { entrants }),
         onPassAndPlay: () => {
           // Claim every seat that's still open. Seats already taken by a phone or a bot are
           // left alone — mixing the two on one table is legitimate and shouldn't be undone.

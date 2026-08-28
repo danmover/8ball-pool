@@ -92,8 +92,8 @@ export class Room {
   /** Entrants in the knockout, which is independent of how many a *match* seats. */
   private tournamentEntrants: number | null = null;
   private king: KingOfTable | null = null;
-  /** Power-up effects waiting for the table to change hands. */
-  private pendingAgainstOpponent: ShotModifiers = { ...NO_MODIFIERS };
+  /** Power-up effects banked per seat, cashed when that seat next shoots. */
+  private pendingModifiers = new Map<Seat, ShotModifiers>();
   private kingSeats: number | null = null;
   private lastEmoteAt = new Map<Seat, number>();
 
@@ -208,8 +208,8 @@ export class Room {
       // Handicap tokens refill every frame — a spot you didn't need last frame isn't banked.
       next.players[seat].spotsLeft = this.lobby.handicaps[seat]?.spots ?? 0;
     }
-    // A new rack clears any banked power-up: an effect armed last frame has nothing to act on.
-    this.pendingAgainstOpponent = { ...NO_MODIFIERS };
+    // A new rack clears every banked power-up: an effect armed last frame has nothing to act on.
+    this.pendingModifiers.clear();
     next.series =
       this.lobby.seriesTarget > 1
         ? series ?? { target: this.lobby.seriesTarget, frame: 1, wins: {} }
@@ -578,7 +578,14 @@ export class Room {
       next.players[seat].loadout = { ...before.loadout };
       next.players[seat].isBot = before.isBot;
       next.players[seat].botDifficulty = before.botDifficulty;
+      // Handicap tokens refill with the rack. They're seeded from the lobby rather than
+      // carried over: a spot you didn't need last frame isn't banked, and one you spent
+      // isn't held against you.
+      next.players[seat].spotsLeft = this.lobby.handicaps[seat]?.spots ?? 0;
     }
+
+    // Likewise every banked power-up. An effect armed last frame has nothing left to act on.
+    this.pendingModifiers.clear();
 
     if (prev.series && !seriesOver) {
       next.series = { ...prev.series, frame: prev.series.frame + 1, wins: { ...prev.series.wins } };
@@ -767,23 +774,37 @@ export class Room {
     for (const ev of events) {
       if (ev.type === 'pickup') armed = applyPickup(armed, ev.kind, ev.pos);
     }
-    const { mine, theirs } = splitModifiers(armed);
 
-    // Opponent-targeted effects are banked rather than applied straight away. Arming a freeze
-    // and then keeping the table would otherwise blind you with your own power-up.
-    this.pendingAgainstOpponent = {
-      ...this.pendingAgainstOpponent,
-      blockedPocket: theirs.blockedPocket ?? this.pendingAgainstOpponent.blockedPocket,
-      freezeGuide: theirs.freezeGuide || this.pendingAgainstOpponent.freezeGuide,
-    };
-
-    if (this.gameState.currentShooter === this.gameState.lastShooter) {
-      this.gameState.modifiers = mine;
-      return;
+    const collector = this.gameState.lastShooter;
+    if (collector) {
+      const { mine, theirs } = splitModifiers(armed);
+      // Banked per seat rather than applied straight to the next shot. Two things go wrong
+      // otherwise: arming a freeze and *keeping* the table blinds you with your own power-up,
+      // and arming a magnet and then missing throws it away silently — which is the worse of
+      // the two, because you paid for it by routing the cue ball there.
+      this.bankModifiers(collector, mine);
+      for (const seat of this.gameState.seatOrder) {
+        if (seat !== collector) this.bankModifiers(seat, theirs);
+      }
     }
-    // The table changed hands, so the bank is cashed against whoever just walked up.
-    this.gameState.modifiers = { ...this.pendingAgainstOpponent };
-    this.pendingAgainstOpponent = { ...NO_MODIFIERS };
+
+    // Whoever is about to shoot cashes their bank. It is spent by being played, so the entry
+    // is cleared here rather than after the shot — an effect lasts exactly one stroke.
+    const shooter = this.gameState.currentShooter;
+    this.gameState.modifiers = this.pendingModifiers.get(shooter) ?? { ...NO_MODIFIERS };
+    this.pendingModifiers.delete(shooter);
+  }
+
+  /** Merges effects into a seat's bank. Same-kind effects replace rather than stack. */
+  private bankModifiers(seat: Seat, add: ShotModifiers): void {
+    const held = this.pendingModifiers.get(seat) ?? { ...NO_MODIFIERS };
+    this.pendingModifiers.set(seat, {
+      magnetPocket: add.magnetPocket ?? held.magnetPocket,
+      blockedPocket: add.blockedPocket ?? held.blockedPocket,
+      ghostLine: add.ghostLine || held.ghostLine,
+      freezeGuide: add.freezeGuide || held.freezeGuide,
+      bonusVisit: add.bonusVisit || held.bonusVisit,
+    });
   }
 
   /** Banks a frame win into the running series or tournament, whichever is in play. */
@@ -840,11 +861,16 @@ export class Room {
    * the same reason: rebuilding the room between frames would drop cosmetics, reconnect tokens
    * and the spectator queue purely to avoid skipping seats in the turn order.
    */
-  startKingOfTable(): void {
+  startKingOfTable(entrants: number): void {
     if (this.started) return;
-    // At least three makes it a queue rather than a rematch; bots fill the gap when a room is
-    // short, exactly as they do for a bracket.
-    this.kingSeats = Math.max(3, Math.min(MAX_SEATS, this.connections.size));
+    // The count has to be passed in for the same reason the bracket's is: eight-ball seats
+    // exactly two, so `lobby.maxPlayers` is how many play at once, not how many are in the
+    // queue. Deriving it from `connections.size` had the same failure — the clamp rejects the
+    // third and fourth players before they can be counted.
+    //
+    // At least three makes it a queue rather than a rematch; bots fill any gap, exactly as
+    // they do for a bracket.
+    this.kingSeats = Math.max(3, Math.min(MAX_SEATS, Math.round(entrants)));
     for (const seat of this.seats()) {
       if (!this.connections.has(seat)) this.addBot(seat, DEFAULT_SETTINGS.defaultBotDifficulty);
     }
