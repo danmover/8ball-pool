@@ -24,6 +24,7 @@ import { sampleRamp, trailStyleFor, type TrailStyle } from './cosmetics/trailSty
 import { applyTableThemeToPage, tableThemeFor, type TableTheme } from './cosmetics/tableThemes';
 import { hitEffectFor, type HitEffect } from './cosmetics/hitEffects';
 import { drawScene } from './cosmetics/scenes';
+import { sceneCacheKey } from './sceneKey';
 
 const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
@@ -1098,11 +1099,7 @@ export class TableRenderer {
       w: (TABLE_LENGTH + RAIL * 2) * baseScale,
       h: (TABLE_WIDTH + RAIL * 2) * baseScale,
     };
-    // The scale belongs in the key, not just the canvas size. `chromeless` changes the fit from
-    // 0.8 to 1.0 at the *same* canvas size, so without it the room stayed painted for whichever
-    // layout happened first — a table footprint 25% too big, which put every prop off-screen and
-    // stretched the rug to the canvas edges.
-    const key = `${this.theme.id}|${Math.round(w)}x${Math.round(h)}|${baseScale.toFixed(3)}`;
+    const key = sceneCacheKey(this.theme.id, w, h, baseScale);
     if (key !== this.sceneKey) {
       this.sceneKey = key;
       drawScene(this.sceneLayer, this.theme, w, h, table);

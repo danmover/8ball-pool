@@ -129,6 +129,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let replayRaf = 0;
   /** The last thing the game said about a shot, reused as the share card's headline. */
   let lastCalloutText: string | null = null;
+  /** Set while the review bar is open, so the R key can toggle it shut again. */
+  let closeReplay: () => void = () => {};
   /** Balls potted in the current unbroken visit, for the "clearance" feats. */
   let visitRun = 0;
   /** The longest unbroken run this frame, for the stats page's longest clearance. */
@@ -450,12 +452,6 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
           spinPad?.reset();
           elevation?.reset();
           break;
-        case 'r':
-        case 'R':
-          // Watch the last shot back without waiting for the frame to end. Wanting to see what
-          // a massé actually did is not something that can wait ten minutes for a result card.
-          openReplay(0.35);
-          break;
         default:
           return;
       }
@@ -463,6 +459,23 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     };
     window.addEventListener('keydown', onShotKey);
     cleanups.push(() => window.removeEventListener('keydown', onShotKey));
+
+    /*
+     * Review the last shot. Deliberately *outside* `onShotKey`, which returns early whenever
+     * the spin pad is hidden — i.e. whenever it isn't your turn. Wanting to see the shot your
+     * opponent just played is at least as common as reviewing your own, and it is exactly the
+     * moment the aim controls are put away.
+     */
+    const onReviewKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'r' && e.key !== 'R') return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // A second press closes it again, so the same key gets you out.
+      if (root.querySelector('#replayOverlay')) closeReplay();
+      else openReplay(0.35);
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onReviewKey);
+    cleanups.push(() => window.removeEventListener('keydown', onReviewKey));
 
     // Holding shift also slows the aim drag itself, for the same reason.
     const onShift = (e: KeyboardEvent): void => aimController?.setPrecise(e.shiftKey);
@@ -1535,7 +1548,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     cancelAnimationFrame(replayRaf);
     replayRaf = requestAnimationFrame(tick);
 
-    const close = (): void => {
+    closeReplay = (): void => {
       cancelAnimationFrame(replayRaf);
       replayPlayer.pause();
       renderer?.setCamera(null, 0);
@@ -1543,6 +1556,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       // Back to the real table, which has not moved while we were looking away.
       if (lastState) renderer?.updateBalls(lastState.balls);
     };
+    const close = closeReplay;
 
     overlay.querySelector('#rpPlay')!.addEventListener('click', () => {
       if (replayPlayer.isPlaying) replayPlayer.pause();
