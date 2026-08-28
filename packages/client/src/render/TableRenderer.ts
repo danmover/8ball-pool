@@ -1044,13 +1044,19 @@ export class TableRenderer {
     let ox = (w - boardW * this.scale) / 2 - left * this.scale;
     let oy = (h - boardH * this.scale) / 2 - BOARD_TOP * this.scale;
 
+    // The unzoomed layout, kept aside. The room is painted against *this* rather than against
+    // the camera, so pushing in doesn't invalidate its cache — see the transform below.
+    const baseScale = this.scale;
+    const baseOx = ox;
+    const baseOy = oy;
+
     // Push in toward a point on the cloth, for replays and the winning ball.
     //
-    // Blended from the *unzoomed* layout rather than composed on top of it, so at camNow = 0
-    // the arithmetic collapses exactly back to the line above. A camera that drifts a pixel
-    // when it is supposed to be off is worse than no camera.
+    // Blended from the unzoomed layout rather than composed on top of it, so at camNow = 0 the
+    // arithmetic collapses exactly back to the lines above. A camera that drifts a pixel when
+    // it is supposed to be off is worse than no camera.
     if (this.camNow > 0.001 && this.camFocus) {
-      const zoomed = this.scale * (1 + (CAMERA_ZOOM - 1) * this.camNow);
+      const zoomed = baseScale * (1 + (CAMERA_ZOOM - 1) * this.camNow);
       const fx = w / 2 - this.camFocus.x * zoomed;
       const fy = h / 2 - this.camFocus.y * zoomed;
       ox += (fx - ox) * this.camNow;
@@ -1058,6 +1064,21 @@ export class TableRenderer {
       this.scale = zoomed;
       this.root.scale.set(this.scale);
     }
+
+    /*
+     * The room follows the camera as a *transform*, never a repaint.
+     *
+     * It used to be painted from the live scale, so easing the camera in redrew the whole room
+     * — floor, rug, furniture, the lot — on every frame of the move. At 0.35× playback that is
+     * several hundred full vector repaints for one replay. The room is a fixed picture; moving
+     * the view over it is two numbers.
+     *
+     * Solves A(x) = o + (x - baseO)·k for the screen-space map from the unzoomed layout to the
+     * current one, where k is the ratio of the two scales.
+     */
+    const k = this.scale / baseScale;
+    this.sceneLayer.scale.set(k);
+    this.sceneLayer.position.set(ox - baseOx * k, oy - baseOy * k);
 
     if (this.shakeMag > 0.01) {
       ox += (Math.random() - 0.5) * this.shakeMag;
@@ -1069,17 +1090,19 @@ export class TableRenderer {
     // geometry and none of it moves. The room is drawn from directly above, like the table, so
     // it needs the table's whole footprint on screen to arrange the floor around rather than
     // just where its top edge lands.
+    // Deliberately the *base* layout: the room is painted once for the table's resting
+    // position and then transformed, rather than repainted as the camera moves.
     const table = {
-      x: ox - RAIL * this.scale,
-      y: oy - RAIL * this.scale,
-      w: (TABLE_LENGTH + RAIL * 2) * this.scale,
-      h: (TABLE_WIDTH + RAIL * 2) * this.scale,
+      x: baseOx - RAIL * baseScale,
+      y: baseOy - RAIL * baseScale,
+      w: (TABLE_LENGTH + RAIL * 2) * baseScale,
+      h: (TABLE_WIDTH + RAIL * 2) * baseScale,
     };
     // The scale belongs in the key, not just the canvas size. `chromeless` changes the fit from
     // 0.8 to 1.0 at the *same* canvas size, so without it the room stayed painted for whichever
     // layout happened first — a table footprint 25% too big, which put every prop off-screen and
     // stretched the rug to the canvas edges.
-    const key = `${this.theme.id}|${Math.round(w)}x${Math.round(h)}|${this.scale.toFixed(3)}`;
+    const key = `${this.theme.id}|${Math.round(w)}x${Math.round(h)}|${baseScale.toFixed(3)}`;
     if (key !== this.sceneKey) {
       this.sceneKey = key;
       drawScene(this.sceneLayer, this.theme, w, h, table);

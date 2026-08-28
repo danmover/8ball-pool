@@ -182,7 +182,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     <div class="host-spin-wrap" id="hostSpinWrap" style="display:none">
       <div class="spin-label">SPIN</div>
       <div id="hostSpin"></div>
-      <div class="spin-hint">Arrows nudge spin · Shift+arrows fine-aim · C to centre</div>
+      <div class="spin-hint">Arrows nudge spin · Shift+arrows fine-aim · C to centre · R to review</div>
       <div class="spin-label">CUE</div>
       <div id="hostElevation"></div>
     </div>
@@ -449,6 +449,12 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         case 'C':
           spinPad?.reset();
           elevation?.reset();
+          break;
+        case 'r':
+        case 'R':
+          // Watch the last shot back without waiting for the frame to end. Wanting to see what
+          // a massé actually did is not something that can wait ten minutes for a result card.
+          openReplay(0.35);
           break;
         default:
           return;
