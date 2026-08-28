@@ -14,7 +14,15 @@ export type CosmeticSlot =
   | 'hitEffect'
   | 'banner'
   | 'bannerEffect'
-  | 'avatar';
+  | 'avatar'
+  /**
+   * The cube you chalk with, drawn on the rail and puffed on every strike.
+   *
+   * Added as its own slot rather than folded into cues because it is the one piece of kit
+   * that is visible on *someone else's* shot — the puff happens wherever the cue ball is
+   * struck, so a chalk choice is the one cosmetic your opponent cannot help noticing.
+   */
+  | 'chalk';
 
 export interface CosmeticItem {
   id: string;
@@ -36,6 +44,7 @@ export const SLOT_ORDER: CosmeticSlot[] = [
   'banner',
   'bannerEffect',
   'avatar',
+  'chalk',
 ];
 
 export const SLOT_LABELS: Record<CosmeticSlot, string> = {
@@ -46,6 +55,7 @@ export const SLOT_LABELS: Record<CosmeticSlot, string> = {
   banner: 'Banners',
   bannerEffect: 'Banner FX',
   avatar: 'Avatars',
+  chalk: 'Chalk',
 };
 
 export const RARITY_ORDER: Rarity[] = ['common', 'rare', 'epic', 'legendary', 'mystic'];
@@ -159,6 +169,64 @@ export const CATALOG: CosmeticItem[] = [
   { id: 'avatar.shark', slot: 'avatar', name: 'Shark', rarity: 'epic', blurb: 'Circling the table.' },
   { id: 'avatar.flame', slot: 'avatar', name: 'Firebrand', rarity: 'legendary', blurb: 'Permanently on fire.' },
 
+
+  // ---- Chalk ----
+  { id: 'chalk.blue', slot: 'chalk', name: 'Master Blue', rarity: 'common', blurb: 'The cube in every pub in the country.' },
+  { id: 'chalk.green', slot: 'chalk', name: 'Table Green', rarity: 'common', blurb: 'Matches the cloth, hides the mess.' },
+  { id: 'chalk.red', slot: 'chalk', name: 'Red Devil', rarity: 'common', blurb: 'Leaves its mark on everything.' },
+  { id: 'chalk.talc', slot: 'chalk', name: 'White Talc', rarity: 'rare', blurb: 'Barely there. Purists only.' },
+  { id: 'chalk.violet', slot: 'chalk', name: 'Violet Grip', rarity: 'rare', blurb: 'Tournament grade, faintly perfumed.' },
+  { id: 'chalk.copper', slot: 'chalk', name: 'Copper Dust', rarity: 'rare', blurb: 'Puffs a warm metallic haze.' },
+  { id: 'chalk.neon', slot: 'chalk', name: 'Blacklight', rarity: 'epic', blurb: 'Glows on the tip for a whole frame.' },
+  { id: 'chalk.ember', slot: 'chalk', name: 'Ember', rarity: 'epic', blurb: 'The dust drifts upward, not down.' },
+  { id: 'chalk.frost', slot: 'chalk', name: 'Frostbite', rarity: 'epic', blurb: 'The puff hangs and crystallises.' },
+  { id: 'chalk.midas', slot: 'chalk', name: 'Gilded Cube', rarity: 'legendary', blurb: 'Gold leaf. Ruinously impractical.' },
+  { id: 'chalk.stardust', slot: 'chalk', name: 'Stardust', rarity: 'legendary', blurb: 'Each puff is a small constellation.' },
+
+  // ---- Second wave: cues ----
+  { id: 'cue.driftwood', slot: 'cue', name: 'Driftwood', rarity: 'common', blurb: 'Found on a beach, never explained.' },
+  { id: 'cue.tartan', slot: 'cue', name: 'Tartan Wrap', rarity: 'common', blurb: 'Loud, warm, unapologetic.' },
+  { id: 'cue.brassneck', slot: 'cue', name: 'Brass Neck', rarity: 'rare', blurb: 'For the shot you have no business taking.' },
+  { id: 'cue.stormglass', slot: 'cue', name: 'Stormglass', rarity: 'epic', blurb: 'Clouds move inside the butt.' },
+  { id: 'cue.lantern', slot: 'cue', name: 'Lantern', rarity: 'epic', blurb: 'Lights the cloth just ahead of the tip.' },
+  { id: 'cue.oathkeeper', slot: 'cue', name: 'Oathkeeper', rarity: 'legendary', blurb: 'Straighter than you deserve.' },
+
+  // ---- Second wave: ball sets ----
+  { id: 'balls.bakelite', slot: 'ballSet', name: 'Bakelite', rarity: 'common', blurb: 'Brown, heavy, and older than you.' },
+  { id: 'balls.enamel', slot: 'ballSet', name: 'Enamel', rarity: 'rare', blurb: 'Hard gloss over deep colour.' },
+  { id: 'balls.circuit', slot: 'ballSet', name: 'Motherboard', rarity: 'epic', blurb: 'Etched traces under the lacquer.' },
+  { id: 'balls.lantern', slot: 'ballSet', name: 'Paper Lanterns', rarity: 'epic', blurb: 'Lit softly from within.' },
+  { id: 'balls.obsidian', slot: 'ballSet', name: 'Obsidian Set', rarity: 'legendary', blurb: 'Black glass; the numbers are inlaid silver.' },
+
+  // ---- Second wave: trails ----
+  { id: 'trail.chalkline', slot: 'trail', name: 'Chalk Line', rarity: 'common', blurb: 'A dusty streak, like a snooker diagram.' },
+  { id: 'trail.ripple', slot: 'trail', name: 'Ripple', rarity: 'rare', blurb: 'The cloth behaves like water.' },
+  { id: 'trail.petals', slot: 'trail', name: 'Petals', rarity: 'epic', blurb: 'Scatters blossom and forgets to clean up.' },
+  { id: 'trail.aurora', slot: 'trail', name: 'Northern Lights', rarity: 'legendary', blurb: 'Green and violet sheets, low over the baize.' },
+
+  // ---- Second wave: hit effects ----
+  { id: 'hit.thud', slot: 'hitEffect', name: 'Honest Thud', rarity: 'common', blurb: 'No effect at all, and proud of it.' },
+  { id: 'hit.pinball', slot: 'hitEffect', name: 'Pinball', rarity: 'rare', blurb: 'Bells, bumpers, a rising score.' },
+  { id: 'hit.glassbreak', slot: 'hitEffect', name: 'Glassbreak', rarity: 'epic', blurb: 'Sounds much worse than it is.' },
+  { id: 'hit.stampede', slot: 'hitEffect', name: 'Stampede', rarity: 'legendary', blurb: 'Dust, thunder, and something enormous passing.' },
+
+  // ---- Second wave: banners ----
+  { id: 'banner.marquee', slot: 'banner', name: 'Marquee', rarity: 'rare', blurb: 'Bulbs around the edge, two of them out.' },
+  { id: 'banner.stainedglass', slot: 'banner', name: 'Stained Glass', rarity: 'epic', blurb: 'Lit from behind, saintly.' },
+  { id: 'banner.laurelplate', slot: 'banner', name: 'Laurel Plate', rarity: 'legendary', blurb: 'Gilded, engraved, and heavier than the trophy.' },
+
+  // ---- Second wave: avatars ----
+  { id: 'avatar.pint', slot: 'avatar', name: 'Half of Bitter', rarity: 'common', blurb: 'Left on the rail, obviously.' },
+  { id: 'avatar.jukebox', slot: 'avatar', name: 'Jukebox', rarity: 'rare', blurb: 'Three plays for a pound.' },
+  { id: 'avatar.moth', slot: 'avatar', name: 'Table Moth', rarity: 'epic', blurb: 'Drawn to the light above the baize.' },
+  { id: 'avatar.ghost', slot: 'avatar', name: 'The Ghost', rarity: 'legendary', blurb: 'Never misses. Never actually turns up.' },
+
+  // ---- Second wave: banner effects ----
+  { id: 'fx.dust', slot: 'bannerEffect', name: 'Chalk Dust', rarity: 'common', blurb: 'Settles gently over your name.' },
+  { id: 'fx.tickertape', slot: 'bannerEffect', name: 'Ticker Tape', rarity: 'rare', blurb: 'Your win count, scrolling.' },
+  { id: 'fx.spotlight', slot: 'bannerEffect', name: 'Spotlight', rarity: 'epic', blurb: 'Follows you. Slightly late.' },
+  { id: 'fx.laurels', slot: 'bannerEffect', name: 'Laurels', rarity: 'legendary', blurb: 'Grown, not awarded.' },
+
   // ---- Mystic: one per slot, and each one is meant to be ridiculous ----
   {
     id: 'cue.eventhorizon',
@@ -196,6 +264,13 @@ export const CATALOG: CosmeticItem[] = [
     blurb: 'Your name written in a script nobody agreed on.',
   },
   {
+    id: 'chalk.singularity',
+    slot: 'chalk',
+    name: 'Singularity Cube',
+    rarity: 'mystic',
+    blurb: 'Chalks the tip by removing the parts that were never going to help.',
+  },
+  {
     id: 'fx.thirdeye',
     slot: 'bannerEffect',
     name: 'Third Eye',
@@ -220,6 +295,7 @@ export const DEFAULT_LOADOUT: Required<Loadout> = {
   banner: 'banner.oak',
   bannerEffect: 'fx.none',
   avatar: 'avatar.ball',
+  chalk: 'chalk.blue',
 };
 
 export const STARTER_IDS: string[] = Object.values(DEFAULT_LOADOUT);

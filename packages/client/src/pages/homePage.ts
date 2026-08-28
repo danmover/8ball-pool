@@ -11,7 +11,7 @@ import { getSocket } from '../net/socket';
 import { loadSettings, saveSession, saveSettings } from '../settings/settingsStore';
 import { equippedLoadout, getProfile, setDisplayName } from '../profile/profile';
 import { achievementSummary, weeklyMissions } from '../profile/progression';
-import { openWheel } from '../profile/wheel';
+import { openCase } from '../profile/caseReel';
 import { playerBannerHtml } from '../render/banner';
 import { modeArtSvg } from '../render/modeArt';
 import { TableRenderer } from '../render/TableRenderer';
@@ -409,7 +409,7 @@ export function renderHomePage(root: HTMLElement): () => void {
 
   root.querySelector('#lockerBtn')!.addEventListener('click', () => {
     if (getProfile().spins > 0) {
-      void openWheel(root).then(() => drawPlayer());
+      void openCase(root).then(() => drawPlayer());
       return;
     }
     navigate('/profile');

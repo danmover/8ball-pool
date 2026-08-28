@@ -17,7 +17,7 @@ import {
   recordStats,
   setDisplayName,
 } from '../profile/profile';
-import { openWheel } from '../profile/wheel';
+import { openCase } from '../profile/caseReel';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings, saveSession } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
@@ -348,7 +348,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       </div>`;
 
     slot.querySelector('#spinNow')?.addEventListener('click', () => {
-      void openWheel(root).then(() => {
+      void openCase(root).then(() => {
         socket.emit('setLoadout', { loadout: equippedLoadout() });
         renderer?.setBallSet(equippedLoadout().ballSet);
         renderRewards(iWon, slot);

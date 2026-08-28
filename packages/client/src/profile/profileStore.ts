@@ -48,6 +48,15 @@ export interface Profile {
   /** Head-to-head records, keyed by `rivalKey(name)`. */
   rivals?: Record<string, RivalRecord>;
   /**
+   * Saved kits. Changing your look meant eight separate equips; a preset is one tap.
+   *
+   * Stored as whole loadouts rather than as diffs so a preset saved today still means the
+   * same thing after the catalogue grows.
+   */
+  presets?: { name: string; loadout: Loadout }[];
+  /** Sets whose completion reward has been handed over. */
+  claimedSets?: string[];
+  /**
    * Counters the stats page reads. Kept apart from `stats` for the same reason `feats` is —
    * that object is what the profile card has always shown, and widening it would change what
    * every existing save means.

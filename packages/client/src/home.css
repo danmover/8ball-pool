@@ -1287,3 +1287,555 @@ body.reduce-motion .shot-callout {
   font-size: 1.15rem;
   line-height: 1.25;
 }
+
+/* ================= Case opening ================= */
+.case-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 14, 0.82);
+  backdrop-filter: blur(3px);
+  padding: 1rem;
+}
+
+.case-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  width: min(760px, 96vw);
+  padding: 1.2rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 8px 0 var(--paper-3),
+    0 26px 60px rgba(0, 0, 0, 0.6);
+}
+
+.case-sub {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+/* ---- The strip ---- */
+.reel-stage {
+  position: relative;
+  width: 100%;
+  height: 128px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #16121c;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.reel-track {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0;
+  /* The marker sits at the centre; the strip is offset so cell 0 starts under it. */
+  padding-left: calc(50% - 48px);
+  will-change: transform;
+}
+
+.reel-cell {
+  flex: 0 0 96px;
+  height: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  border-radius: 10px;
+  background: #221b2c;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+  /* A bar of the rarity colour along the bottom — readable even at speed. */
+  border-bottom: 4px solid var(--rc, #7d8aa0);
+}
+
+.reel-cell.rarity-common { --rc: #7d8aa0; }
+.reel-cell.rarity-rare { --rc: #4aa8ff; }
+.reel-cell.rarity-epic { --rc: #b46aff; }
+.reel-cell.rarity-legendary { --rc: #ffc94d; }
+.reel-cell.rarity-mystic { --rc: #c9a8ff; }
+
+.reel-name {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+  line-height: 1.1;
+  padding: 0 0.2rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reel-marker {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  transform: translateX(-50%);
+  background: #ffd569;
+  box-shadow: 0 0 12px rgba(255, 213, 105, 0.9);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.reel-marker::before,
+.reel-marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+}
+
+.reel-marker::before { top: -1px; border-top-color: #ffd569; }
+.reel-marker::after { bottom: -1px; border-bottom-color: #ffd569; }
+
+/* Edges fade so the strip reads as continuous rather than as a list that stops. */
+.reel-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 84px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.reel-fade.left {
+  left: 0;
+  background: linear-gradient(90deg, #16121c 0%, rgba(22, 18, 28, 0) 100%);
+}
+
+.reel-fade.right {
+  right: 0;
+  background: linear-gradient(270deg, #16121c 0%, rgba(22, 18, 28, 0) 100%);
+}
+
+/* The tease: something better is sliding past the marker right now. */
+.reel-stage.teasing .reel-marker {
+  background: #fff;
+  box-shadow: 0 0 22px rgba(255, 255, 255, 0.95);
+}
+
+.reel-stage.landed {
+  box-shadow: inset 0 0 0 2px var(--rc, #7d8aa0);
+}
+
+.reel-stage.landed-epic { --rc: #b46aff; }
+.reel-stage.landed-legendary { --rc: #ffc94d; }
+.reel-stage.landed-mystic { --rc: #c9a8ff; }
+
+.reel-cell.is-winner {
+  box-shadow:
+    inset 0 0 0 2px var(--rc),
+    0 0 26px var(--rc);
+}
+
+.case-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.case-odds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.odds-chip {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #14141a;
+  background: var(--c);
+}
+
+/* ---- The reveal, laid over the reel rather than replacing it ---- */
+.case-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1.2rem;
+  border-radius: 20px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  animation: revealIn 260ms ease both;
+}
+
+@keyframes revealIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+body.reduce-motion .case-reveal { animation: none; }
+
+.reveal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+/* ---- Confetti ---- */
+.case-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: hidden;
+}
+
+.case-burst i {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 9px;
+  height: 14px;
+  background: var(--c);
+  border-radius: 2px;
+  animation: confetti var(--d) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes confetti {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 0; }
+}
+
+/* ================= Locker ================= */
+.locker-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.8rem 0 0.6rem;
+}
+
+.locker-tab {
+  position: relative;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.locker-tab.active {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  border-color: #14141a;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #d94b3a;
+  color: #fff;
+  font-size: 0.65rem;
+}
+
+/* Per-shelf counts beside each slot tab. */
+.slot-count {
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-tab.complete .slot-count {
+  opacity: 1;
+  color: #6ee7a0;
+}
+
+/* ---- Filter bar ---- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.filter-search {
+  flex: 1 1 180px;
+  min-width: 140px;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+.filter-select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.filter-count {
+  margin-left: auto;
+  font-size: 0.72rem;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-grid {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* The set an item belongs to, so it reads as a step toward something. */
+.item-set {
+  font-size: 0.62rem;
+  font-weight: 700;
+  opacity: 0.55;
+  text-align: center;
+}
+
+/* ---- Collection ---- */
+.collection-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.collection-head h2 { margin: 0; }
+.collection-head p { margin: 0.15rem 0 0; }
+
+.collection-ring {
+  flex: 0 0 auto;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(#ffd569 calc(var(--p) * 1%), rgba(255, 255, 255, 0.1) 0);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.collection-ring span {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--bg-1, #1a1520);
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+
+.shelf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1.4rem;
+}
+
+.shelf-row {
+  display: grid;
+  grid-template-columns: 7rem 1fr 3.2rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.shelf-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.shelf-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7d8aa0, #ffd569);
+}
+
+.shelf-row.complete .shelf-fill { background: #6ee7a0; }
+
+.shelf-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.section-head {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+}
+
+.set-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.7rem;
+}
+
+.set-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.8rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.set-card.complete {
+  box-shadow: inset 0 0 0 2px #ffd569;
+}
+
+.set-card.claimed {
+  opacity: 0.55;
+}
+
+.set-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.set-count {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-blurb {
+  margin: 0;
+  font-size: 0.74rem;
+  opacity: 0.65;
+}
+
+.set-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.set-piece {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  /* Banner previews are wide rather than square, and spilled over the tile beside them. */
+  overflow: hidden;
+  /* Pieces you don't own are dimmed rather than hidden — the gap is the point. */
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.set-piece > *,
+.preset-piece > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.set-piece.have {
+  opacity: 1;
+  filter: none;
+  box-shadow: inset 0 0 0 2px rgba(255, 213, 105, 0.5);
+}
+
+.set-reward {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.set-missing {
+  font-size: 0.72rem;
+}
+
+/* ---- Kits ---- */
+.kit-save {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.kit-save input {
+  flex: 1 1 200px;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.preset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1.4rem;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.7rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.preset-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preset-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.preset-piece {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.preset-pieces.wearing .preset-piece {
+  width: 46px;
+  height: 46px;
+}

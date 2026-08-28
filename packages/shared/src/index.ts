@@ -4,6 +4,8 @@ export * from './table.js';
 export * from './ruleSets.js';
 export * from './ball.js';
 export * from './cosmetics.js';
+export * from './collection.js';
+export * from './reel.js';
 export * from './progression.js';
 export * from './dailyChallenge.js';
 export * from './challenges.js';

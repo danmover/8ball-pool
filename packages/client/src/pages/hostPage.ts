@@ -57,7 +57,7 @@ import {
 } from '../profile/profile';
 import { recordChallengeEvent } from '../profile/dailyChallenge';
 import { addSeasonXp, recordFrameResult, recordShotFeats } from '../profile/progression';
-import { openWheel } from '../profile/wheel';
+import { openCase } from '../profile/caseReel';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
@@ -1061,7 +1061,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       </div>`;
 
     slot.querySelector('#spinNow')?.addEventListener('click', () => {
-      void openWheel(root).then(() => {
+      void openCase(root).then(() => {
         // The new loadout should show on the table straight away.
         socket.emit('setLoadout', { loadout: equippedLoadout() });
         renderer?.setBallSet(equippedLoadout().ballSet);

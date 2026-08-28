@@ -275,6 +275,8 @@ export function cosmeticPreviewHtml(item: CosmeticItem, size = 88): string {
     case 'banner':
     case 'bannerEffect':
       return bannerPreview(item, size);
+    case 'chalk':
+      return chalkPreview(item.id, size);
     case 'avatar':
       return `<div class="avatar-preview" style="width:${size}px; height:${size}px; background-image:${avatarSvg(
         0,
@@ -285,4 +287,55 @@ export function cosmeticPreviewHtml(item: CosmeticItem, size = 88): string {
     default:
       return '';
   }
+}
+
+/** Chalk cube colours, keyed by item id. The puff colour follows the cube. */
+const CHALK_COLORS: Record<string, { face: string; puff: string }> = {
+  'chalk.blue': { face: '#2f6fd0', puff: '#7ea9e8' },
+  'chalk.green': { face: '#2f9d5e', puff: '#8fd6b0' },
+  'chalk.red': { face: '#c0392b', puff: '#f0958c' },
+  'chalk.talc': { face: '#e8e4da', puff: '#ffffff' },
+  'chalk.violet': { face: '#7d4bd0', puff: '#c3a6f0' },
+  'chalk.copper': { face: '#a8642c', puff: '#e0a978' },
+  'chalk.neon': { face: '#1a1030', puff: '#8cff4d' },
+  'chalk.ember': { face: '#8a2d12', puff: '#ff9a4d' },
+  'chalk.frost': { face: '#9fd8e8', puff: '#e8fbff' },
+  'chalk.midas': { face: '#d4a017', puff: '#ffe9a8' },
+  'chalk.stardust': { face: '#2a2350', puff: '#dcd0ff' },
+  'chalk.singularity': { face: '#08070e', puff: '#b98cff' },
+};
+
+/**
+ * A chalk cube seen from a corner, with its puff drifting off it.
+ *
+ * Drawn in isometric rather than flat-on because a flat square reads as a colour swatch, and
+ * three visible faces is the difference between "a blue square" and "a cube of chalk".
+ */
+function chalkPreview(id: string, size: number): string {
+  const c = CHALK_COLORS[id] ?? CHALK_COLORS['chalk.blue'];
+  const top = shadeHex(c.face, 0.3);
+  const side = shadeHex(c.face, -0.3);
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">
+      <g transform="translate(50 58)">
+        <path d="M0 -26 L28 -12 L0 2 L-28 -12 Z" fill="${top}"/>
+        <path d="M-28 -12 L0 2 L0 30 L-28 16 Z" fill="${side}"/>
+        <path d="M28 -12 L0 2 L0 30 L28 16 Z" fill="${c.face}"/>
+        <path d="M0 -26 L28 -12 L0 2 L-28 -12 Z M-28 -12 L-28 16 L0 30 L28 16 L28 -12"
+              fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="2" stroke-linejoin="round"/>
+      </g>
+      <g fill="${c.puff}" opacity="0.75">
+        <circle cx="70" cy="26" r="7"/>
+        <circle cx="80" cy="16" r="4.5"/>
+        <circle cx="86" cy="27" r="3"/>
+      </g>
+    </svg>`;
+}
+
+/** Lighten (positive) or darken (negative) a #rrggbb colour. */
+function shadeHex(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) =>
+    Math.max(0, Math.min(255, Math.round(v + (amount > 0 ? (255 - v) * amount : v * amount))))
+  );
+  return `#${ch.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }

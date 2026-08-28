@@ -5,6 +5,7 @@
  */
 
 import { CATALOG, STARTER_IDS, type CosmeticItem, type Rarity } from './cosmetics.js';
+import { setRewardIds } from './collection.js';
 
 // ---- XP ----
 
@@ -120,9 +121,16 @@ export interface WheelResult {
   chalkAwarded: number;
 }
 
-/** Items the wheel is allowed to hand out: everything except the always-owned starters. */
+/**
+ * Items the wheel is allowed to hand out.
+ *
+ * Excludes the always-owned starters, and excludes **set rewards** — those are the one thing
+ * you cannot get by luck, which is the entire reason a set is worth finishing. Handing one out
+ * on a spin would quietly delete the goal.
+ */
 export function wheelPool(): CosmeticItem[] {
-  return CATALOG.filter((item) => !STARTER_IDS.includes(item.id));
+  const rewards = setRewardIds();
+  return CATALOG.filter((item) => !STARTER_IDS.includes(item.id) && !rewards.has(item.id));
 }
 
 function pickWeighted(items: CosmeticItem[], rng: () => number): CosmeticItem {
