@@ -975,3 +975,91 @@ body.reduce-motion .shot-clock {
     0 0 0 2px var(--ink),
     0 3px 0 rgba(0, 0, 0, 0.3);
 }
+
+/* ---- Shot callouts: a word about what just happened, when there is one ---- */
+.shot-callout {
+  align-self: center;
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  color: #14141a;
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 rgba(0, 0, 0, 0.3);
+  animation: calloutPop 2.6s ease forwards;
+}
+
+.shot-callout.tone-great {
+  background: linear-gradient(180deg, #ffe27a 0%, #ffb32e 100%);
+  font-size: 1.35rem;
+}
+
+/* A foul gets a word too, but it must not look like a trophy. */
+.shot-callout.tone-wry {
+  background: linear-gradient(180deg, #e6e0d2 0%, #c8bfae 100%);
+  font-size: 1rem;
+}
+
+@keyframes calloutPop {
+  0% { transform: scale(0.7); opacity: 0; }
+  12% { transform: scale(1.06); opacity: 1; }
+  22% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+body.reduce-motion .shot-callout {
+  animation: none;
+}
+
+/* ---- Replay bar ---- */
+.replay-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--paper-3),
+    0 18px 34px rgba(0, 0, 0, 0.5);
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.replay-controls input[type='range'] {
+  width: min(46vw, 340px);
+  accent-color: #d98324;
+}
+
+.replay-rate {
+  min-width: 3.2rem;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.6;
+}

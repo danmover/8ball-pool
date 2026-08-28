@@ -153,6 +153,8 @@ export function openSettingsPanel(
         row('Effects volume', '', slider('soundVolume', settings.soundVolume)),
         row('Music', 'Each table theme has its own score', toggle('musicEnabled')),
         row('Music volume', '', slider('musicVolume', settings.musicVolume)),
+        row('Room ambience', 'The venue behind the table — chatter, hum, wind', toggle('ambienceEnabled')),
+        row('Ambience volume', '', slider('ambienceVolume', settings.ambienceVolume)),
         row('Vibration', 'Haptic feedback on collisions and pots', toggle('hapticsEnabled')),
       ].join('');
     }

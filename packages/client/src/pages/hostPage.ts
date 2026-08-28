@@ -17,6 +17,8 @@ import {
   computeTrajectoryPreview,
   legalTargetBallIds,
   seatId,
+  bestCallout,
+  factsFromEvents,
   PICKUP_INFO,
   formatSpeedTime,
   speedTotalMs,
@@ -33,6 +35,14 @@ import {
 } from '@8ball/shared';
 import { playerBannerHtml } from '../render/banner';
 import { icon } from '../render/icons';
+import { ReplayPlayer, ShotRecorder, replayFocus, type ReplayFrame } from '../render/replay';
+import { offerShareCard, renderShareCard } from '../render/shareCard';
+
+/**
+ * How much of a shot is worth watching again. Long enough to see the cue ball set off, short
+ * enough that the replay is over before anyone wants it to be.
+ */
+const REPLAY_WINDOW_MS = 6000;
 import { confirmLeave, showToast } from '../render/dialogs';
 import { PotCelebrator } from '../render/potCelebration';
 import {
@@ -105,6 +115,18 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
    * dial has been reset and the nomination cleared.
    */
   let shotKind = { elevated: 0, called: false, miscued: false };
+  /** The last few seconds of every shot, kept so any of them can be watched again. */
+  const recorder = new ShotRecorder();
+  const replayPlayer = new ReplayPlayer();
+  /** Events and starting positions for the shot in flight, for the callout. */
+  let shotEvents: SimEvent[] = [];
+  let shotStartPositions = new Map<number, { x: number; y: number }>();
+  /** The finished shot worth offering a replay of, and where to point the camera. */
+  let lastShotFrames: ReplayFrame[] = [];
+  let lastShotFocus: { x: number; y: number } | null = null;
+  let replayRaf = 0;
+  /** The last thing the game said about a shot, reused as the share card's headline. */
+  let lastCalloutText: string | null = null;
   /** Balls potted in the current unbroken visit, for the "clearance" feats. */
   let visitRun = 0;
   let lastPotPos: { x: number; y: number } | null = null;
@@ -880,6 +902,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         </table>
         <div id="rewardSlot"></div>
         <div class="result-actions">
+          ${lastShotFrames.length >= 2 ? `<button class="secondary" id="replayBtn">${icon('replay', { size: 18 })}Watch that again</button>` : ''}
           <button id="rematchBtn">${icon('replay', { size: 18 })}Play again</button>
           <button class="secondary" id="setupBtn">${icon('settings', { size: 18 })}Change setup</button>
           <button class="secondary" id="menuBtn">${icon('home', { size: 18 })}Main menu</button>
@@ -888,6 +911,10 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     root.appendChild(overlay);
     renderRewards(state, overlay.querySelector<HTMLElement>('#rewardSlot')!);
 
+    overlay.querySelector('#replayBtn')?.addEventListener('click', () => {
+      // The result card stays put behind it — you came back to it after watching, every time.
+      openReplay(0.35);
+    });
     overlay.querySelector('#rematchBtn')!.addEventListener('click', () => {
       socket.emit('requestRematch');
       resetFrameBookkeeping();
@@ -1234,6 +1261,10 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     renderer?.setShooterLoadout(state.players[state.currentShooter]?.loadout);
     renderer?.setStreakFire((streaks[state.currentShooter] ?? 0) >= 2);
 
+    // Record the shot as it happens. Only while balls are moving: recording the minutes
+    // someone spends lining up would push the interesting part out of the window.
+    if (state.phase === 'shot_in_progress') recorder.record(state.balls);
+
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
     renderer?.setPickups(
@@ -1312,9 +1343,20 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (cuePos) renderer?.spawnChalkPuff(cuePos, input.angle);
     renderer?.setAimVisual(0, 0, false);
     renderer?.setAimPreview(CUE_BALL_ID, null);
+
+    // A fresh recording per shot, and the layout it started from — the callout needs to know
+    // how far a potted ball actually travelled, which only the *before* picture can say.
+    recorder.start();
+    shotEvents = [];
+    shotStartPositions = new Map(
+      (lastState?.balls ?? []).filter((b) => !b.pocketed).map((b) => [b.id, { ...b.pos }])
+    );
   });
 
   socket.on('simEvent', (ev: SimEvent) => {
+    // Kept for the callout, which reads the whole shot rather than any single moment.
+    if (ev.type !== 'shotSettled') shotEvents.push(ev);
+
     if (ev.type === 'ballCollision') {
       if (settings.soundEnabled) {
         // The impact sound follows the shooter's equipped hit effect.
@@ -1348,8 +1390,14 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
    * device is actually playing (a phone player's XP is banked on their own phone).
    */
   function onShotSettled(): void {
+    // Bank the replay before anything else — every shot gets one, whether or not it was good.
+    lastShotFrames = recorder.tail(REPLAY_WINDOW_MS);
+    lastShotFocus = replayFocus(lastShotFrames, lastPotPos);
+
     const summary = celebrator?.onShotSettled();
     if (!summary || !shotSeat) return;
+
+    announceShot(summary.pots);
 
     streaks[shotSeat] = summary.pots > 0 ? (streaks[shotSeat] ?? 0) + 1 : 0;
 
@@ -1389,6 +1437,132 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
     if (lastState) applyState(lastState);
     shotSeat = null;
+  }
+
+  /**
+   * Watches the last shot again.
+   *
+   * Drives the *live* renderer rather than a second one: the replay is the same table, the
+   * same cosmetics and the same lighting, which is what makes it feel like a replay rather
+   * than a diagram. The live state is put back the moment it closes.
+   */
+  function openReplay(autoRate: number | null = null): void {
+    if (lastShotFrames.length < 2) return;
+    root.querySelector('#replayOverlay')?.remove();
+
+    replayPlayer.load(lastShotFrames);
+    const overlay = document.createElement('div');
+    overlay.id = 'replayOverlay';
+    overlay.className = 'replay-bar';
+    overlay.innerHTML = `
+      <div class="replay-controls">
+        <button class="mini" id="rpPlay">${icon('replay', { size: 16 })}</button>
+        <button class="mini secondary" id="rpBack">◀</button>
+        <button class="mini secondary" id="rpFwd">▶</button>
+        <input type="range" id="rpScrub" min="0" max="1000" value="0" />
+        <span class="replay-rate" id="rpRate">0.35×</span>
+        <button class="mini secondary" id="rpShare">Share</button>
+        <button class="mini secondary" id="rpClose">${icon('close', { size: 14 })}</button>
+      </div>
+      <div class="replay-label">Reviewing the last shot</div>`;
+    root.appendChild(overlay);
+
+    const scrub = overlay.querySelector<HTMLInputElement>('#rpScrub')!;
+    const rates = [0.15, 0.35, 1];
+    let rateIndex = 1;
+
+    replayPlayer.setCallbacks(
+      (balls, progress) => {
+        renderer?.updateBalls(balls);
+        scrub.value = String(Math.round(progress * 1000));
+        // Ease the camera in over the first third and hold it — pushing in all the way to the
+        // end means the interesting moment happens while the view is still moving.
+        renderer?.setCamera(lastShotFocus, Math.min(1, progress * 3));
+      },
+      () => {
+        // Sit on the final frame rather than snapping back; the end is what you came to see.
+      }
+    );
+
+    const tick = (): void => {
+      replayPlayer.tick();
+      replayRaf = requestAnimationFrame(tick);
+    };
+    cancelAnimationFrame(replayRaf);
+    replayRaf = requestAnimationFrame(tick);
+
+    const close = (): void => {
+      cancelAnimationFrame(replayRaf);
+      replayPlayer.pause();
+      renderer?.setCamera(null, 0);
+      overlay.remove();
+      // Back to the real table, which has not moved while we were looking away.
+      if (lastState) renderer?.updateBalls(lastState.balls);
+    };
+
+    overlay.querySelector('#rpPlay')!.addEventListener('click', () => {
+      if (replayPlayer.isPlaying) replayPlayer.pause();
+      else replayPlayer.play(rates[rateIndex]);
+    });
+    overlay.querySelector('#rpBack')!.addEventListener('click', () => replayPlayer.step(-1));
+    overlay.querySelector('#rpFwd')!.addEventListener('click', () => replayPlayer.step(1));
+    overlay.querySelector('#rpRate')!.addEventListener('click', (e) => {
+      rateIndex = (rateIndex + 1) % rates.length;
+      (e.target as HTMLElement).textContent = `${rates[rateIndex]}×`;
+      if (replayPlayer.isPlaying) replayPlayer.play(rates[rateIndex]);
+    });
+    overlay.querySelector('#rpShare')!.addEventListener('click', async () => {
+      const shooter = shotSeat ?? lastState?.lastShooter ?? null;
+      const card = renderShareCard({
+        frames: lastShotFrames,
+        title: lastCalloutText ?? 'NICE SHOT',
+        player: (shooter && lastState?.players[shooter]?.name) || 'Someone',
+        subtitle: modeDescriptor(lastState?.mode ?? 'classic').name,
+      });
+      const how = await offerShareCard(card, 'shot.png');
+      showToast(
+        root.querySelector<HTMLElement>('#toastStack')!,
+        how === 'copied' ? 'Shot copied — paste it anywhere' : 'Shot saved as an image',
+        'info'
+      );
+    });
+    overlay.querySelector('#rpClose')!.addEventListener('click', close);
+    scrub.addEventListener('input', () => replayPlayer.seek(Number(scrub.value) / 1000));
+
+    if (autoRate !== null) replayPlayer.play(autoRate);
+  }
+
+  /**
+   * Says something about the shot, when there is something to say.
+   *
+   * The judgement lives in `callouts.ts` and is deliberately stingy — most shots get nothing,
+   * which is what keeps the ones that do get a word worth reading.
+   */
+  function announceShot(pots: number): void {
+    if (!lastState) return;
+    const remaining = lastState.balls.filter((b) => !b.pocketed && b.id !== CUE_BALL_ID).length;
+    const call = bestCallout(
+      factsFromEvents(
+        shotEvents,
+        {
+          wonFrame: lastState.phase === 'game_over',
+          ballsRemaining: remaining,
+          visitRun: pots > 0 ? visitRun + pots : 0,
+          jumped: shotKind.elevated >= Math.PI / 4,
+          massed: shotKind.elevated > 0.1 && shotKind.elevated < Math.PI / 4,
+          fouled: Boolean(lastState.lastFoulReason),
+        },
+        shotStartPositions
+      )
+    );
+    lastCalloutText = call?.text ?? null;
+    if (!call) return;
+
+    const el = document.createElement('div');
+    el.className = `shot-callout tone-${call.tone}`;
+    el.textContent = call.text;
+    root.querySelector<HTMLElement>('#toastStack')!.appendChild(el);
+    setTimeout(() => el.remove(), 2600);
   }
 
   socket.on('errorMessage', (msg) => {

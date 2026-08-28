@@ -13,6 +13,7 @@ import { renderCareerPage } from './pages/careerPage';
 import { renderProgressPage } from './pages/progressPage';
 import { unlockAudio } from './render/audio';
 import { startMusic } from './render/music';
+import { startAmbience } from './render/ambience';
 import { tableThemeFor } from './render/cosmetics/tableThemes';
 import { loadSettings } from './settings/settingsStore';
 import { SyncedProfileStore } from './profile/syncedProfileStore';
@@ -72,6 +73,9 @@ window.addEventListener(
     const settings = loadSettings();
     if (settings.musicEnabled && !settings.reduceMotion) {
       startMusic(tableThemeFor(settings.tableTheme).id, settings.musicVolume);
+    }
+    if (settings.ambienceEnabled) {
+      startAmbience(tableThemeFor(settings.tableTheme).id, settings.ambienceVolume);
     }
   },
   { once: true }

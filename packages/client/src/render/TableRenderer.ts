@@ -27,6 +27,11 @@ import { drawScene } from './cosmetics/scenes';
 
 const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
+/**
+ * How far the replay camera pushes in. Enough that a pocket fills a useful part of the screen,
+ * short of the point where you lose track of where on the table you are.
+ */
+const CAMERA_ZOOM = 1.85;
 
 /** '#rrggbb' → 0xrrggbb, for feeding CSS-authored theme colours to Pixi. */
 function cssToHex(css: string): number {
@@ -688,6 +693,10 @@ export class TableRenderer {
   private shakeEnabled = true;
   private legalTargets: Set<number> = new Set();
   private shakeMag = 0;
+  /** Camera focus in table coordinates, and how far in we are toward it (0..1). */
+  private camFocus: { x: number; y: number } | null = null;
+  private camTarget = 0;
+  private camNow = 0;
   private elapsed = 0;
   private chromeless = false;
 
@@ -1034,6 +1043,22 @@ export class TableRenderer {
 
     let ox = (w - boardW * this.scale) / 2 - left * this.scale;
     let oy = (h - boardH * this.scale) / 2 - BOARD_TOP * this.scale;
+
+    // Push in toward a point on the cloth, for replays and the winning ball.
+    //
+    // Blended from the *unzoomed* layout rather than composed on top of it, so at camNow = 0
+    // the arithmetic collapses exactly back to the line above. A camera that drifts a pixel
+    // when it is supposed to be off is worse than no camera.
+    if (this.camNow > 0.001 && this.camFocus) {
+      const zoomed = this.scale * (1 + (CAMERA_ZOOM - 1) * this.camNow);
+      const fx = w / 2 - this.camFocus.x * zoomed;
+      const fy = h / 2 - this.camFocus.y * zoomed;
+      ox += (fx - ox) * this.camNow;
+      oy += (fy - oy) * this.camNow;
+      this.scale = zoomed;
+      this.root.scale.set(this.scale);
+    }
+
     if (this.shakeMag > 0.01) {
       ox += (Math.random() - 0.5) * this.shakeMag;
       oy += (Math.random() - 0.5) * this.shakeMag;
@@ -1745,6 +1770,23 @@ export class TableRenderer {
     this.placementGhost = pos;
   }
 
+  /**
+   * Points the camera at somewhere on the cloth and pushes in.
+   *
+   * `amount` is 0 for the ordinary whole-table view and 1 for fully zoomed; anything between
+   * is honoured, which is what lets a replay ease in and back out. Off entirely under
+   * `reduceMotion` — a camera that moves without being asked is exactly what that setting is
+   * for — and the focus is remembered so pulling back out still eases from the right place.
+   */
+  setCamera(focus: { x: number; y: number } | null, amount: number): void {
+    if (!this.shakeEnabled) {
+      this.camTarget = 0;
+      return;
+    }
+    if (focus) this.camFocus = focus;
+    this.camTarget = Math.max(0, Math.min(1, amount));
+  }
+
   /** Screen shake, magnitude in table units; scale roughly with collision impulse. */
   shake(strength: number): void {
     if (!this.shakeEnabled) return;
@@ -2001,6 +2043,13 @@ export class TableRenderer {
   private tick(deltaSeconds: number): void {
     this.elapsed += deltaSeconds;
     this.shakeMag *= Math.pow(0.001, deltaSeconds);
+    // Ease toward the camera target rather than snapping — the move is the effect.
+    if (Math.abs(this.camTarget - this.camNow) > 0.0005) {
+      const k = 1 - Math.exp(-deltaSeconds / 0.28);
+      this.camNow += (this.camTarget - this.camNow) * k;
+    } else {
+      this.camNow = this.camTarget;
+    }
     this.layout();
     this.tickAttract(deltaSeconds);
 

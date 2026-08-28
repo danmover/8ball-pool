@@ -279,6 +279,14 @@ export interface PlayerSettings {
   /** Background music, scored per table theme. Separate from effects on purpose. */
   musicEnabled: boolean;
   musicVolume: number; // 0..1
+  /**
+   * The room behind the table, in sound — bar chatter, arcade hum, wind in the ice cavern.
+   *
+   * Its own switch rather than part of the music one: the two do very different jobs, and
+   * plenty of people want the room without the tune.
+   */
+  ambienceEnabled: boolean;
+  ambienceVolume: number; // 0..1
   hapticsEnabled: boolean;
   colorblindPatterns: boolean;
   leftHanded: boolean;
@@ -302,6 +310,8 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   soundVolume: 0.7,
   musicEnabled: true,
   musicVolume: 0.35,
+  ambienceEnabled: true,
+  ambienceVolume: 0.5,
   hapticsEnabled: true,
   colorblindPatterns: false,
   leftHanded: false,
