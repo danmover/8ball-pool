@@ -1,8 +1,23 @@
 import { Vec2 } from './vector.js';
 import type { Ball, SimEvent, Vec3 } from './types.js';
 import { CUSHIONS, JAWS, POCKETS, mouthDepth, pocketContaining } from './table.js';
+import { MAGNET_BONUS, pickupsUnder, type Pickup, type ShotModifiers } from './pickups.js';
+
+/**
+ * Optional extras for a single simulation run.
+ *
+ * Optional on purpose: the aim guide and the bot's shot search call `stepSimulation` without
+ * them and get exactly the engine they always got. Only the party mode passes anything.
+ */
+export interface SimOptions {
+  /** Pickups on the cloth. Mutated in place as the cue ball collects them. */
+  pickups?: Pickup[];
+  /** Effects in force for this shot only. */
+  modifiers?: ShotModifiers;
+}
 import {
   BALL_RADIUS,
+  CUE_BALL_ID,
   MAX_SHOT_SPEED,
   CUSHION_NOSE_RISE,
   CUSHION_RESTITUTION_FAST,
@@ -265,9 +280,34 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
  * circle around a point, so a ball passing through the visible middle of a mouth was ruled
  * still-in-play and then bounced off the phantom cushion behind it.
  */
-function resolvePocket(ball: Ball, events: SimEvent[]): boolean {
-  const pocket = pocketContaining(ball.pos);
+function resolvePocket(ball: Ball, events: SimEvent[], mods?: ShotModifiers): boolean {
+  let pocket = pocketContaining(ball.pos);
+
+  // A magnet pocket reads wider than it is: a ball passing close enough across its mouth gets
+  // drawn in. Tested only when the ball isn't already going down, so it can never *stop* a pot.
+  if (!pocket && mods?.magnetPocket !== null && mods?.magnetPocket !== undefined) {
+    const magnet = POCKETS[mods.magnetPocket];
+    if (magnet && mouthDepth(magnet, ball.pos) > -MAGNET_BONUS) {
+      const along = Vec2.sub(ball.pos, magnet.mid);
+      const axis = Vec2.normalize(Vec2.sub(magnet.b, magnet.a));
+      if (Math.abs(Vec2.dot(along, axis)) <= magnet.halfWidth + BALL_RADIUS) pocket = magnet;
+    }
+  }
+
   if (!pocket) return false;
+
+  // A blocked pocket spits the ball back out. Handled here rather than as a cushion so it
+  // can't be jumped, banked around or squeezed past — a bumper is a bumper.
+  if (mods?.blockedPocket === pocket.index) {
+    // Back onto the *table*, which is the direction `out` points away from — pushing along
+    // (pos - mid) instead sends a ball that is already deep in the bag further into the corner,
+    // where it sticks.
+    const n = Vec2.scale(pocket.out, -1);
+    ball.pos = Vec2.add(pocket.mid, Vec2.scale(n, BALL_RADIUS * 2.2));
+    ball.vel = Vec2.scale(Vec2.reflect(ball.vel, n), 0.55);
+    events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: Vec2.length(ball.vel) });
+    return false;
+  }
 
   const pos = { ...ball.pos };
   ball.pocketed = true;
@@ -284,8 +324,12 @@ function resolvePocket(ball: Ball, events: SimEvent[]): boolean {
  * far over the edge drop. `mouthDepth` is negative outside, so this only bites in the last
  * ball-radius of approach.
  */
-function applyBagGravity(ball: Ball, dt: number): void {
+function applyBagGravity(ball: Ball, dt: number, blockedPocket?: number | null): void {
   for (const p of POCKETS) {
+    // A blocked pocket doesn't just refuse the ball, it stops reaching for it. Without this
+    // the bumper spits the ball out and the bag immediately drags it back, so it hovers in
+    // the jaws for ever instead of being played out of them.
+    if (p.index === blockedPocket) continue;
     const depth = mouthDepth(p, ball.pos);
     if (depth < -BALL_RADIUS || depth >= 0) continue;
     const pull = Vec2.normalize(Vec2.sub(p.capture, ball.pos));
@@ -495,8 +539,10 @@ const MIN_SUBSTEP_DT = 1 / 20000;
  * skews the contact normal, which is what made hard shots visibly miss the line the
  * aim guide predicted. Capping travel per substep keeps contacts shallow and accurate.
  */
-export function stepSimulation(balls: Ball[], dt: number): StepResult {
+export function stepSimulation(balls: Ball[], dt: number, opts?: SimOptions): StepResult {
   const events: SimEvent[] = [];
+  const mods = opts?.modifiers;
+  const pickups = opts?.pickups;
   let remaining = dt;
 
   while (remaining > 1e-9) {
@@ -514,6 +560,19 @@ export function stepSimulation(balls: Ball[], dt: number): StepResult {
 
     for (const ball of active) {
       ball.pos = Vec2.add(ball.pos, Vec2.scale(ball.vel, h));
+    }
+
+    // Pickups arm when the *cue* ball rolls over them — an object ball clipping one on its way
+    // to a pocket would be luck rather than a decision, and the whole appeal is choosing to
+    // route the cue ball through one.
+    if (pickups) {
+      const cue = active.find((b) => b.id === CUE_BALL_ID);
+      if (cue && !isAirborne(cue)) {
+        for (const pickup of pickupsUnder(pickups, cue.pos)) {
+          pickup.taken = true;
+          events.push({ type: 'pickup', kind: pickup.kind, pos: { ...pickup.pos } });
+        }
+      }
     }
 
     for (let i = 0; i < active.length; i++) {
@@ -535,10 +594,10 @@ export function stepSimulation(balls: Ball[], dt: number): StepResult {
         }
         events.push({ type: 'land', ballId: ball.id, pos: { ...ball.pos } });
       }
-      if (resolvePocket(ball, events)) continue;
+      if (resolvePocket(ball, events, mods)) continue;
       resolveCushions(ball, events);
       // After the cushions, so a ball nudged over the lip by a jaw still gets drawn in.
-      applyBagGravity(ball, h);
+      applyBagGravity(ball, h, mods?.blockedPocket);
       applyClothFriction(ball, h);
     }
   }

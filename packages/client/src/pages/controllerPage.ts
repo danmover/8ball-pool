@@ -1,4 +1,4 @@
-import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview } from '@8ball/shared';
+import type { AimInput, GameState, Seat, ShootInput, SimEvent, TrajectoryPreview, TrajectoryPreviewMode } from '@8ball/shared';
 import {
   CUE_BALL_ID,
   EMOTES,
@@ -126,7 +126,17 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   }
 
   function renderPreview(angle: number): void {
-    if (!renderer || !lastState || settings.trajectoryPreview === 'off') {
+    // A freeze takes the guide away and a ghost line hands the full one over, whatever the
+    // player's own setting says — read from state so the effect can't be turned off by the
+    // person it is aimed at. Same rule as the host screen.
+    const mods = lastState?.modifiers;
+    const guideMode: TrajectoryPreviewMode = mods?.freezeGuide
+      ? 'off'
+      : mods?.ghostLine
+        ? 'full'
+        : settings.trajectoryPreview;
+
+    if (!renderer || !lastState || guideMode === 'off') {
       renderer?.setAimPreview(CUE_BALL_ID, null);
       return;
     }
@@ -134,10 +144,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       lastState.balls,
       CUE_BALL_ID,
       angle,
-      settings.trajectoryPreview,
+      guideMode,
       spinPad?.getValue() ?? { x: 0, y: 0 },
       lastAimPower,
-      elevationDial?.getValue() ?? 0
+      elevationDial?.getValue() ?? 0,
+      mods ?? undefined
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
   }
@@ -146,6 +157,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     lastState = state;
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
+    renderer?.setPickups(
+      state.pickups,
+      state.modifiers?.magnetPocket ?? null,
+      state.modifiers?.blockedPocket ?? null
+    );
 
     const myTurn = seat !== null && state.currentShooter === seat;
     const canAim = myTurn && (state.phase === 'aiming' || state.phase === 'break');

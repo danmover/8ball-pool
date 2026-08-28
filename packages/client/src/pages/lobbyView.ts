@@ -33,7 +33,15 @@ export interface LobbyCallbacks {
   onSeriesChange: (target: number) => void;
   onRuleSetChange: (id: RuleSetId) => void;
   onStart: () => void;
+  onStartTournament: (target: number, entrants: number) => void;
+  onStartKing: () => void;
+  /** Claim every remaining seat for this screen — one device, players taking turns. */
+  onPassAndPlay: () => void;
+  onHandicapChange: (seat: Seat, spots: number) => void;
 }
+
+/** Handicap steps a seat can cycle through, in the order the button walks them. */
+const SPOT_STEPS = [0, 1, 2, 3];
 
 /** Renders the pre-game lobby into `container` for the host screen. */
 export function renderLobby(
@@ -50,6 +58,15 @@ export function renderLobby(
   const filled = seats.filter((s) => room.players[s]).length;
   const canStart = filled >= descriptor.minPlayers;
   const clockIndex = Math.max(0, SHOT_CLOCK_STEPS.indexOf(lobby.shotClockSeconds));
+  /**
+   * How many go in the bracket, as distinct from how many a *match* seats.
+   *
+   * Eight-ball is strictly 1v1, so the lobby's own player limit is the wrong number here —
+   * using it produced a "tournament" that was a single match between the first two people.
+   * The bracket rounds up to a power of two and fills the gaps with bots anyway, so the honest
+   * default is everyone who has actually sat down.
+   */
+  const tournamentEntrants = Math.max(2, Math.min(MAX_SEATS, filled));
 
   container.innerHTML = `
     <div class="lobby">
@@ -156,6 +173,7 @@ export function renderLobby(
                 ? `<span class="seat-team team-${teamClass}">TEAM ${teamClass.toUpperCase()}</span>`
                 : '';
               const number = seatIndex(seat) + 1;
+              const spots = lobby.handicaps[seat]?.spots ?? 0;
               if (p) {
                 // Show the equipped avatar here so a player's cosmetics read before the
                 // game even starts.
@@ -182,6 +200,10 @@ export function renderLobby(
                       ${teamBadge}
                     </span>
                   </span>
+                  <button class="seat-handicap${spots > 0 ? ' on' : ''}" data-handicap="${seat}"
+                          title="Handicap: ball-in-hand spots this player may take each frame">
+                    ${spots > 0 ? `${spots} spot${spots > 1 ? 's' : ''}` : '+ spot'}
+                  </button>
                   ${
                     p.isBot
                       ? `<button class="seat-x" data-removebot="${seat}" title="Remove bot">${icon('close', { size: 12 })}</button>`
@@ -206,6 +228,20 @@ export function renderLobby(
         </div>
       </div>
 
+      <button id="startKing" class="secondary" ${filled >= 2 ? '' : 'disabled'}
+              style="min-width:210px"
+              title="Winner stays on; everyone else queues. Empty places are filled by bots">
+        King of the Table
+      </button>
+      <button id="passAndPlay" class="secondary" style="min-width:210px"
+              title="Everyone plays from this screen, taking turns — no phones needed">
+        Pass &amp; Play
+      </button>
+      <button id="startTournament" class="secondary" ${filled >= 2 ? '' : 'disabled'}
+              style="min-width:210px"
+              title="Seeded knockout across ${tournamentEntrants} entrants — empty places are filled by bots">
+        ${filled >= 2 ? `Tournament · ${tournamentEntrants} players` : 'Tournament'}
+      </button>
       <button id="startGame" ${canStart ? '' : 'disabled'} style="min-width:220px">
         ${canStart ? 'Start Game' : `Need ${descriptor.minPlayers}+ players`}
       </button>
@@ -242,5 +278,19 @@ export function renderLobby(
   container
     .querySelector('#seriesDown')
     ?.addEventListener('click', () => cb.onSeriesChange(lobby.seriesTarget - 1));
+  container.querySelectorAll<HTMLButtonElement>('[data-handicap]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const seat = btn.dataset.handicap!;
+      const current = lobby.handicaps[seat]?.spots ?? 0;
+      // Cycles rather than opening a picker: there are four values and this is a party lobby.
+      const next = SPOT_STEPS[(SPOT_STEPS.indexOf(current) + 1) % SPOT_STEPS.length];
+      cb.onHandicapChange(seat, next);
+    });
+  });
+  container.querySelector('#startKing')?.addEventListener('click', () => cb.onStartKing());
+  container.querySelector('#passAndPlay')?.addEventListener('click', () => cb.onPassAndPlay());
   container.querySelector('#startGame')?.addEventListener('click', () => cb.onStart());
+  container
+    .querySelector('#startTournament')
+    ?.addEventListener('click', () => cb.onStartTournament(lobby.seriesTarget, tournamentEntrants));
 }

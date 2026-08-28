@@ -399,7 +399,9 @@ export class BotPlayer {
 
     const events: SimEvent[] = [];
     for (let i = 0; i < MAX_SIM_FRAMES; i++) {
-      const step = stepSimulation(balls, SIM_FRAME);
+      // The party mode's blocked and magnetised pockets are part of the table for this shot,
+      // so the search has to see them — otherwise the bot keeps firing at a covered pocket.
+      const step = stepSimulation(balls, SIM_FRAME, { modifiers: state.modifiers ?? undefined });
       events.push(...step.events);
       if (step.settled) break;
     }

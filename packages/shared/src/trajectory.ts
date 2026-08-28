@@ -2,6 +2,7 @@ import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
 import { CUSHIONS, JAWS, POCKETS, inPocketApproach, mouthDepth, pocketContaining } from './table.js';
 import { applyCueStrike, stepSimulation, strikeAngle } from './physics.js';
+import type { ShotModifiers } from './pickups.js';
 import { BALL_RADIUS } from './constants.js';
 
 const MAX_BOUNCES_FULL = 2;
@@ -147,7 +148,8 @@ function simulatePaths(
   angle: number,
   power: number,
   tip: { x: number; y: number },
-  elevation: number
+  elevation: number,
+  modifiers?: ShotModifiers
 ): SimulatedPaths {
   const clone: Ball[] = balls.map((b) => ({
     ...b,
@@ -168,7 +170,7 @@ function simulatePaths(
   let elapsed = 0;
 
   while (elapsed < PREVIEW_SECONDS) {
-    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT);
+    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT, { modifiers });
     elapsed += PREVIEW_SAMPLE_DT;
 
     if (!struck) {
@@ -238,7 +240,13 @@ export function computeTrajectoryPreview(
   /** Shot power 0..1, so the post-contact line scales with how hard you're about to hit it. */
   power = 0.5,
   /** Cue elevation in radians — a raised cue curves the ball, so the guide has to know. */
-  elevation = 0
+  elevation = 0,
+  /**
+   * Party-mode effects in force. Threaded through for the same reason the guide simulates at
+   * all: a line that showed a ball dropping into a pocket the blocker is covering would be
+   * worse than no line, because the player would trust it.
+   */
+  modifiers?: ShotModifiers
 ): TrajectoryPreview {
   const cue = balls.find((b) => b.id === cueBallId);
   const path: TrajectorySegment[] = [];
@@ -290,7 +298,7 @@ export function computeTrajectoryPreview(
       result.firstContactBallId = hit.ball.id;
       if (mode === 'full') {
         // Both onward paths come from actually playing the shot, cushions, spin and all.
-        const paths = simulatePaths(balls, cueBallId, angle, power, spin, elevation);
+        const paths = simulatePaths(balls, cueBallId, angle, power, spin, elevation, modifiers);
         result.objectBallPath = toSegments(paths.objectBall, hit.ball.pos);
         result.cueAfterPath = toSegments(paths.cueAfter, hit.point);
         result.cueRestPos = paths.cueRest;

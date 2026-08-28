@@ -118,6 +118,26 @@ const ART: Record<GameMode, string> = {
     ${ball(88, 34, '#f03a2e', '1')}
     ${ball(104, 56, '#2a6ee0', '2')}
     <path d="M22 62 H120" stroke="#fff" stroke-width="2" stroke-dasharray="5 4" opacity="0.35"/>`),
+  // A ball rolling onto a glowing disc.
+  powerup: frame(`
+    <circle cx="52" cy="46" r="13" fill="#ffd569" opacity="0.35"/>
+    <circle cx="52" cy="46" r="13" fill="none" stroke="#ffd569" stroke-width="3"
+            stroke-dasharray="5 4"/>
+    <path d="M55 38 L48 47 H54 L50 55" fill="none" stroke="#ffd569" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M70 46 H96" stroke="#fff" stroke-width="2" stroke-dasharray="5 4" opacity="0.5"/>
+    ${ball(30, 46, '#f6f2e6', '')}
+    ${stripeBall(106, 46, '#2a6ee0', '10')}`),
+
+  // A stopwatch, and a ball streaking past it.
+  speed: frame(`
+    <circle cx="40" cy="44" r="16" fill="none" stroke="#fbf8ef" stroke-width="3" opacity="0.85"/>
+    <path d="M40 30 V24 M33 23 H47" stroke="#fbf8ef" stroke-width="3" stroke-linecap="round"
+          opacity="0.85"/>
+    <path d="M40 44 L50 36" stroke="#f03a2e" stroke-width="3" stroke-linecap="round"/>
+    <path d="M64 32 H92 M60 44 H100 M64 56 H92" stroke="#fff" stroke-width="2"
+          stroke-linecap="round" opacity="0.4"/>
+    ${ball(106, 44, '#ffcf2e', '9')}`),
   sandbox: frame(`
     <path d="M18 62 L58 34" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
     <path d="M18 62 L58 34" stroke="${RAIL}" stroke-width="4" stroke-linecap="round"/>

@@ -53,6 +53,7 @@ export function createInitialGameState(
       eliminated: false,
       isBot: false,
       botDifficulty: null,
+      spotsLeft: 0,
     };
   });
 
@@ -73,6 +74,11 @@ export function createInitialGameState(
     turnNumber: 0,
     shotClock: null,
     series: null,
+    tournament: null,
+    king: null,
+    pickups: null,
+    modifiers: null,
+    speedRun: null,
     challenge: null,
   };
 
@@ -146,7 +152,8 @@ export function resolveShot(
   preShotGroupCleared: boolean,
   lowestBefore: number | null = null,
   timedOut = false,
-  call: { ballId: number; pocketIndex: number } | null = null
+  call: { ballId: number; pocketIndex: number } | null = null,
+  now: number = Date.now()
 ): GameState {
   const ctx: ShotContext = {
     groupCleared: preShotGroupCleared,
@@ -154,6 +161,7 @@ export function resolveShot(
     timedOut,
     rules: ruleOptions(state.ruleSet),
     call,
+    now,
   };
   const shooter = state.currentShooter;
   modeDescriptor(state.mode).resolveShot(state, outcome, ctx);

@@ -2,21 +2,30 @@ import QRCode from 'qrcode';
 import type {
   AimInput,
   GameState,
+  KingOfTable,
+  PickupKind,
   RoomStateDTO,
   Seat,
   ShootInput,
   SimEvent,
   TrajectoryPreview,
+  TrajectoryPreviewMode,
 } from '@8ball/shared';
 import {
   CUE_BALL_ID,
   STARTING_LIVES,
   computeTrajectoryPreview,
   legalTargetBallIds,
+  seatId,
+  PICKUP_INFO,
+  formatSpeedTime,
+  speedTotalMs,
   levelProgress,
   activeChallenge,
   cosmeticById,
   modeDescriptor,
+  nextMatch,
+  roundName,
   predictedPocket,
   ruleOptions,
   seatIndex,
@@ -104,6 +113,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let autostarted = false;
   let backdropStarted = false;
   let clockRaf = 0;
+  let speedRaf = 0;
   /** Tracks the "win without fouling" daily objective across the frame. */
   let fouledThisFrame = false;
   /** Set when this table was launched from the career ladder, so a win counts toward it. */
@@ -124,8 +134,12 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       </div>
       <!-- The centre column carries anything that must be noticed: the clock counting down and
            the prompt telling you it's your move. Both used to sit off in a corner. -->
+      <div class="bracket-wrap" id="bracketWrap"></div>
       <div class="centre-hud">
         <div class="shot-clock" id="shotClock" style="display:none"></div>
+        <div class="speed-clock" id="speedClock" style="display:none"></div>
+        <div class="spot-bar" id="spotBar" style="display:none"></div>
+        <div class="modifier-bar" id="modifierBar" style="display:none"></div>
         <div id="callout"></div>
         <div id="callHud"></div>
       </div>
@@ -255,7 +269,29 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
         onRemoveBot: (seat) => socket.emit('hostRemoveBot', { seat }),
         onShotClockChange: (shotClockSeconds) => socket.emit('hostUpdateLobby', { shotClockSeconds }),
         onRuleSetChange: (ruleSet) => socket.emit('hostUpdateLobby', { ruleSet }),
+        onStartTournament: (target, entrants) =>
+          socket.emit('hostStartTournament', { target, entrants }),
         onSeriesChange: (seriesTarget) => socket.emit('hostUpdateLobby', { seriesTarget }),
+        onStartKing: () => socket.emit('hostStartKing'),
+        onPassAndPlay: () => {
+          // Claim every seat that's still open. Seats already taken by a phone or a bot are
+          // left alone — mixing the two on one table is legitimate and shouldn't be undone.
+          const seats = Array.from({ length: room.lobby.maxPlayers }, (_, i) => seatId(i));
+          for (const seat of seats) {
+            if (room.players[seat]) continue;
+            socket.emit('hostClaimSeat', {
+              seat,
+              loadout: equippedLoadout(),
+              name: getProfile().displayName,
+            });
+          }
+        },
+        onHandicapChange: (seat, spots) => {
+          const handicaps = { ...room.lobby.handicaps };
+          if (spots > 0) handicaps[seat] = { spots, shotClockSeconds: null };
+          else delete handicaps[seat];
+          socket.emit('hostUpdateLobby', { handicaps });
+        },
         onStart: () => socket.emit('hostStartGame'),
       },
       settings.defaultBotDifficulty
@@ -659,6 +695,101 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       </div>`;
   }
 
+  /**
+   * The queue, in the same column the bracket uses.
+   *
+   * The streak is the headline rather than the queue itself: "four in a row" is the thing a
+   * room actually cares about, and it's what makes the next challenger want the table.
+   */
+  function renderKingQueue(wrap: HTMLElement, state: GameState, king: KingOfTable): void {
+    const who = (seat: Seat): string => state.players[seat]?.name ?? seat;
+    wrap.innerHTML = `
+      <div class="bracket king-queue">
+        <div class="bracket-title">King of the Table</div>
+        <div class="king-holder">
+          <span class="king-crown">♛</span>
+          <span class="king-name">${who(king.holder)}</span>
+          <span class="king-streak">${king.streak} in a row</span>
+        </div>
+        <div class="bracket-round">
+          <span class="round-label">Up next</span>
+          ${
+            king.queue.length === 0
+              ? '<div class="bracket-match"><i>nobody waiting</i></div>'
+              : king.queue
+                  .map(
+                    (seat, i) => `
+              <div class="bracket-match${i === 0 ? ' live' : ''}">
+                <span class="queue-no">${i + 1}</span>
+                <span>${who(seat)}</span>
+              </div>`
+                  )
+                  .join('')
+          }
+        </div>
+        ${
+          king.best
+            ? `<div class="king-best">Best run: ${who(king.best.seat)} · ${king.best.streak}</div>`
+            : ''
+        }
+      </div>`;
+  }
+
+  /**
+   * The bracket, down the side of the table.
+   *
+   * Shown throughout rather than only between matches: half the fun of a knockout is the people
+   * who aren't playing watching their own next opponent take shape.
+   */
+  function renderBracket(state: GameState): void {
+    const wrap = root.querySelector<HTMLElement>('#bracketWrap')!;
+    if (state.king) {
+      renderKingQueue(wrap, state, state.king);
+      return;
+    }
+    const t = state.tournament;
+    if (!t) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    const live = nextMatch(t);
+    const rounds = [...new Set(t.matches.map((m) => m.round))].sort((a, b) => a - b);
+    const who = (seat: Seat | null): string =>
+      seat ? (state.players[seat]?.name ?? seat) : '<i>—</i>';
+
+    wrap.innerHTML = `
+      <div class="bracket">
+        <div class="bracket-title">${
+          t.champion
+            ? `${state.players[t.champion]?.name ?? t.champion} wins the tournament`
+            : live
+              ? roundName(t, live.round)
+              : 'Tournament'
+        }</div>
+        ${rounds
+          .map(
+            (round) => `
+          <div class="bracket-round">
+            <span class="round-label">${roundName(t, round)}</span>
+            ${t.matches
+              .filter((m) => m.round === round)
+              .map((m) => {
+                const isLive = live?.id === m.id;
+                const scoreOf = (seat: Seat | null): number => (seat ? (m.score[seat] ?? 0) : 0);
+                return `
+                <div class="bracket-match${isLive ? ' live' : ''}${m.winner ? ' done' : ''}">
+                  <span class="side${m.winner === m.a ? ' won' : ''}">${who(m.a)}<b>${scoreOf(m.a)}</b></span>
+                  <span class="side${m.winner === m.b ? ' won' : ''}">${who(m.b)}<b>${scoreOf(m.b)}</b></span>
+                </div>`;
+              })
+              .join('')}
+          </div>`
+          )
+          .join('')}
+      </div>`;
+  }
+
   function renderBottomArea(state: GameState): void {
     bottomArea.innerHTML = '';
 
@@ -917,6 +1048,96 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     step();
   }
 
+  /**
+   * The speed-pool clock. Unlike the shot clock this one counts *up*, and the penalty rides
+   * alongside the elapsed time rather than being folded into it — seeing "+20s" is what makes
+   * a foul feel expensive at the moment it happens.
+   */
+  function tickSpeedClock(state: GameState): void {
+    cancelAnimationFrame(speedRaf);
+    const el = root.querySelector<HTMLElement>('#speedClock');
+    const run = state.speedRun;
+    if (!el || !run) {
+      if (el) el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+
+    const paint = (total: number): void => {
+      el.innerHTML = `<span class="speed-time">${formatSpeedTime(total)}</span>${
+        run.penaltyMs > 0 ? `<span class="speed-penalty">+${run.penaltyMs / 1000}s</span>` : ''
+      }`;
+    };
+
+    if (run.finalMs !== null) {
+      el.dataset.done = 'true';
+      paint(run.finalMs);
+      return;
+    }
+    el.dataset.done = 'false';
+    const step = (): void => {
+      paint(speedTotalMs(run, Date.now()));
+      speedRaf = requestAnimationFrame(step);
+    };
+    step();
+  }
+
+  /**
+   * The handicap spot button — only for the seat this screen is playing, only on its turn, and
+   * only while it still has one. Everything else about the frame is untouched.
+   */
+  function renderSpotBar(state: GameState): void {
+    const el = root.querySelector<HTMLElement>('#spotBar');
+    if (!el) return;
+    const seat = ownedSeat;
+    const player = seat ? state.players[seat] : null;
+    const usable =
+      player &&
+      player.spotsLeft > 0 &&
+      state.currentShooter === seat &&
+      (state.phase === 'aiming' || state.phase === 'break');
+    if (!usable) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    el.innerHTML = `<button class="mini" id="useSpot">Take a spot · ${player!.spotsLeft} left</button>`;
+    el.querySelector('#useSpot')?.addEventListener('click', () => {
+      socket.emit('useSpot', { seat: seat! });
+    });
+  }
+
+  /**
+   * What is armed for the shot in front of us, named plainly.
+   *
+   * Shown to the whole room rather than only to whoever it affects: half the fun of a blocker
+   * is the other player knowing it's there before they line up.
+   */
+  function renderModifiers(state: GameState): void {
+    const el = root.querySelector<HTMLElement>('#modifierBar');
+    if (!el) return;
+    const m = state.modifiers;
+    const active: PickupKind[] = [];
+    if (m) {
+      if (m.magnetPocket !== null) active.push('magnet');
+      if (m.blockedPocket !== null) active.push('blocker');
+      if (m.ghostLine) active.push('ghost');
+      if (m.freezeGuide) active.push('freeze');
+      if (m.bonusVisit) active.push('bonus');
+    }
+    if (active.length === 0) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    el.innerHTML = active
+      .map(
+        (kind) =>
+          `<span class="modifier-chip" title="${PICKUP_INFO[kind].blurb}">${PICKUP_INFO[kind].label}</span>`
+      )
+      .join('');
+  }
+
   /** Pocket names in `POCKETS` order, for the call readout. */
   const POCKET_NAMES = ['top-left', 'top-middle', 'top-right', 'bottom-left', 'bottom-middle', 'bottom-right'];
 
@@ -972,7 +1193,17 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   }
 
   function renderPreview(angle: number): void {
-    if (!renderer || !lastState || settings.trajectoryPreview === 'off') {
+    // A freeze takes the guide away for exactly one shot; a ghost line hands over the full one
+    // regardless of what you'd normally have on. Both are read here rather than from the
+    // settings so the effect can't be turned off by the player it's aimed at.
+    const mods = lastState?.modifiers;
+    const guideMode: TrajectoryPreviewMode = mods?.freezeGuide
+      ? 'off'
+      : mods?.ghostLine
+        ? 'full'
+        : settings.trajectoryPreview;
+
+    if (!renderer || !lastState || guideMode === 'off') {
       renderer?.setAimPreview(CUE_BALL_ID, null);
       return;
     }
@@ -980,10 +1211,11 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       lastState.balls,
       CUE_BALL_ID,
       angle,
-      settings.trajectoryPreview,
+      guideMode,
       spinPad?.getValue() ?? ZERO_SPIN,
       lastAimPower,
-      elevation?.getValue() ?? 0
+      elevation?.getValue() ?? 0,
+      lastState.modifiers ?? undefined
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
 
@@ -1004,10 +1236,19 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
+    renderer?.setPickups(
+      state.pickups,
+      state.modifiers?.magnetPocket ?? null,
+      state.modifiers?.blockedPocket ?? null
+    );
     renderScoreboard(state);
     renderChallengeHud(state);
     tickShotClock();
+    tickSpeedClock(state);
+    renderSpotBar(state);
+    renderModifiers(state);
     renderCallout(state);
+    renderBracket(state);
     renderBottomArea(state);
 
     const canAim =

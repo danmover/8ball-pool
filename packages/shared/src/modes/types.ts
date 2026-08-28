@@ -36,6 +36,11 @@ export interface ShotContext {
   lowestBefore: number | null;
   /** The clock ran out instead of a shot being taken. */
   timedOut?: boolean;
+  /**
+   * When the shot settled, epoch millis. Passed in rather than read from `Date.now()` so the
+   * timed modes can be tested without waiting in real time.
+   */
+  now?: number;
 }
 
 /**

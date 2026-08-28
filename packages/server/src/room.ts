@@ -9,7 +9,13 @@ import {
   EMOTE_COOLDOWN_MS,
   MAX_SEATS,
   clampPlayerCount,
+  createTournament,
+  applyPickup,
+  splitModifiers,
+  NO_MODIFIERS,
   modeDescriptor,
+  nextMatch,
+  recordFrameWin,
   applyCueStrike,
   restBall,
   TABLE_LENGTH,
@@ -39,6 +45,9 @@ import type {
   ServerToClientEvents,
   ShootInput,
   SimEvent,
+  Tournament,
+  KingOfTable,
+  ShotModifiers,
 } from '@8ball/shared';
 import { HEAD_STRING_X, RULE_SETS } from '@8ball/shared';
 import { generateToken } from './roomCode.js';
@@ -78,6 +87,14 @@ export class Room {
   private botHandle: ReturnType<typeof setTimeout> | null = null;
   /** Spectator sockets in arrival order, so the longest waiting is seated first. */
   private spectatorQueue: string[] = [];
+  /** The knockout in progress, when this room is running one. */
+  private tournament: Tournament | null = null;
+  /** Entrants in the knockout, which is independent of how many a *match* seats. */
+  private tournamentEntrants: number | null = null;
+  private king: KingOfTable | null = null;
+  /** Power-up effects waiting for the table to change hands. */
+  private pendingAgainstOpponent: ShotModifiers = { ...NO_MODIFIERS };
+  private kingSeats: number | null = null;
   private lastEmoteAt = new Map<Seat, number>();
 
   constructor(code: string, io: IoServer, hostToken: string) {
@@ -91,9 +108,18 @@ export class Room {
     return Array.from({ length: this.lobby.maxPlayers }, (_, i) => `Player ${i + 1}`);
   }
 
-  /** All seat ids this lobby currently allows, whether occupied or not. */
+  /**
+   * All seat ids this lobby currently allows, whether occupied or not.
+   *
+   * A tournament overrides the mode's own limit, because those are two different numbers that
+   * `maxPlayers` was quietly serving both of: how many people are *in* the event, and how many
+   * play at once. Eight-ball is strictly 1v1, which is exactly right for a match and exactly
+   * wrong for a bracket — asking for eight entrants otherwise silently produced a one-match
+   * "tournament" between the first two.
+   */
   seats(): Seat[] {
-    return Array.from({ length: this.lobby.maxPlayers }, (_, i) => seatId(i));
+    const count = this.tournamentEntrants ?? this.kingSeats ?? this.lobby.maxPlayers;
+    return Array.from({ length: count }, (_, i) => seatId(i));
   }
 
   roomStateDTO(): RoomStateDTO {
@@ -119,6 +145,21 @@ export class Room {
         patch.shotClockSeconds === null
           ? null
           : Math.max(5, Math.min(120, Math.round(patch.shotClockSeconds)));
+    }
+    if (patch.handicaps !== undefined) {
+      // Replace wholesale rather than merge: the lobby UI always sends the full picture, and a
+      // merge would make "remove this player's handicap" impossible to express.
+      this.lobby.handicaps = {};
+      for (const [seat, h] of Object.entries(patch.handicaps)) {
+        if (!h) continue;
+        this.lobby.handicaps[seat] = {
+          spots: Math.max(0, Math.min(3, Math.round(h.spots))),
+          shotClockSeconds:
+            h.shotClockSeconds === null || h.shotClockSeconds === undefined
+              ? null
+              : Math.max(5, Math.min(120, Math.round(h.shotClockSeconds))),
+        };
+      }
     }
     if (patch.seriesTarget !== undefined) {
       this.lobby.seriesTarget = Math.max(1, Math.min(9, Math.round(patch.seriesTarget)));
@@ -164,7 +205,11 @@ export class Room {
       next.players[seat].loadout = { ...(conn?.loadout ?? prev?.loadout ?? {}) };
       next.players[seat].isBot = Boolean(conn?.bot);
       next.players[seat].botDifficulty = conn?.bot?.difficulty ?? null;
+      // Handicap tokens refill every frame — a spot you didn't need last frame isn't banked.
+      next.players[seat].spotsLeft = this.lobby.handicaps[seat]?.spots ?? 0;
     }
+    // A new rack clears any banked power-up: an effect armed last frame has nothing to act on.
+    this.pendingAgainstOpponent = { ...NO_MODIFIERS };
     next.series =
       this.lobby.seriesTarget > 1
         ? series ?? { target: this.lobby.seriesTarget, frame: 1, wins: {} }
@@ -194,6 +239,12 @@ export class Room {
     this.started = false;
     // Series score doesn't survive a trip back to the lobby — you're setting up a new match.
     this.gameState.series = null;
+    this.gameState.tournament = null;
+    this.tournament = null;
+    this.tournamentEntrants = null;
+    this.gameState.king = null;
+    this.king = null;
+    this.kingSeats = null;
     this.rebuildGameState();
     this.broadcastRoomState();
     this.broadcastGameState();
@@ -228,6 +279,7 @@ export class Room {
       name,
       connected: true,
       isHost,
+      spotsLeft: this.lobby.handicaps[seat]?.spots ?? 0,
       group: existing?.group ?? null,
       team: existing?.team ?? null,
       score: existing?.score ?? 0,
@@ -263,6 +315,7 @@ export class Room {
       name: bot.name,
       connected: true,
       isHost: false,
+      spotsLeft: this.lobby.handicaps[seat]?.spots ?? 0,
       group: existing?.group ?? null,
       team: existing?.team ?? null,
       score: 0,
@@ -424,6 +477,28 @@ export class Room {
     this.startSimLoop();
   }
 
+  /**
+   * Spends one of a seat's handicap tokens: take the cue ball in hand, right now.
+   *
+   * Claimable only on your own turn and before you shoot, which keeps it a decision about the
+   * table you were left rather than a way to undo a shot you've already played.
+   */
+  useSpot(seat: Seat): void {
+    const state = this.gameState;
+    if (!this.started || state.currentShooter !== seat) return;
+    if (state.phase !== 'aiming' && state.phase !== 'break') return;
+    const player = state.players[seat];
+    if (!player || player.spotsLeft <= 0) return;
+
+    player.spotsLeft--;
+    state.phase = 'ball_in_hand';
+    // A spot is a free placement anywhere, not the restricted one a break scratch earns.
+    state.ballInHandBehindLine = false;
+    state.lastFoulReason = `${player.name} took a spot`;
+    this.broadcastGameState();
+    this.onTurnReady();
+  }
+
   handlePlaceCueBall(payload: BallInHandPlacement): void {
     if (this.gameState.phase !== 'ball_in_hand' || this.gameState.currentShooter !== payload.seat) return;
     const { x, y } = payload.pos;
@@ -461,6 +536,26 @@ export class Room {
 
   requestRematch(): void {
     if (this.gameState.phase !== 'game_over') return;
+
+    // In a tournament "play again" means the next frame of the bracket, not a rerun of the
+    // pairing that just finished — the bracket decides who is at the table, not the players.
+    if (this.tournament) {
+      if (this.tournament.champion) return; // nothing left to play
+      this.rebuildGameState();
+      this.gameState.tournament = this.tournament;
+      this.seatCurrentMatch();
+      this.broadcastGameState();
+      return;
+    }
+    // King of the table: the winner keeps their chair and the next challenger steps up.
+    if (this.king) {
+      this.rebuildGameState();
+      this.gameState.king = this.king;
+      this.seatKingMatch();
+      this.broadcastGameState();
+      return;
+    }
+
     const prev = this.gameState;
     // A finished series has to be reset explicitly rather than rolling into frame 9 of 5.
     const seriesOver =
@@ -511,7 +606,9 @@ export class Room {
     const { phase, currentShooter } = this.gameState;
     if (phase !== 'aiming' && phase !== 'break' && phase !== 'ball_in_hand') return;
 
-    const seconds = this.lobby.shotClockSeconds;
+    // A seat's own handicap clock overrides the table's — that is the whole point of it.
+    const seconds =
+      this.lobby.handicaps[currentShooter]?.shotClockSeconds ?? this.lobby.shotClockSeconds;
     if (seconds && modeDescriptor(this.gameState.mode).supportsShotClock) {
       this.gameState.shotClock = { endsAt: Date.now() + seconds * 1000, seconds };
       this.shotClockHandle = setTimeout(() => this.onShotClockExpired(), seconds * 1000);
@@ -627,7 +724,11 @@ export class Room {
     if (this.loopHandle) return;
     const dt = 1 / BROADCAST_HZ;
     this.loopHandle = setInterval(() => {
-      const { events, settled } = stepSimulation(this.gameState.balls, dt);
+      // Only the party mode passes anything here; every other mode runs the plain engine.
+      const { events, settled } = stepSimulation(this.gameState.balls, dt, {
+        pickups: this.gameState.pickups ?? undefined,
+        modifiers: this.gameState.modifiers ?? undefined,
+      });
       this.shotEvents.push(...events);
       for (const ev of events) this.io.to(this.code).emit('simEvent', ev);
       this.broadcastGameState();
@@ -643,6 +744,7 @@ export class Room {
           false,
           this.preShotCall
         );
+        this.rollModifiers(events);
         if (this.gameState.phase === 'game_over') this.recordFrameResult();
         this.broadcastGameState();
         this.onTurnReady();
@@ -650,11 +752,165 @@ export class Room {
     }, 1000 / BROADCAST_HZ);
   }
 
-  /** Banks a frame win into the running series, if there is one. */
+  /**
+   * Turns the pickups collected during a shot into the effects for the *next* one.
+   *
+   * Called after `resolveShot`, so `currentShooter` has already moved on if the visit ended.
+   * That is what makes "self" and "opponent" effects a single rule rather than two: the half
+   * that follows the shooter and the half that's handed on are split by `splitModifiers`, and
+   * whether those are the same person is simply whether the shooter kept the table.
+   */
+  private rollModifiers(events: SimEvent[]): void {
+    if (!this.gameState.pickups) return;
+
+    let armed = { ...NO_MODIFIERS };
+    for (const ev of events) {
+      if (ev.type === 'pickup') armed = applyPickup(armed, ev.kind, ev.pos);
+    }
+    const { mine, theirs } = splitModifiers(armed);
+
+    // Opponent-targeted effects are banked rather than applied straight away. Arming a freeze
+    // and then keeping the table would otherwise blind you with your own power-up.
+    this.pendingAgainstOpponent = {
+      ...this.pendingAgainstOpponent,
+      blockedPocket: theirs.blockedPocket ?? this.pendingAgainstOpponent.blockedPocket,
+      freezeGuide: theirs.freezeGuide || this.pendingAgainstOpponent.freezeGuide,
+    };
+
+    if (this.gameState.currentShooter === this.gameState.lastShooter) {
+      this.gameState.modifiers = mine;
+      return;
+    }
+    // The table changed hands, so the bank is cashed against whoever just walked up.
+    this.gameState.modifiers = { ...this.pendingAgainstOpponent };
+    this.pendingAgainstOpponent = { ...NO_MODIFIERS };
+  }
+
+  /** Banks a frame win into the running series or tournament, whichever is in play. */
   private recordFrameResult(): void {
-    const { series, winner } = this.gameState;
-    if (!series || !winner) return;
+    const { winner } = this.gameState;
+    if (!winner) return;
+
+    if (this.tournament) {
+      const current = nextMatch(this.tournament);
+      if (current) {
+        const decided = recordFrameWin(this.tournament, current.id, winner);
+        // Only a *decided* match changes the bracket; frames inside a best-of just move the
+        // score along, which is what the bracket screen shows between them.
+        if (decided) this.broadcastRoomState();
+      }
+      this.gameState.tournament = this.tournament;
+      return;
+    }
+
+    if (this.king) {
+      const king = this.king;
+      const loser = king.holder === winner ? king.queue[0] : king.holder;
+      if (king.holder === winner) {
+        king.streak++;
+      } else {
+        king.holder = winner;
+        king.streak = 1;
+      }
+      // The challenger always leaves the front of the queue; the loser rejoins the back. When
+      // the holder wins those are the same seat, and the shift-then-push does the right thing
+      // either way rather than needing two branches.
+      king.queue.shift();
+      if (loser !== undefined) king.queue.push(loser);
+      if (!king.best || king.streak > king.best.streak) {
+        king.best = { seat: king.holder, streak: king.streak };
+      }
+      this.gameState.king = king;
+      this.broadcastRoomState();
+      return;
+    }
+
+    const { series } = this.gameState;
+    if (!series) return;
     series.wins[winner] = (series.wins[winner] ?? 0) + 1;
+  }
+
+  // ---- King of the table ----
+
+  /**
+   * Winner stays on. Everyone seated joins the queue; the first two play, and from then on the
+   * loser goes to the back.
+   *
+   * Built on the same "seat everyone, mark the rest eliminated" trick as the tournament, for
+   * the same reason: rebuilding the room between frames would drop cosmetics, reconnect tokens
+   * and the spectator queue purely to avoid skipping seats in the turn order.
+   */
+  startKingOfTable(): void {
+    if (this.started) return;
+    // At least three makes it a queue rather than a rematch; bots fill the gap when a room is
+    // short, exactly as they do for a bracket.
+    this.kingSeats = Math.max(3, Math.min(MAX_SEATS, this.connections.size));
+    for (const seat of this.seats()) {
+      if (!this.connections.has(seat)) this.addBot(seat, DEFAULT_SETTINGS.defaultBotDifficulty);
+    }
+    const order = this.seats();
+    this.king = { holder: order[0], streak: 0, queue: order.slice(1), best: null };
+    this.startGame();
+    this.seatKingMatch();
+  }
+
+  /** Puts the holder and the front of the queue at the table; everyone else waits. */
+  private seatKingMatch(): void {
+    const king = this.king;
+    if (!king) return;
+    const challenger = king.queue[0];
+    if (challenger === undefined) return;
+
+    for (const seat of this.gameState.seatOrder) {
+      this.gameState.players[seat].eliminated = seat !== king.holder && seat !== challenger;
+    }
+    // The challenger breaks — the holder has had the table, so the incoming player gets the
+    // one advantage that costs the holder nothing.
+    this.gameState.currentShooter = challenger;
+    this.gameState.king = king;
+    this.broadcastGameState();
+    this.onTurnReady();
+  }
+
+  // ---- Tournament ----
+
+  /**
+   * Starts a knockout over everyone seated, filling any empty seats with bots.
+   *
+   * Seeding is seat order, which is the only ranking a party game has — and being explicit
+   * about that is better than pretending to compute one from a handful of frames.
+   */
+  startTournament(target: number, entrants: number): void {
+    if (this.started) return;
+    this.tournamentEntrants = Math.max(2, Math.min(MAX_SEATS, Math.round(entrants)));
+    const seats = this.seats();
+    for (const seat of seats) {
+      if (!this.connections.has(seat)) this.addBot(seat, DEFAULT_SETTINGS.defaultBotDifficulty);
+    }
+    this.tournament = createTournament(seats, Math.max(1, Math.min(9, target)));
+    this.startGame();
+    this.seatCurrentMatch();
+  }
+
+  /**
+   * Puts the next pairing at the table.
+   *
+   * Everyone stays seated — the bracket decides who *shoots*, and the rest are spectators for
+   * that match. Rebuilding the room per match would drop cosmetics, reconnect tokens and the
+   * spectator queue, all to avoid skipping two seats in the turn order.
+   */
+  private seatCurrentMatch(): void {
+    if (!this.tournament) return;
+    const match = nextMatch(this.tournament);
+    if (!match) return;
+
+    for (const seat of this.gameState.seatOrder) {
+      this.gameState.players[seat].eliminated = seat !== match.a && seat !== match.b;
+    }
+    this.gameState.currentShooter = match.a!;
+    this.gameState.tournament = this.tournament;
+    this.broadcastGameState();
+    this.onTurnReady();
   }
 
   private stopSimLoop(): void {

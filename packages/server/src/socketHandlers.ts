@@ -122,6 +122,18 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       room.startGame();
     });
 
+    socket.on('hostStartTournament', ({ target, entrants }) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.startTournament(target, entrants);
+    });
+
+    socket.on('hostStartKing', () => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) return;
+      room.startKingOfTable();
+    });
+
     socket.on('hostReturnToLobby', () => {
       const room = rooms.get(socket.data.roomCode);
       if (!room || room.hostSocketId !== socket.id) return;
@@ -145,6 +157,15 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       const seat = socket.data.seat as Seat | undefined;
       const stored = seat ? room?.seatSettings(seat) : undefined;
       if (stored) Object.assign(stored, settings);
+    });
+
+    socket.on('useSpot', ({ seat }) => {
+      const room = rooms.get(socket.data.roomCode);
+      if (!room) return;
+      // The host may hold several seats hotseat, so trust the named seat only when this socket
+      // actually owns it.
+      if (room.connections.get(seat)?.socketId !== socket.id) return;
+      room.useSpot(seat);
     });
 
     socket.on('requestRematch', () => {

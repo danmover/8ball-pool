@@ -1,10 +1,12 @@
 import { Application, BlurFilter, Container, Graphics, Sprite, Texture } from 'pixi.js';
-import type { Ball, Loadout, TrajectoryPreview } from '@8ball/shared';
+import type { Ball, Loadout, Pickup, TrajectoryPreview } from '@8ball/shared';
 import {
   BALL_RADIUS,
   CORNER_MOUTH,
   CUE_BALL_ID,
   HEAD_STRING_X,
+  PICKUP_RADIUS,
+  POCKETS,
   DEFAULT_LOADOUT,
   SIDE_MOUTH,
   TABLE_LENGTH,
@@ -628,6 +630,11 @@ export class TableRenderer {
   private shadowLayer = new Graphics();
   private trailLayer = new Graphics();
   private highlightLayer = new Graphics();
+  /** Party-mode discs on the cloth, under the balls so a ball can be seen sitting on one. */
+  private pickupLayer = new Graphics();
+  private pickups: Pickup[] = [];
+  private blockedPocket: number | null = null;
+  private magnetPocket: number | null = null;
   private ballLayer = new Container();
   private guideLayer = new Graphics();
   private fxLayer = new Container();
@@ -755,6 +762,7 @@ export class TableRenderer {
       this.shadowLayer,
       this.trailLayer,
       this.highlightLayer,
+      this.pickupLayer,
       this.ballLayer,
       this.guideLayer,
       this.fxLayer,
@@ -1669,6 +1677,66 @@ export class TableRenderer {
    * Shading the kitchen matters as much as enforcing it: a rejected click with a toast is a
    * far worse way to learn a rule than simply seeing where you may go.
    */
+  /**
+   * Party-mode state: the discs still on the cloth, and which pockets are altered this shot.
+   *
+   * Passed together because they're read together — a blocked pocket with no discs anywhere is
+   * not a state the party mode can be in, and splitting them into three setters would just be
+   * three chances for the table to disagree with itself.
+   */
+  setPickups(
+    pickups: Pickup[] | null,
+    magnetPocket: number | null,
+    blockedPocket: number | null
+  ): void {
+    this.pickups = pickups ?? [];
+    this.magnetPocket = magnetPocket;
+    this.blockedPocket = blockedPocket;
+  }
+
+  /**
+   * Draws the discs, and marks any pocket the current shot has changed.
+   *
+   * The marks matter more than the discs: an opponent needs to see that a pocket is blocked
+   * *before* they play at it, or the effect reads as the game arbitrarily rejecting a good pot.
+   */
+  private drawPickups(): void {
+    const g = this.pickupLayer;
+    g.clear();
+    if (this.pickups.length === 0 && this.magnetPocket === null && this.blockedPocket === null) {
+      return;
+    }
+
+    // A slow pulse, so a disc reads as live rather than as a mark on the cloth. Tied to the
+    // shake toggle because that is what `reduceMotion` switches off — a pulsing disc is the
+    // same kind of unasked-for movement.
+    const pulse = this.shakeEnabled ? 0.85 + 0.15 * Math.sin(performance.now() / 420) : 1;
+
+    for (const pickup of this.pickups) {
+      if (pickup.taken) continue;
+      const r = PICKUP_RADIUS * pulse;
+      g.circle(pickup.pos.x, pickup.pos.y, r).fill({ color: 0xffd569, alpha: 0.22 });
+      g.circle(pickup.pos.x, pickup.pos.y, r).stroke({ width: 2.5, color: 0xffd569, alpha: 0.85 });
+      g.circle(pickup.pos.x, pickup.pos.y, r * 0.34).fill({ color: 0xfff3c4, alpha: 0.9 });
+    }
+
+    if (this.magnetPocket !== null) {
+      const p = POCKETS[this.magnetPocket];
+      if (p) {
+        g.circle(p.mid.x, p.mid.y, PICKUP_RADIUS * 2.2)
+          .stroke({ width: 4, color: 0x6ee7a0, alpha: 0.8 });
+      }
+    }
+    if (this.blockedPocket !== null) {
+      const p = POCKETS[this.blockedPocket];
+      if (p) {
+        g.circle(p.mid.x, p.mid.y, PICKUP_RADIUS * 1.6).fill({ color: 0xd94b3a, alpha: 0.55 });
+        g.circle(p.mid.x, p.mid.y, PICKUP_RADIUS * 1.6)
+          .stroke({ width: 3, color: 0x14141a, alpha: 0.9 });
+      }
+    }
+  }
+
   setKitchenOnly(behindLine: boolean): void {
     this.kitchenOnly = behindLine;
   }
@@ -1942,6 +2010,7 @@ export class TableRenderer {
     this.shadowLayer.clear();
     this.highlightLayer.clear();
     this.trailLayer.clear();
+    this.drawPickups();
 
     for (const [id, visual] of this.ballVisuals) {
       // A pocketed ball is skipped outright once its drop animation finishes — otherwise

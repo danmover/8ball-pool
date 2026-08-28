@@ -1,6 +1,8 @@
 import type { Vec2 } from './vector.js';
 import type { Loadout } from './cosmetics.js';
 import { DEFAULT_RULE_SET, type RuleSetId } from './ruleSets.js';
+import type { Tournament } from './tournament.js';
+import type { Pickup, PickupKind, ShotModifiers } from './pickups.js';
 
 export type BallGroup = 'solid' | 'stripe';
 export type BallKind = 'cue' | 'eight' | BallGroup;
@@ -68,7 +70,9 @@ export function seatIndex(seat: Seat): number {
  * - `cutthroat` : 3-5 players each own a group of balls; you're out when your last one drops,
  *                 and the last player with a ball still on the table wins.
  * - `killer`    : everyone starts with lives; fail to pot on your turn and you lose one.
+ * - `powerup`   : eight-ball with pickups on the cloth; each arms one effect for one shot.
  * - `ghost`     : solo. Clear the whole table in one visit or the rack is lost.
+ * - `speed`     : solo against the clock. Clear all fifteen; fouls cost seconds, not the rack.
  * - `sandbox`   : no turns, no fouls, no winner — a practice table.
  */
 export type GameMode =
@@ -78,7 +82,9 @@ export type GameMode =
   | 'nineball'
   | 'cutthroat'
   | 'killer'
+  | 'powerup'
   | 'ghost'
+  | 'speed'
   | 'sandbox'
   | 'challenge';
 
@@ -93,7 +99,25 @@ export interface LobbySettings {
   shotClockSeconds: number | null;
   /** Frames needed to take the match; 1 is a single one-and-done frame. */
   seriesTarget: number;
+  /**
+   * Per-seat handicaps, so a mixed-skill group can play a real frame.
+   *
+   * A stronger player takes a tighter clock; a weaker one gets `spots` — take-it-in-hand
+   * tokens, claimable once each per frame. Both are subtractive rather than additive: nobody
+   * is given help *at the table*, the physics is identical for everyone, and the outcome of
+   * any given shot is still entirely down to who played it.
+   */
+  handicaps: Partial<Record<Seat, SeatHandicap>>;
 }
+
+export interface SeatHandicap {
+  /** Ball-in-hand tokens this seat may claim per frame. */
+  spots: number;
+  /** A tighter per-shot clock for this seat only; null follows the table's setting. */
+  shotClockSeconds: number | null;
+}
+
+export const NO_HANDICAP: SeatHandicap = { spots: 0, shotClockSeconds: null };
 
 export const DEFAULT_LOBBY: LobbySettings = {
   mode: 'classic',
@@ -101,7 +125,26 @@ export const DEFAULT_LOBBY: LobbySettings = {
   maxPlayers: 2,
   shotClockSeconds: null,
   seriesTarget: 1,
+  handicaps: {},
 };
+
+/**
+ * Winner stays on.
+ *
+ * The oldest format in any pub, and a much better fit for a party than a bracket: nobody is
+ * knocked out, the queue is visible, and losing costs you one frame's wait rather than the
+ * evening.
+ */
+export interface KingOfTable {
+  /** Who is holding the table. */
+  holder: Seat;
+  /** Frames won in a row without leaving. */
+  streak: number;
+  /** Waiting seats, front first. `queue[0]` is at the table right now. */
+  queue: Seat[];
+  /** The longest streak anyone has managed this session, and who. */
+  best: { seat: Seat; streak: number } | null;
+}
 
 export interface PlayerInfo {
   seat: Seat;
@@ -121,6 +164,8 @@ export interface PlayerInfo {
   eliminated: boolean;
   isBot: boolean;
   botDifficulty: BotDifficulty | null;
+  /** Handicap ball-in-hand tokens left this frame. Zero when no handicap is set. */
+  spotsLeft: number;
 }
 
 export type TurnPhase =
@@ -160,6 +205,25 @@ export interface GameState {
   shotClock: { endsAt: number; seconds: number } | null;
   /** Best-of series across frames; null when playing single frames. */
   series: { target: number; frame: number; wins: Record<Seat, number> } | null;
+  /** The knockout bracket, when this room is running a tournament. */
+  tournament: Tournament | null;
+  /** Winner-stays-on, when this room is running king of the table. */
+  king: KingOfTable | null;
+  /** Pickups on the cloth, and the effects armed for the shot in front of us. Party mode only. */
+  pickups: Pickup[] | null;
+  modifiers: ShotModifiers | null;
+  /**
+   * A speed-pool run against the clock. `finalMs` is null until the table is cleared, so a
+   * live run is timed from `startedAt` and a finished one is read straight off the state
+   * rather than being recomputed against a clock that has kept moving.
+   */
+  speedRun: {
+    startedAt: number;
+    penaltyMs: number;
+    fouls: number;
+    finalMs: number | null;
+    stars: number;
+  } | null;
   /** Trick-shot progress; null outside challenge mode. */
   challenge: {
     challengeId: string;
@@ -311,8 +375,13 @@ export interface ClientToServerEvents {
   hostReleaseSeat: (payload: { seat: Seat }) => void;
   hostUpdateLobby: (payload: Partial<LobbySettings>) => void;
   hostStartGame: () => void;
+  hostStartKing: () => void;
+  /** Spend one handicap ball-in-hand token. */
+  useSpot: (payload: { seat: Seat }) => void;
   /** Reopen the lobby after a game so the table can be set up differently. */
   hostReturnToLobby: () => void;
+  /** Run a seeded knockout over everyone seated, filling empty seats with bots. */
+  hostStartTournament: (payload: { target: number; entrants: number }) => void;
   updateAim: (input: AimInput) => void;
   takeShot: (input: ShootInput) => void;
   placeCueBall: (payload: BallInHandPlacement) => void;
@@ -341,6 +410,8 @@ export type SimEvent =
   | { type: 'ballCollision'; a: number; b: number; pos: Vec2; impulse: number }
   /** The tip slipped off the ball — struck too far off centre to hold. */
   | { type: 'miscue' }
+  /** The cue ball rolled over a pickup in the party mode. */
+  | { type: 'pickup'; kind: PickupKind; pos: Vec2 }
   /** A jumped ball came back down onto the cloth. */
   | { type: 'land'; ballId: number; pos: Vec2 }
   | { type: 'shotSettled' };

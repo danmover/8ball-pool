@@ -6,6 +6,8 @@ import { cutthroatMode } from './cutthroat.js';
 import { killerMode } from './killer.js';
 import { sandboxMode } from './sandbox.js';
 import { ghostMode } from './ghost.js';
+import { speedMode } from './speed.js';
+import { powerupMode } from './powerup.js';
 import { challengeMode } from './challenge.js';
 import type { ModeDescriptor } from './types.js';
 
@@ -14,6 +16,13 @@ export * from './shared.js';
 export { isGroupCleared } from './classic.js';
 export { STARTING_LIVES } from './killer.js';
 export { activeChallenge } from './challenge.js';
+export {
+  formatSpeedTime,
+  speedStars,
+  speedTotalMs,
+  SPEED_FOUL_PENALTY_MS,
+  SPEED_PAR_MS,
+} from './speed.js';
 export type { ChallengeState } from './challenge.js';
 
 /**
@@ -29,6 +38,8 @@ export const MODES: Record<GameMode, ModeDescriptor> = {
   killer: killerMode,
   sandbox: sandboxMode,
   ghost: ghostMode,
+  speed: speedMode,
+  powerup: powerupMode,
   challenge: challengeMode,
 };
 
@@ -43,8 +54,10 @@ export const MODE_ORDER: GameMode[] = [
   'teams',
   'cutthroat',
   'killer',
+  'powerup',
   'rotation',
   'ghost',
+  'speed',
   'sandbox',
 ];
 

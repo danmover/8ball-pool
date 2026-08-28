@@ -10,6 +10,8 @@ export * from './challenges.js';
 export * from './career.js';
 export * from './achievements.js';
 export * from './season.js';
+export * from './tournament.js';
+export * from './pickups.js';
 export * from './types.js';
 export * from './physics.js';
 export * from './trajectory.js';

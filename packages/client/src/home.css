@@ -834,3 +834,144 @@ body.reduce-motion .shot-clock {
     width: auto;
   }
 }
+
+/* ---- Speed pool: a clock that counts up, and the penalty it has cost so far ---- */
+.speed-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.95rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 14px 26px rgba(0, 0, 0, 0.45);
+}
+
+.speed-time {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 1.55rem;
+  /* Tabular figures, or the whole readout jitters as the tenths tick over. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.speed-penalty {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #c0392b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A finished run stops shouting and settles into a result. */
+.speed-clock[data-done='true'] {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+}
+
+/* ---- Handicap spot ---- */
+.spot-bar {
+  /* The rest of the centre column is display-only; this one is a control. */
+  pointer-events: auto;
+}
+
+/* A quiet chip until it's set, so an unused handicap doesn't clutter every seat. */
+.seat-handicap {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.seat-handicap:hover {
+  opacity: 1;
+}
+
+.seat-handicap.on {
+  opacity: 1;
+  background: #ffd569;
+  color: #14141a;
+  border-color: #14141a;
+}
+
+/* ---- King of the table: the queue reuses the bracket column ---- */
+.king-holder {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.king-crown {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.king-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.king-streak {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.queue-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.king-best {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  text-align: center;
+}
+
+/* ---- Power-up pool: what is armed for the shot in front of us ---- */
+.modifier-bar {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.modifier-chip {
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 rgba(0, 0, 0, 0.3);
+}
