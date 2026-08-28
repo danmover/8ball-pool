@@ -10,6 +10,9 @@ import {
   MAX_SEATS,
   clampPlayerCount,
   createTournament,
+  newRound,
+  placeBet,
+  settle,
   applyPickup,
   splitModifiers,
   NO_MODIFIERS,
@@ -48,6 +51,7 @@ import type {
   Tournament,
   KingOfTable,
   ShotModifiers,
+  BettingRound,
 } from '@8ball/shared';
 import { HEAD_STRING_X, RULE_SETS } from '@8ball/shared';
 import { generateToken } from './roomCode.js';
@@ -94,6 +98,8 @@ export class Room {
   private king: KingOfTable | null = null;
   /** Power-up effects banked per seat, cashed when that seat next shoots. */
   private pendingModifiers = new Map<Seat, ShotModifiers>();
+  /** The book on the current frame. Spectators only; the players themselves cannot bet. */
+  private betting: BettingRound = newRound();
   private kingSeats: number | null = null;
   private lastEmoteAt = new Map<Seat, number>();
 
@@ -210,6 +216,8 @@ export class Room {
     }
     // A new rack clears every banked power-up: an effect armed last frame has nothing to act on.
     this.pendingModifiers.clear();
+    // And re-opens the book. Stakes from a frame that no longer exists cannot be settled.
+    if (!this.betting.open) this.betting = newRound();
     next.series =
       this.lobby.seriesTarget > 1
         ? series ?? { target: this.lobby.seriesTarget, frame: 1, wins: {} }
@@ -469,6 +477,12 @@ export class Room {
     );
 
     this.gameState.phase = 'shot_in_progress';
+    // The book closes the moment the balls move. Backing a player once you have seen how the
+    // frame is going is not a wager, it is a refund with extra steps.
+    if (this.betting.open) {
+      this.betting.open = false;
+      this.broadcastBook();
+    }
     this.shotEvents = [];
     // Tell everyone the tip slipped, or the shot just looks broken rather than risky.
     if (strike.miscued) this.io.to(this.code).emit('simEvent', { type: 'miscue' });
@@ -710,12 +724,73 @@ export class Room {
     this.io.to(this.code).emit('emote', { seat, emote });
   }
 
+  // ---- Spectator betting ----
+
+  /**
+   * Takes a spectator's stake.
+   *
+   * Players are refused outright. Someone with a cue in their hand betting on the frame they
+   * are playing is a different game entirely, and not one worth having in a pub.
+   */
+  placeSpectatorBet(socketId: string, name: string, on: Seat, amount: number): void {
+    // Deliberately *not* gated on the game having started. The natural moment to back someone
+    // is while everyone is still settling in, and requiring `started` refused every bet placed
+    // in the lobby — silently, which is the worst way for a rule to work. The book's own
+    // `open` flag is the right condition, and the first shot closes it.
+    if (!this.spectatorSocketIds.has(socketId)) return;
+    if (!this.gameState.seatOrder.includes(on)) return;
+    if (this.gameState.players[on]?.eliminated) return;
+
+    if (placeBet(this.betting, { bettorId: socketId, name, on, amount })) {
+      this.broadcastBook();
+    }
+  }
+
+  /**
+   * Pays the book out against the frame the server refereed.
+   *
+   * Every bettor is told, winners and losers alike — a silent loss reads as a bug, and the
+   * client needs to move the chalk either way.
+   */
+  private settleBets(winner: Seat | null): void {
+    if (this.betting.bets.length === 0) return;
+    for (const payout of settle(this.betting, winner)) {
+      this.io.to(payout.bettorId).emit('betSettled', {
+        staked: payout.staked,
+        returned: payout.returned,
+        winner,
+      });
+    }
+    this.betting = newRound();
+    this.broadcastBook();
+  }
+
+  private bookDTO(): { open: boolean; bets: { name: string; on: Seat; amount: number }[] } {
+    return {
+      open: this.betting.open,
+      bets: this.betting.bets.map((b) => ({ name: b.name, on: b.on, amount: b.amount })),
+    };
+  }
+
+  private broadcastBook(): void {
+    this.io.to(this.code).emit('bettingBook', this.bookDTO());
+  }
+
+  /** The book, to one socket — for someone who has only just started watching. */
+  private sendBook(socketId: string): void {
+    this.io.to(socketId).emit('bettingBook', this.bookDTO());
+  }
+
   // ---- Spectators ----
 
   addSpectator(socketId: string): void {
     this.spectatorSocketIds.add(socketId);
     if (!this.spectatorQueue.includes(socketId)) this.spectatorQueue.push(socketId);
     this.broadcastRoomState();
+    // Tell them the state of the book *now*, not at the next change. Someone who walks up
+    // mid-frame would otherwise be shown an open book that isn't, tap a stake, and have
+    // nothing happen — a silent refusal is the worst way to explain a rule.
+    this.sendBook(socketId);
   }
 
   /** Offers a freed seat to the spectator who has been waiting longest. */
@@ -813,6 +888,7 @@ export class Room {
   /** Banks a frame win into the running series or tournament, whichever is in play. */
   private recordFrameResult(): void {
     const { winner } = this.gameState;
+    this.settleBets(winner);
     if (!winner) return;
 
     if (this.tournament) {

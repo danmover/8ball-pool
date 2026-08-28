@@ -24,6 +24,24 @@ function fakeIo(): never {
   return chain as never;
 }
 
+/**
+ * A `Server` stand-in that records what was emitted and to whom.
+ *
+ * Needed for betting, where the *addressing* is the behaviour under test: a payout that went
+ * to the room instead of the bettor would tell everyone what everyone else staked.
+ */
+function recordingIo(): { io: never; sent: { to: string; event: string; payload: unknown }[] } {
+  const sent: { to: string; event: string; payload: unknown }[] = [];
+  const make = (target: string) => ({
+    emit: (event: string, payload: unknown) => {
+      sent.push({ to: target, event, payload });
+      return make(target);
+    },
+    to: (next: string) => make(next),
+  });
+  return { io: make('') as never, sent };
+}
+
 function room(): Room {
   return new Room('TEST', fakeIo(), 'host-token');
 }
@@ -260,6 +278,96 @@ describe('power-up banking', () => {
 
     winFrame(r, 'p1');
     expect(inner(r).pendingModifiers.size).toBe(0);
+  });
+});
+
+describe('spectator betting', () => {
+  type BetInternals = {
+    betting: { open: boolean; bets: { bettorId: string; on: string; amount: number }[] };
+    settleBets(winner: string | null): void;
+  };
+  const bets = (r: Room): BetInternals => r as unknown as BetInternals;
+
+  /** A started two-bot table with `count` spectators watching. */
+  function table(count = 2): { room: Room; sent: ReturnType<typeof recordingIo>['sent'] } {
+    const { io, sent } = recordingIo();
+    const r = new Room('TEST', io, 'tok');
+    r.addBot('p1', 'club');
+    r.addBot('p2', 'club');
+    r.startGame();
+    for (let i = 0; i < count; i++) r.addSpectator(`spec${i}`);
+    return { room: r, sent };
+  }
+
+  it('takes a stake from someone watching', () => {
+    const { room } = table();
+    room.placeSpectatorBet('spec0', 'Ava', 'p1', 50);
+    expect(bets(room).betting.bets).toHaveLength(1);
+  });
+
+  it('refuses anyone who is not a spectator', () => {
+    // Someone with a cue in their hand betting on the frame they are playing is a different
+    // game entirely, and not one worth having in a pub.
+    const { room } = table();
+    room.placeSpectatorBet('some-player-socket', 'Cheat', 'p1', 50);
+    expect(bets(room).betting.bets).toHaveLength(0);
+  });
+
+  it('refuses a stake on a seat that is not in the frame', () => {
+    const { room } = table();
+    room.placeSpectatorBet('spec0', 'Ava', 'p7', 50);
+    expect(bets(room).betting.bets).toHaveLength(0);
+  });
+
+  it('sends the book to someone who starts watching mid-frame', () => {
+    // Otherwise they are shown an open book that isn't, tap a stake, and nothing happens — a
+    // silent refusal is the worst possible way to explain a rule.
+    const { room, sent } = table(0);
+    bets(room).betting.open = false;
+    sent.length = 0;
+    room.addSpectator('late');
+
+    const addressed = sent.filter((m) => m.event === 'bettingBook' && m.to === 'late');
+    expect(addressed).toHaveLength(1);
+    expect((addressed[0].payload as { open: boolean }).open).toBe(false);
+  });
+
+  it('pays each bettor privately, not the whole room', () => {
+    const { room, sent } = table();
+    room.placeSpectatorBet('spec0', 'Ava', 'p1', 50);
+    room.placeSpectatorBet('spec1', 'Ben', 'p2', 50);
+    sent.length = 0;
+
+    bets(room).settleBets('p1');
+    const payouts = sent.filter((m) => m.event === 'betSettled');
+    expect(payouts).toHaveLength(2);
+    // Addressed to the bettor's own socket, never broadcast to the room code.
+    expect(payouts.map((p) => p.to).sort()).toEqual(['spec0', 'spec1']);
+    expect(payouts.find((p) => p.to === 'spec0')!.payload).toMatchObject({ returned: 100 });
+    expect(payouts.find((p) => p.to === 'spec1')!.payload).toMatchObject({ returned: 0 });
+  });
+
+  it('clears the book once it has been settled', () => {
+    const { room } = table();
+    room.placeSpectatorBet('spec0', 'Ava', 'p1', 50);
+    bets(room).settleBets('p1');
+    expect(bets(room).betting.bets).toHaveLength(0);
+    expect(bets(room).betting.open).toBe(true);
+  });
+
+  it('hands stakes back when the frame had no winner', () => {
+    const { room, sent } = table();
+    room.placeSpectatorBet('spec0', 'Ava', 'p1', 50);
+    sent.length = 0;
+    bets(room).settleBets(null);
+    expect(sent.find((m) => m.event === 'betSettled')!.payload).toMatchObject({ returned: 50 });
+  });
+
+  it('settles nothing when nobody bet', () => {
+    const { room, sent } = table();
+    sent.length = 0;
+    bets(room).settleBets('p1');
+    expect(sent.filter((m) => m.event === 'betSettled')).toHaveLength(0);
   });
 });
 

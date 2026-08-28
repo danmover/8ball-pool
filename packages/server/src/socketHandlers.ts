@@ -168,6 +168,12 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
       room.useSpot(seat);
     });
 
+    socket.on('placeBet', ({ on, amount, name }) => {
+      const room = rooms.get(socket.data.roomCode);
+      // Whether this socket is actually a spectator is the Room's call, not the client's.
+      room?.placeSpectatorBet(socket.id, (name ?? '').trim().slice(0, 24) || 'Someone', on, amount);
+    });
+
     socket.on('requestRematch', () => {
       rooms.get(socket.data.roomCode)?.requestRematch();
     });

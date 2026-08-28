@@ -121,6 +121,11 @@ export function renderHomePage(root: HTMLElement): () => void {
             <span class="tile-label">Progress</span>
             <span class="tile-sub" id="progressSub"></span>
           </button>
+          <button class="tile-btn" id="statsBtn">
+            <span class="tile-icon">${icon('trophy', { size: 26 })}</span>
+            <span class="tile-label">Stats</span>
+            <span class="tile-sub" id="statsSub"></span>
+          </button>
           <div class="tile-btn challenge" id="challengeTile"></div>
         </section>
       </div>
@@ -206,6 +211,12 @@ export function renderHomePage(root: HTMLElement): () => void {
       ? `${ready} reward${ready === 1 ? '' : 's'} to claim!`
       : `${ach.earned} / ${ach.total} achievements`;
     root.querySelector<HTMLElement>('#progressBtn')!.classList.toggle('has-reward', ready > 0);
+
+    // The subtitle is the one number worth seeing without opening the page.
+    const sp = getProfile();
+    const shots = sp.history?.shots ?? 0;
+    root.querySelector<HTMLElement>('#statsSub')!.textContent =
+      shots > 0 ? `${Math.round((sp.stats.pots / shots) * 100)}% pot rate` : 'no frames yet';
 
     const stars = Object.values(profile.challengeStars ?? {}).reduce((a, b) => a + b, 0);
     const possible = CHALLENGES.length * 3;
@@ -406,6 +417,7 @@ export function renderHomePage(root: HTMLElement): () => void {
 
   root.querySelector('#careerBtn')!.addEventListener('click', () => navigate('/career'));
   root.querySelector('#progressBtn')!.addEventListener('click', () => navigate('/progress'));
+  root.querySelector('#statsBtn')!.addEventListener('click', () => navigate('/stats'));
   root.querySelector('#trickShotsBtn')!.addEventListener('click', () => navigate('/challenges'));
 
   root.querySelector('#settingsBtn')!.addEventListener('click', () => {

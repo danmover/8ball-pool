@@ -13,6 +13,7 @@ import {
   type AchievementStats,
   type Mission,
 } from '@8ball/shared';
+import { recordRival } from '@8ball/shared';
 import { getProfile, grantXp, mutateProfile } from './profile';
 import type { Profile } from './profileStore';
 
@@ -191,6 +192,15 @@ export interface FrameResult {
   botTier?: string | null;
   /** The career opponent faced, when this frame came off the ladder. */
   careerOpponentId?: string | null;
+  /** Who you played, for the head-to-head record. Bots included — they are opponents too. */
+  opponentName?: string | null;
+  /** Which mode it was, so "favourite mode" is a fact rather than a guess. */
+  mode?: string | null;
+  /** Shots taken and the longest unbroken run, for the stats page. */
+  shots?: number;
+  longestRun?: number;
+  /** The frame decided a series — the last frame of a best-of. */
+  decider?: boolean;
 }
 
 /**
@@ -217,6 +227,25 @@ export function recordFrameResult(r: FrameResult): {
 
     bumpMissions(draft, 'winCount', r.won ? 1 : 0);
     if (r.won && r.clean) bumpMissions(draft, 'cleanFrames', 1);
+
+    if (r.opponentName) {
+      draft.rivals = recordRival(draft.rivals ?? {}, r.opponentName, r.won);
+    }
+
+    const history = (draft.history ??= {
+      modeFrames: {},
+      longestClearance: 0,
+      shots: 0,
+      decidersWon: 0,
+      decidersLost: 0,
+    });
+    if (r.mode) history.modeFrames[r.mode] = (history.modeFrames[r.mode] ?? 0) + 1;
+    history.shots += r.shots ?? 0;
+    history.longestClearance = Math.max(history.longestClearance, r.longestRun ?? 0);
+    if (r.decider) {
+      if (r.won) history.decidersWon += 1;
+      else history.decidersLost += 1;
+    }
 
     if (r.won && r.careerOpponentId) {
       const already = (draft.careerBeaten ?? []).includes(r.careerOpponentId);

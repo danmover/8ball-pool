@@ -363,6 +363,13 @@ export interface ServerToClientEvents {
   emote: (payload: { seat: Seat; emote: string }) => void;
   /** A seat opened up and this spectator is first in line for it. */
   seatAvailable: (payload: { seat: Seat }) => void;
+  /** The state of the book on this frame, for everyone watching. */
+  bettingBook: (payload: {
+    open: boolean;
+    bets: { name: string; on: Seat; amount: number }[];
+  }) => void;
+  /** Sent only to the bettor: what their stake did. `returned` of 0 means they lost it. */
+  betSettled: (payload: { staked: number; returned: number; winner: Seat | null }) => void;
 }
 
 /** The fixed reaction set. Server-validated, so clients can't inject arbitrary content. */
@@ -386,6 +393,8 @@ export interface ClientToServerEvents {
   hostUpdateLobby: (payload: Partial<LobbySettings>) => void;
   hostStartGame: () => void;
   hostStartKing: (payload: { entrants: number }) => void;
+  /** Back a player with chalk. Spectators only, and only before the first shot. */
+  placeBet: (payload: { on: Seat; amount: number; name: string }) => void;
   /** Spend one handicap ball-in-hand token. */
   useSpot: (payload: { seat: Seat }) => void;
   /** Reopen the lobby after a game so the table can be set up differently. */

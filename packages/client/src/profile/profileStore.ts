@@ -1,4 +1,4 @@
-import { DEFAULT_LOADOUT, STARTER_IDS, type Loadout } from '@8ball/shared';
+import { DEFAULT_LOADOUT, STARTER_IDS, type Loadout, type RivalRecord } from '@8ball/shared';
 
 /**
  * A player's persistent identity and collection. Deliberately kept behind the
@@ -45,6 +45,24 @@ export interface Profile {
   season?: { season: string; xp: number; claimed: number[] };
   /** Elo against the bots — "am I actually getting better" needs an answer. */
   rating?: number;
+  /** Head-to-head records, keyed by `rivalKey(name)`. */
+  rivals?: Record<string, RivalRecord>;
+  /**
+   * Counters the stats page reads. Kept apart from `stats` for the same reason `feats` is —
+   * that object is what the profile card has always shown, and widening it would change what
+   * every existing save means.
+   */
+  history?: {
+    /** Frames played per mode, so "favourite mode" is a fact rather than a guess. */
+    modeFrames: Record<string, number>;
+    /** Most balls potted in a single unbroken visit. */
+    longestClearance: number;
+    /** Shots taken, so a pot rate can be computed honestly. */
+    shots: number;
+    /** Frames that went to a decider, and how they went. */
+    decidersWon: number;
+    decidersLost: number;
+  };
 }
 
 export interface ProfileStore {

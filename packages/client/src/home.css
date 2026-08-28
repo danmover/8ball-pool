@@ -1063,3 +1063,227 @@ body.reduce-motion .shot-callout {
   font-weight: 700;
   opacity: 0.6;
 }
+
+/* ---- Rivalry line on the result card ---- */
+.rivalry-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.4rem;
+  font-weight: 800;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* ---- Stats page ---- */
+.stats-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+  margin: 1rem 0 1.6rem;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3);
+}
+
+.stat-value {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.stat-note {
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+
+.rivals-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rivals-table th,
+.rivals-table td {
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.rivals-table thead th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+.rivals-table tbody tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.rival-ahead td:nth-child(2) b:first-child { color: #6ee7a0; }
+.rival-behind td:nth-child(2) b:last-child { color: #f08b7e; }
+
+/* ---- Spectator view ---- */
+.spectator-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+  min-height: 100dvh;
+}
+
+.spec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.spec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.spec-queue {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  /* The leave button is fixed to the top-right corner; keep clear of it rather than sliding
+     underneath, which clipped this to "Waiting fo". */
+  margin-right: 3rem;
+  text-align: right;
+}
+
+.spec-score {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.spec-player {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 0.95rem;
+}
+
+/* Whoever is at the table right now. */
+.spec-player.shooting {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.spec-book {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.book-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.book-seats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.book-seat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.6rem;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+.book-seat.picked {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  border-color: #14141a;
+}
+
+.book-odds {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.book-stakes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+.book-stake {
+  padding: 0.6rem 0;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.book-stake:disabled {
+  opacity: 0.35;
+}
+
+.book-hint,
+.book-mine {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.book-closed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* A value that is words rather than a number needs to be set smaller to fit its card. */
+.stat-value.text {
+  font-size: 1.15rem;
+  line-height: 1.25;
+}

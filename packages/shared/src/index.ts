@@ -13,6 +13,8 @@ export * from './season.js';
 export * from './tournament.js';
 export * from './pickups.js';
 export * from './callouts.js';
+export * from './betting.js';
+export * from './rivals.js';
 export * from './types.js';
 export * from './physics.js';
 export * from './trajectory.js';

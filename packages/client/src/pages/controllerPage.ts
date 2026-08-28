@@ -9,7 +9,14 @@ import {
   xpForResult,
 } from '@8ball/shared';
 import { PotCelebrator } from '../render/potCelebration';
-import { equippedLoadout, getProfile, grantXp, recordStats, setDisplayName } from '../profile/profile';
+import {
+  equippedLoadout,
+  getProfile,
+  grantXp,
+  mutateProfile,
+  recordStats,
+  setDisplayName,
+} from '../profile/profile';
 import { openWheel } from '../profile/wheel';
 import { getSocket } from '../net/socket';
 import { loadSession, loadSettings, saveSettings, saveSession } from '../settings/settingsStore';
@@ -25,6 +32,8 @@ import { icon } from '../render/icons';
 import { confirmLeave, showToast } from '../render/dialogs';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+import { createSpectatorView, type SpectatorView } from './spectatorView';
+import type { BettingRound } from '@8ball/shared';
 
 export function renderControllerPage(root: HTMLElement, code: string): () => void {
   const socket = getSocket();
@@ -33,6 +42,18 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
 
   let seat: Seat | null = existing?.seat ?? null;
   let lastState: GameState | null = null;
+  /** Present only when this phone is watching rather than playing. */
+  let spectator: SpectatorView | null = null;
+  let spectatorName = 'Someone';
+  /**
+   * The book, cached.
+   *
+   * The server sends it while handling `joinRoom`, which is *before* the client's callback has
+   * created the spectator view — so without somewhere to put it the first (and often only)
+   * book of the frame is dropped, and someone joining mid-frame is shown an open book that
+   * isn't. Same reason `lastState` exists.
+   */
+  let lastBook: { open: boolean; bets: { name: string; on: Seat; amount: number }[] } | null = null;
   let renderer: TableRenderer | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
@@ -87,6 +108,13 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       setDisplayName(name);
       socket.emit('joinRoom', { code, name, loadout: equippedLoadout() }, (res) => {
         if (!res.ok) {
+          // The server has already put us in the room and in the queue for the next free seat.
+          // Showing an error and stopping was a strange thing to do to someone who has just
+          // walked over and scanned the code.
+          if (isSpectating(res.error)) {
+            startSpectating(name);
+            return;
+          }
           joinError.textContent = res.error;
           return;
         }
@@ -107,12 +135,44 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     }
     socket.emit('joinRoom', { code, name: '', token: existing.token, loadout: equippedLoadout() }, (res) => {
       if (!res.ok) {
+        if (isSpectating(res.error)) {
+          startSpectating(getProfile().displayName || 'Someone');
+          return;
+        }
         showNameEntry(res.error);
         return;
       }
       seat = res.seat;
       void boot();
     });
+  }
+
+  /** The wire shape carries no bettor ids — the client only ever needs the totals. */
+  function toRound(book: {
+    open: boolean;
+    bets: { name: string; on: Seat; amount: number }[];
+  }): BettingRound {
+    return { open: book.open, bets: book.bets.map((b) => ({ ...b, bettorId: '' })) };
+  }
+
+  /** The one refusal that isn't a refusal: the table is full, but we're in the room. */
+  function isSpectating(error: string | undefined): boolean {
+    return Boolean(error && /spectator/i.test(error));
+  }
+
+  function startSpectating(name: string): void {
+    spectatorName = name;
+    spectator = createSpectatorView(
+      root,
+      {
+        onBet: (on, amount) => socket.emit('placeBet', { on, amount, name: spectatorName }),
+        // A spectator never claimed a seat, so there is no stored session to clear.
+        onLeave: () => navigate('/'),
+      },
+      'Waiting for a seat'
+    );
+    if (lastBook) spectator.setBook(toRound(lastBook));
+    if (lastState) spectator.update(lastState);
   }
 
   function onPlacementPointer(e: PointerEvent): void {
@@ -155,6 +215,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
 
   function applyState(state: GameState): void {
     lastState = state;
+    // A spectator has no renderer and no seat; everything below is about playing.
+    if (spectator) {
+      spectator.update(state);
+      return;
+    }
     renderer?.updateBalls(state.balls);
     renderer?.setLegalTargets(legalTargetBallIds(state));
     renderer?.setPickups(
@@ -463,6 +528,21 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         onShotSettled();
       }
     },
+    bettingBook: (book: { open: boolean; bets: { name: string; on: Seat; amount: number }[] }) => {
+      lastBook = book;
+      spectator?.setBook(toRound(book));
+    },
+    betSettled: (payload: { staked: number; returned: number; winner: Seat | null }) => {
+      spectator?.settled(payload);
+      // The chalk moves here rather than in the view: the balance belongs to the profile, and
+      // the view's job is only to say what happened.
+      if (payload.returned !== payload.staked) {
+        mutateProfile((draft) => {
+          draft.chalk = Math.max(0, draft.chalk - payload.staked + payload.returned);
+        });
+      }
+    },
+    seatAvailable: ({ seat: free }: { seat: Seat }) => spectator?.offerSeat(free),
     errorMessage: (msg: string) => {
       const stack = root.querySelector<HTMLElement>('#toastStack');
       if (stack) showToast(stack, msg, 'foul');
@@ -474,6 +554,9 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   socket.on('shotFired', socketHandlers.shotFired);
   socket.on('simEvent', socketHandlers.simEvent);
   socket.on('errorMessage', socketHandlers.errorMessage);
+  socket.on('bettingBook', socketHandlers.bettingBook);
+  socket.on('betSettled', socketHandlers.betSettled);
+  socket.on('seatAvailable', socketHandlers.seatAvailable);
 
   socket.on('connect_error', () => showFatal('Could not connect to the table.'));
 
@@ -485,6 +568,9 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     socket.off('shotFired', socketHandlers.shotFired);
     socket.off('simEvent', socketHandlers.simEvent);
     socket.off('errorMessage', socketHandlers.errorMessage);
+    socket.off('bettingBook', socketHandlers.bettingBook);
+    socket.off('betSettled', socketHandlers.betSettled);
+    socket.off('seatAvailable', socketHandlers.seatAvailable);
     aimController?.destroy();
     renderer?.destroy();
   };

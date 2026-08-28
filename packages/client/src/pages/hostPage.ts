@@ -19,6 +19,8 @@ import {
   seatId,
   bestCallout,
   factsFromEvents,
+  rivalKey,
+  rivalryLine,
   PICKUP_INFO,
   formatSpeedTime,
   speedTotalMs,
@@ -129,6 +131,8 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   let lastCalloutText: string | null = null;
   /** Balls potted in the current unbroken visit, for the "clearance" feats. */
   let visitRun = 0;
+  /** The longest unbroken run this frame, for the stats page's longest clearance. */
+  let bestVisitRun = 0;
   let lastPotPos: { x: number; y: number } | null = null;
   let rewardsShown = false;
   let winCelebrated = false;
@@ -827,6 +831,24 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   }
 
   /**
+   * "7–5 to Sam", when there is enough history for that to mean something.
+   *
+   * Read after the frame has been recorded, so it includes the one just played — a banner that
+   * showed the score before your win would look broken to the person who just won.
+   */
+  function rivalryHtml(state: GameState): string {
+    const mySeats = state.seatOrder.filter((s) => state.players[s].isHost);
+    const others = state.seatOrder.filter((s) => !mySeats.includes(s));
+    if (mySeats.length === 0 || others.length !== 1) return '';
+
+    const opponent = state.players[others[0]].name;
+    const record = (getProfile().rivals ?? {})[rivalKey(opponent)];
+    if (!record) return '';
+    const line = rivalryLine(record, getProfile().displayName || 'You');
+    return line ? `<p class="rivalry-line">${icon('trophy', { size: 14 })} ${line}</p>` : '';
+  }
+
+  /**
    * The end-of-frame screen.
    *
    * It used to be a headline and a single Rematch button, which left the only way to change
@@ -890,6 +912,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       <div class="result-card">
         <h2>${headline}</h2>
         ${state.lastFoulReason ? `<p class="result-reason">${state.lastFoulReason}</p>` : ''}
+        ${rivalryHtml(state)}
         ${seriesHtml}
         <table class="result-stats">
           <thead>
@@ -975,17 +998,31 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
 
       // Career, achievements, missions and the season all resolve off one frame result.
       const botSeat = state.seatOrder.find((s) => state.players[s].isBot);
+      // Whoever was on the other side of the table. With several seats it's the one that
+      // isn't ours — a doubles game has no single opponent to keep a record against, so it
+      // records none rather than inventing one.
+      const others = state.seatOrder.filter((s) => !mySeats.includes(s));
+      const opponentName = others.length === 1 ? state.players[others[0]].name : null;
+      const myShots = mySeats.reduce((sum, s) => sum + (frameStats[s]?.shots ?? 0), 0);
+      const series = state.series;
       const outcome = recordFrameResult({
         won: iWon,
         clean: !fouledThisFrame,
         botTier: botSeat ? state.players[botSeat].botDifficulty : null,
         careerOpponentId: careerOpponent,
+        opponentName,
+        mode: state.mode,
+        shots: myShots,
+        longestRun: bestVisitRun,
+        // A decider is the frame that finished the match, not merely the last one played.
+        decider: Boolean(series && Object.values(series.wins).some((w) => w >= series.target)),
       });
       addSeasonXp(award.xp);
       announceUnlocks(outcome);
 
       fouledThisFrame = false;
       visitRun = 0;
+      bestVisitRun = 0;
     }
 
     const profile = getProfile();
@@ -1415,6 +1452,7 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
       }
       // A visit is an unbroken run of scoring shots — the moment one fails to pot, it's over.
       visitRun = summary.pots > 0 ? visitRun + summary.pots : 0;
+      bestVisitRun = Math.max(bestVisitRun, visitRun);
       recordShotFeats({
         pots: summary.pots,
         runSoFar: visitRun,

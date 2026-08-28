@@ -11,6 +11,7 @@ import { renderProfilePage } from './pages/profilePage';
 import { renderChallengesPage } from './pages/challengesPage';
 import { renderCareerPage } from './pages/careerPage';
 import { renderProgressPage } from './pages/progressPage';
+import { renderStatsPage } from './pages/statsPage';
 import { unlockAudio } from './render/audio';
 import { startMusic } from './render/music';
 import { startAmbience } from './render/ambience';
@@ -91,6 +92,8 @@ startRouter(app, (path) => {
     setCleanup(renderControllerPage(app, playMatch[1].toUpperCase()));
   } else if (path === '/progress') {
     setCleanup(renderProgressPage(app));
+  } else if (path === '/stats') {
+    setCleanup(renderStatsPage(app));
   } else if (path === '/career') {
     setCleanup(renderCareerPage(app));
   } else if (path === '/profile') {
