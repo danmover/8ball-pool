@@ -751,7 +751,10 @@ export class Room {
           false,
           this.preShotCall
         );
-        this.rollModifiers(events);
+        // The whole shot's events, not the last tick's — a disc is almost always collected
+        // while the cue ball is still rolling, so `events` here would be empty every time.
+        // `summarizeShot` above reads the same accumulated list for the same reason.
+        this.rollModifiers(this.shotEvents);
         if (this.gameState.phase === 'game_over') this.recordFrameResult();
         this.broadcastGameState();
         this.onTurnReady();

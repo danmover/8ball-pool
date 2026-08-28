@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { NO_MODIFIERS, type Seat, type ShotModifiers, type SimEvent } from '@8ball/shared';
+import {
+  CUE_BALL_ID,
+  NO_MODIFIERS,
+  TABLE_WIDTH,
+  type Seat,
+  type ShotModifiers,
+  type SimEvent,
+} from '@8ball/shared';
 import { Room } from '../room.js';
 
 /**
@@ -30,6 +37,15 @@ type Internals = {
   seatKingMatch(): void;
 };
 const inner = (r: Room): Internals => r as unknown as Internals;
+
+/** Waits for the shot in flight to come to rest, or gives up after `ms`. */
+async function settled(r: Room, ms = 25_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (r.gameState.phase === 'shot_in_progress' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  expect(r.gameState.phase, 'the shot never settled').not.toBe('shot_in_progress');
+}
 
 /** Plays out one frame: `winner` takes it, and the room moves on to the next. */
 function winFrame(r: Room, winner: Seat): void {
@@ -199,6 +215,41 @@ describe('power-up banking', () => {
     inner(r).rollModifiers([pickup('magnet')]);
     expect(r.gameState.modifiers).toBeNull();
   });
+
+  it('reads the whole shot, not just the tick it settled on', async () => {
+    // The regression this exists for. A disc is almost always collected while the cue ball is
+    // still rolling, so passing the final tick's events — which is what the sim loop did —
+    // meant the list was empty every single time and no effect ever armed. Every other test
+    // here calls rollModifiers directly and so could not have caught it; this one plays a real
+    // shot through the loop.
+    const r = started();
+    const cue = r.gameState.balls.find((b) => b.id === CUE_BALL_ID)!;
+    cue.pos = { x: 300, y: TABLE_WIDTH / 2 };
+
+    // Put a disc squarely in the cue ball's path, and nothing else in the way.
+    for (const ball of r.gameState.balls) {
+      if (ball.id !== CUE_BALL_ID) ball.pocketed = true;
+    }
+    r.gameState.pickups = [
+      { id: 0, kind: 'bonus', pos: { x: 700, y: TABLE_WIDTH / 2 }, taken: false },
+    ];
+    r.gameState.phase = 'aiming';
+    r.gameState.currentShooter = 'p1';
+
+    // Gently: the sim loop runs in real time, so a hard shot is still rolling long after any
+    // reasonable test timeout.
+    r.handleShoot({ seat: 'p1', angle: 0, power: 0.3, spin: { x: 0, y: 0 } });
+    // Polled rather than slept for a fixed duration. A wall-clock wait passes alone and fails
+    // under a full run, because the loop is real-time and competing for the same event loop as
+    // every other suite — and a flaky test is worse than none.
+    await settled(r);
+
+    expect(r.gameState.pickups![0].taken, 'the disc should have been rolled over').toBe(true);
+    // With no object balls left there is nothing to hit, so the shot is a foul and the table
+    // passes — which means p1's own effect is banked rather than cashed. Either way it must
+    // exist somewhere, and before the fix it existed nowhere.
+    expect(inner(r).pendingModifiers.get('p1')?.bonusVisit).toBe(true);
+  }, 30000);
 
   it('clears the bank on a new rack', () => {
     const r = started();
