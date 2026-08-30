@@ -162,3 +162,11 @@ export const HEAD_STRING_X = TABLE_LENGTH * 0.25;
 
 export const CUE_BALL_ID = 0;
 export const EIGHT_BALL_ID = 8;
+
+/**
+ * How long an online player has to get back before their seat is forfeited.
+ *
+ * Long enough to cover a tab reload, a train tunnel or a phone locking; short enough that the
+ * people who stayed are not held hostage by someone who has simply left.
+ */
+export const ABANDON_GRACE_MS = 30_000;

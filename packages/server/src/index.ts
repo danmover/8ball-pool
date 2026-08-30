@@ -7,6 +7,7 @@ import cors from 'cors';
 import type { ClientToServerEvents, ServerToClientEvents } from '@8ball/shared';
 import { RoomManager } from './roomManager.js';
 import { registerSocketHandlers } from './socketHandlers.js';
+import { registerOnlineHandlers } from './onlineHandlers.js';
 import { SqliteProfileRepository } from './profiles/sqliteRepository.js';
 import { registerProfileRoutes } from './profiles/routes.js';
 
@@ -21,6 +22,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 const rooms = new RoomManager();
 registerSocketHandlers(io, rooms);
+registerOnlineHandlers(io, rooms);
 
 const profiles = new SqliteProfileRepository();
 registerProfileRoutes(app, profiles);

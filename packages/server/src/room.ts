@@ -9,6 +9,8 @@ import {
   EMOTE_COOLDOWN_MS,
   MAX_SEATS,
   clampPlayerCount,
+  ABANDON_GRACE_MS,
+  endGame,
   createTournament,
   newRound,
   placeBet,
@@ -52,6 +54,9 @@ import type {
   KingOfTable,
   ShotModifiers,
   BettingRound,
+  Governance,
+  TableVisibility,
+  TableSummary,
 } from '@8ball/shared';
 import { HEAD_STRING_X, RULE_SETS } from '@8ball/shared';
 import { generateToken } from './roomCode.js';
@@ -80,6 +85,21 @@ export class Room {
   hostSocketId: string | null = null;
   hostToken: string;
   spectatorSocketIds = new Set<string>();
+  /**
+   * Who is allowed to change this table.
+   *
+   * `host` is the party shape: one screen owns the room and everyone else is a controller.
+   * `open` is the online shape — **nobody is privileged**. Settings are fixed when the table is
+   * made and the game starts itself once the seats fill.
+   *
+   * There is deliberately no host migration. An open table has no authority to hand over when
+   * someone leaves, which removes a whole class of edge case rather than solving it.
+   */
+  governance: Governance = 'host';
+  /** Listed publicly, or only reachable by code. Open tables only. */
+  visibility: TableVisibility = 'private';
+  /** When this table was created — the public list shows the freshest first. */
+  readonly createdAt = Date.now();
 
   private preShotGroupCleared = false;
   /** The ball and pocket nominated for the shot in flight, when call shot is on. */
@@ -102,12 +122,45 @@ export class Room {
   private betting: BettingRound = newRound();
   private kingSeats: number | null = null;
   private lastEmoteAt = new Map<Seat, number>();
+  /** Seats on a disconnection countdown, with the timer that will forfeit them. */
+  private forfeitTimers = new Map<Seat, ReturnType<typeof setTimeout>>();
 
   constructor(code: string, io: IoServer, hostToken: string) {
     this.code = code;
     this.io = io;
     this.hostToken = hostToken;
     this.gameState = createInitialGameState(this.lobby.mode, this.defaultNames());
+  }
+
+  /**
+   * May this socket change the table's setup — settings, seats, bots, starting?
+   *
+   * The one predicate the fourteen scattered `hostSocketId !== socket.id` checks collapse into.
+   * On an open table it is false for everyone, including whoever made it: an online table's
+   * rules are decided once, at creation, and then it is just a table.
+   */
+  canConfigure(socketId: string): boolean {
+    if (this.governance === 'open') return false;
+    return this.hostSocketId === socketId;
+  }
+
+  /** How many seats currently have somebody (or some bot) in them. */
+  filledSeats(): number {
+    return this.seats().filter((seat) => this.connections.has(seat)).length;
+  }
+
+  /** A row in the public table list. */
+  summary(): TableSummary {
+    return {
+      code: this.code,
+      mode: this.lobby.mode,
+      ruleSet: this.lobby.ruleSet,
+      seatsFilled: this.filledSeats(),
+      seatsTotal: this.seats().length,
+      inPlay: this.started,
+      spectators: this.spectatorSocketIds.size,
+      createdAt: this.createdAt,
+    };
   }
 
   private defaultNames(): string[] {
@@ -139,11 +192,16 @@ export class Room {
       started: this.started,
       players,
       spectatorCount: this.spectatorSocketIds.size,
+      governance: this.governance,
+      visibility: this.visibility,
     };
   }
 
   updateLobby(patch: Partial<LobbySettings>): void {
     if (this.started) return;
+    // An open table's settings are decided once, when it is made. Nobody at it has the standing
+    // to change the rules on everyone else half way through the evening.
+    if (this.governance === 'open') return;
     if (patch.mode) this.lobby.mode = patch.mode;
     if (patch.ruleSet && RULE_SETS[patch.ruleSet]) this.lobby.ruleSet = patch.ruleSet;
     if (patch.shotClockSeconds !== undefined) {
@@ -405,6 +463,36 @@ export class Room {
     }
   }
 
+  /**
+   * Gives up a seat on purpose.
+   *
+   * Distinct from `disconnectSocket`, which is the network dropping. Somebody who has told us
+   * they are leaving does not get a thirty-second countdown — that grace exists for people who
+   * are trying to come back.
+   */
+  leaveSeat(seat: Seat): void {
+    this.cancelForfeitCountdown(seat);
+    if (this.started && this.governance === 'open' && this.gameState.phase !== 'game_over') {
+      this.forfeitSeat(seat);
+      return;
+    }
+    this.releaseSeat(seat);
+    this.broadcastRoomState();
+    this.broadcastGameState();
+  }
+
+  /**
+   * Re-creates the game for settings that were just set directly.
+   *
+   * `updateLobby` is the party path and refuses to run on an open table by design; this is the
+   * one-time application of settings an open table is *created* with.
+   */
+  rebuildForLobby(): void {
+    this.rebuildGameState();
+    this.broadcastRoomState();
+    this.broadcastGameState();
+  }
+
   findSeatByToken(token: string): Seat | null {
     for (const [seat, conn] of this.connections) {
       if (conn.token === token) return seat;
@@ -413,6 +501,7 @@ export class Room {
   }
 
   reconnectSeat(seat: Seat, socketId: string): void {
+    this.cancelForfeitCountdown(seat);
     const conn = this.connections.get(seat);
     if (!conn) return;
     conn.socketId = socketId;
@@ -427,12 +516,95 @@ export class Room {
         conn.socketId = null;
         const player = this.gameState.players[seat];
         if (player) player.connected = false;
+        this.beginForfeitCountdown(seat);
       }
     }
     this.spectatorSocketIds.delete(socketId);
     this.spectatorQueue = this.spectatorQueue.filter((id) => id !== socketId);
     this.broadcastRoomState();
     this.offerSeatToSpectator();
+  }
+
+  /**
+   * Starts the clock on a seat whose player has vanished.
+   *
+   * Only on a live open table. In a party room a phone locking its screen is completely normal
+   * and forfeiting the frame for it would be absurd — there, the person is still standing next
+   * to the television. Online there is nobody to ask, so a table cannot be allowed to sit dead
+   * for ever waiting on someone who has closed the tab.
+   */
+  private beginForfeitCountdown(seat: Seat): void {
+    if (this.governance !== 'open' || !this.started) return;
+    if (this.gameState.phase === 'game_over') return;
+    if (this.connections.get(seat)?.bot) return;
+    if (this.forfeitTimers.has(seat)) return;
+
+    const forfeitsAt = Date.now() + ABANDON_GRACE_MS;
+    const name = this.gameState.players[seat]?.name ?? seat;
+    this.io.to(this.code).emit('seatDisconnected', { seat, name, forfeitsAt });
+
+    const timer = setTimeout(() => {
+      this.forfeitTimers.delete(seat);
+      this.forfeitSeat(seat);
+    }, ABANDON_GRACE_MS);
+    timer.unref?.();
+    this.forfeitTimers.set(seat, timer);
+  }
+
+  /** They came back inside the grace period. */
+  private cancelForfeitCountdown(seat: Seat): void {
+    const timer = this.forfeitTimers.get(seat);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.forfeitTimers.delete(seat);
+    const name = this.gameState.players[seat]?.name ?? seat;
+    this.io.to(this.code).emit('seatReconnected', { seat, name });
+  }
+
+  /**
+   * The countdown ran out.
+   *
+   * Two-seat tables end the frame in favour of whoever stayed. Bigger tables eliminate the
+   * leaver and play on — knocking a four-player game over because one person's train went into
+   * a tunnel would punish the three who are still here.
+   */
+  private forfeitSeat(seat: Seat): void {
+    if (!this.started || this.gameState.phase === 'game_over') return;
+    const name = this.gameState.players[seat]?.name ?? seat;
+    this.io.to(this.code).emit('seatForfeited', { seat, name });
+
+    const player = this.gameState.players[seat];
+    if (player) player.eliminated = true;
+
+    const remaining = this.gameState.seatOrder.filter((s) => !this.gameState.players[s].eliminated);
+    if (remaining.length <= 1) {
+      endGame(this.gameState, remaining[0] ?? null, `${name} left the table`);
+      this.recordFrameResult();
+    } else {
+      this.gameState.lastFoulReason = `${name} left the table`;
+      if (this.gameState.currentShooter === seat) {
+        this.gameState.currentShooter = remaining[0];
+      }
+    }
+    this.releaseSeat(seat);
+    this.broadcastRoomState();
+    this.broadcastGameState();
+    this.onTurnReady();
+  }
+
+  /**
+   * Starts an open table once every seat is taken.
+   *
+   * The replacement for a host pressing a button. Deliberately requires the table to be *full*
+   * rather than merely playable: on an open table nobody has the standing to decide that four
+   * is enough for a six-seat game.
+   */
+  maybeAutoStart(): void {
+    if (this.governance !== 'open' || this.started) return;
+    const seats = this.seats();
+    if (seats.length === 0) return;
+    if (seats.some((seat) => !this.connections.has(seat))) return;
+    this.startGame();
   }
 
   openSeat(): Seat | null {
@@ -1025,9 +1197,26 @@ export class Room {
     }
   }
 
+  /**
+   * Is anybody actually here?
+   *
+   * Bots do not count. A room of nothing but bots playing to an empty gallery is exactly what
+   * the sweeper exists to clear away, and they would otherwise keep it alive for ever.
+   */
+  isOccupied(): boolean {
+    if (this.hostSocketId) return true;
+    if (this.spectatorSocketIds.size > 0) return true;
+    for (const conn of this.connections.values()) {
+      if (conn.socketId) return true;
+    }
+    return false;
+  }
+
   destroy(): void {
     this.stopSimLoop();
     this.clearShotClock();
     this.clearBotTimer();
+    for (const timer of this.forfeitTimers.values()) clearTimeout(timer);
+    this.forfeitTimers.clear();
   }
 }

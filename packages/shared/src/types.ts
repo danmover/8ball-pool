@@ -370,6 +370,18 @@ export interface ServerToClientEvents {
   }) => void;
   /** Sent only to the bettor: what their stake did. `returned` of 0 means they lost it. */
   betSettled: (payload: { staked: number; returned: number; winner: Seat | null }) => void;
+  /**
+   * Somebody's connection dropped and their seat is on a countdown.
+   *
+   * Broadcast to the whole table rather than kept quiet: sitting in front of a table that has
+   * silently stopped is the worst version of this, and knowing *why* nothing is happening is
+   * most of the fix.
+   */
+  seatDisconnected: (payload: { seat: Seat; name: string; forfeitsAt: number }) => void;
+  /** They made it back inside the grace period. */
+  seatReconnected: (payload: { seat: Seat; name: string }) => void;
+  /** The countdown ran out; the frame was awarded to whoever stayed. */
+  seatForfeited: (payload: { seat: Seat; name: string }) => void;
 }
 
 /** The fixed reaction set. Server-validated, so clients can't inject arbitrary content. */
@@ -411,6 +423,68 @@ export interface ClientToServerEvents {
   sendEmote: (payload: { emote: string }) => void;
   /** Start or retry a trick-shot challenge. Host only; the room becomes a single-seat puzzle. */
   hostStartChallenge: (payload: { challengeId: string }) => void;
+
+  // ---- Online tables ----
+  // Named for what they are rather than reusing the `host*` events: those are gated on being
+  // the host, and an open table has no host to be.
+
+  /** Makes an open table. The settings given here are fixed for its lifetime. */
+  createTable: (
+    payload: CreateTablePayload,
+    cb: (res: { ok: true; code: string } | { ok: false; error: string }) => void
+  ) => void;
+  /** Takes a seat at an open table, or resumes one with a seat token from a previous visit. */
+  joinTable: (
+    payload: { code: string; name: string; loadout?: Loadout; seatToken?: string },
+    cb: (
+      res:
+        | { ok: true; seat: Seat; seatToken: string; spectating: false }
+        | { ok: true; seat: null; seatToken: null; spectating: true }
+        | { ok: false; error: string }
+    ) => void
+  ) => void;
+  /** Public tables, freshest first. */
+  listTables: (cb: (tables: TableSummary[]) => void) => void;
+  /** Straight into the best waiting table, or a new one if there isn't a good one. */
+  quickPlay: (
+    payload: { mode?: GameMode; ruleSet?: RuleSetId },
+    cb: (res: { ok: true; code: string } | { ok: false; error: string }) => void
+  ) => void;
+  /** Gives up a seat deliberately, as distinct from dropping off the network. */
+  leaveTable: () => void;
+}
+
+/**
+ * How a table is governed.
+ *
+ * `host` is the party shape — one screen owns the room. `open` is the online shape: nobody is
+ * privileged, settings are fixed at creation, and the game starts itself when the seats fill.
+ */
+export type Governance = 'host' | 'open';
+
+/** Listed for anyone to find, or reachable only by its code. */
+export type TableVisibility = 'public' | 'private';
+
+/** One row in the online table browser. */
+export interface TableSummary {
+  code: string;
+  mode: GameMode;
+  ruleSet: RuleSetId;
+  seatsFilled: number;
+  seatsTotal: number;
+  /** Already playing — joinable only as a spectator. */
+  inPlay: boolean;
+  spectators: number;
+  createdAt: number;
+}
+
+export interface CreateTablePayload {
+  mode: GameMode;
+  ruleSet: RuleSetId;
+  /** How many seats the table has. Clamped to what the mode can seat. */
+  seats: number;
+  visibility: TableVisibility;
+  seriesTarget: number;
 }
 
 export interface RoomStateDTO {
@@ -420,6 +494,9 @@ export interface RoomStateDTO {
   started: boolean;
   players: Record<Seat, PlayerInfo | null>;
   spectatorCount: number;
+  /** Party table or online table — the client shows very different controls for each. */
+  governance: Governance;
+  visibility: TableVisibility;
 }
 
 export type SimEvent =

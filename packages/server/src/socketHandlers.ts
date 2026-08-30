@@ -1,9 +1,25 @@
 import type { Server, Socket } from 'socket.io';
 import type { ClientToServerEvents, Seat, ServerToClientEvents } from '@8ball/shared';
 import { RoomManager } from './roomManager.js';
+import type { Room } from './room.js';
 
 type IoServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IoSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+
+/**
+ * Does this socket actually hold the seat it says it does?
+ *
+ * The shot handlers used to take the seat straight from the payload and only check that it was
+ * that seat's turn — so any socket in the room could play anyone's shot. Between friends in one
+ * room that never mattered; with strangers on an open table it means playing your opponent's
+ * shots for them.
+ *
+ * A host screen legitimately holds several seats at once (hotseat, pass-and-play), so the test
+ * is socket ownership of that specific seat rather than a single stored seat.
+ */
+function ownsSeat(room: Room, socket: IoSocket, seat: Seat): boolean {
+  return room.connections.get(seat)?.socketId === socket.id;
+}
 
 export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
   io.on('connection', (socket: IoSocket) => {
@@ -141,15 +157,21 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
     });
 
     socket.on('updateAim', (input) => {
-      rooms.get(socket.data.roomCode)?.handleAim(input);
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || !ownsSeat(room, socket, input.seat)) return;
+      room.handleAim(input);
     });
 
     socket.on('takeShot', (input) => {
-      rooms.get(socket.data.roomCode)?.handleShoot(input);
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || !ownsSeat(room, socket, input.seat)) return;
+      room.handleShoot(input);
     });
 
     socket.on('placeCueBall', (payload) => {
-      rooms.get(socket.data.roomCode)?.handlePlaceCueBall(payload);
+      const room = rooms.get(socket.data.roomCode);
+      if (!room || !ownsSeat(room, socket, payload.seat)) return;
+      room.handlePlaceCueBall(payload);
     });
 
     socket.on('updateSettings', (settings) => {
@@ -161,10 +183,7 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
 
     socket.on('useSpot', ({ seat }) => {
       const room = rooms.get(socket.data.roomCode);
-      if (!room) return;
-      // The host may hold several seats hotseat, so trust the named seat only when this socket
-      // actually owns it.
-      if (room.connections.get(seat)?.socketId !== socket.id) return;
+      if (!room || !ownsSeat(room, socket, seat)) return;
       room.useSpot(seat);
     });
 
