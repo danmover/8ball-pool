@@ -481,6 +481,24 @@ export interface ClientToServerEvents {
   ) => void;
   /** Leaves it again. */
   rankedCancel: () => void;
+  /** The scheduled tournaments, and whether one is open to enter right now. */
+  listEvents: (
+    cb: (
+      events: {
+        id: string;
+        name: string;
+        blurb: string;
+        mode: GameMode;
+        ruleSet: RuleSetId;
+        entrants: number;
+        phase: 'scheduled' | 'signup' | 'running';
+        opensAt: number;
+        startsAt: number;
+        /** The table hosting it, once sign-ups are open. */
+        code: string | null;
+      }[]
+    ) => void
+  ) => void;
   /** The top of the ladder. */
   leaderboard: (
     cb: (rows: { name: string; rating: number; frames: number; wins: number; losses: number }[]) => void
@@ -512,6 +530,10 @@ export interface TableSummary {
   ranked: boolean;
   /** Average rating of the players sitting here, for the list. Null when nobody is seated. */
   averageRating: number | null;
+  /** Running a knockout rather than a single frame. */
+  tournament: boolean;
+  /** The scheduled event this table is running, when it is one. */
+  eventId: string | null;
 }
 
 export interface CreateTablePayload {
@@ -528,6 +550,12 @@ export interface CreateTablePayload {
    * against one other, and there is no honest way to read a four-way frame as that.
    */
   ranked?: boolean;
+  /**
+   * Runs a knockout rather than a single frame.
+   *
+   * `seats` becomes the number of entrants; the bracket is drawn when the last one arrives.
+   */
+  tournament?: boolean;
 }
 
 export interface RoomStateDTO {

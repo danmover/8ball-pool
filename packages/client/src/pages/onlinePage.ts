@@ -7,6 +7,7 @@ import {
   type RuleSetId,
   type TableSummary,
   type TableVisibility,
+  timeUntil,
 } from '@8ball/shared';
 import { getSocket } from '../net/socket';
 import { formatRating, identify, rankedIdentity, type RankedIdentity } from '../net/identity';
@@ -37,6 +38,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   const socket = getSocket();
   let tables: TableSummary[] = [];
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
+  let eventTimer: ReturnType<typeof setInterval> | null = null;
 
   // Create-a-table form state.
   let newMode: GameMode = 'classic';
@@ -50,6 +52,18 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   let showBoard = false;
   /** Set while the ranked queue is running, so the button becomes a cancel. */
   let searching: { waitedMs: number; inQueue: number; band: number | null } | null = null;
+  let newTournament = false;
+  type EventRow = {
+    id: string;
+    name: string;
+    blurb: string;
+    entrants: number;
+    phase: 'scheduled' | 'signup' | 'running';
+    opensAt: number;
+    startsAt: number;
+    code: string | null;
+  };
+  let events: EventRow[] = [];
 
   function toast(msg: string, kind = 'info'): void {
     const stack = root.querySelector<HTMLElement>('#onlineToasts');
@@ -60,6 +74,13 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     socket.emit('listTables', (list) => {
       tables = list;
       paintList();
+    });
+  }
+
+  function refreshEvents(): void {
+    socket.emit('listEvents', (list) => {
+      events = list;
+      draw();
     });
   }
 
@@ -131,6 +152,42 @@ export function renderOnlinePage(root: HTMLElement): () => void {
           </form>
         </section>
 
+        <section class="events">
+          <h2>Scheduled tournaments</h2>
+          ${
+            events.length === 0
+              ? '<p class="muted">Loading the calendar…</p>'
+              : events
+                  .map(
+                    (e) => `
+              <div class="event-row${e.phase === 'signup' ? ' open' : ''}">
+                <div class="event-main">
+                  <b>${e.name}</b>
+                  <small>${e.blurb}</small>
+                </div>
+                <span class="event-when">
+                  ${
+                    e.phase === 'signup'
+                      ? `Doors open · starts ${timeUntil(e.startsAt)}`
+                      : e.phase === 'running'
+                        ? 'Under way'
+                        : `${e.entrants} players · ${timeUntil(e.opensAt)}`
+                  }
+                </span>
+                ${
+                  e.phase === 'signup' && e.code
+                    ? `<button class="mini" data-event="${e.code}">Enter</button>`
+                    : e.phase === 'running' && e.code
+                      ? `<button class="mini secondary" data-event="${e.code}">Watch</button>`
+                      : '<span class="muted event-soon">soon</span>'
+                }
+              </div>`
+                  )
+                  .join('')
+          }
+          <p class="muted event-note">All times UTC.</p>
+        </section>
+
         <section class="table-browser">
           <div class="section-head">
             <h2>Open tables</h2>
@@ -178,6 +235,18 @@ export function renderOnlinePage(root: HTMLElement): () => void {
               </select>
             </label>
           </div>
+          <label class="ranked-toggle${newSeats < 4 ? ' disabled' : ''}">
+            <input type="checkbox" id="newTournament" ${newTournament ? 'checked' : ''}
+                   ${newSeats < 4 ? 'disabled' : ''} />
+            <span>
+              <b>Knockout</b>
+              <small>${
+                newSeats < 4
+                  ? 'Four or more entrants — a bracket needs somebody to knock out'
+                  : `A ${newSeats}-player bracket rather than one frame`
+              }</small>
+            </span>
+          </label>
           <label class="ranked-toggle${newSeats !== 2 || newMode === 'teams' ? ' disabled' : ''}">
             <input type="checkbox" id="newRanked" ${newRanked ? 'checked' : ''}
                    ${newSeats !== 2 || newMode === 'teams' ? 'disabled' : ''} />
@@ -281,8 +350,9 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     });
     root.querySelector<HTMLSelectElement>('#newSeats')!.addEventListener('change', (e) => {
       newSeats = Number((e.target as HTMLSelectElement).value);
-      // Ranked is only offered on a two-seat table, so the note has to be redrawn with it.
+      // Ranked needs two seats and a knockout needs four, so both notes have to be redrawn.
       if (newSeats !== 2) newRanked = false;
+      if (newSeats < 4) newTournament = false;
       draw();
     });
     root.querySelector<HTMLSelectElement>('#newVisibility')!.addEventListener('change', (e) => {
@@ -290,6 +360,12 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     });
     root.querySelector<HTMLInputElement>('#newRanked')?.addEventListener('change', (e) => {
       newRanked = (e.target as HTMLInputElement).checked;
+    });
+    root.querySelector<HTMLInputElement>('#newTournament')?.addEventListener('change', (e) => {
+      newTournament = (e.target as HTMLInputElement).checked;
+    });
+    root.querySelectorAll<HTMLButtonElement>('[data-event]').forEach((btn) => {
+      btn.addEventListener('click', () => navigate(`/t/${btn.dataset.event}`));
     });
 
     root.querySelector('#boardBtn')!.addEventListener('click', () => {
@@ -316,6 +392,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
           visibility: newVisibility,
           seriesTarget: 1,
           ranked: newRanked,
+          tournament: newTournament,
         },
         (res) => {
           creating = false;
@@ -356,7 +433,10 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     draw();
   });
   refresh();
+  refreshEvents();
   refreshTimer = setInterval(refresh, REFRESH_MS);
+  // The calendar moves in minutes, not seconds, so it is checked far less often than the list.
+  eventTimer = setInterval(refreshEvents, 30_000);
 
   // A stale list is worse than no list — it sends people at tables that filled up while they
   // were reading. Nothing here belongs to the profile, so there is nothing to save on the way out.
@@ -364,7 +444,9 @@ export function renderOnlinePage(root: HTMLElement): () => void {
 
   return () => {
     if (refreshTimer) clearInterval(refreshTimer);
+    if (eventTimer) clearInterval(eventTimer);
     refreshTimer = null;
+    eventTimer = null;
     socket.off('matchSearching', onSearching);
     socket.off('matchFound', onFound);
     // Leaving the page should leave the queue — being matched into a table you have navigated

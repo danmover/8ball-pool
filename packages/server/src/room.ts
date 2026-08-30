@@ -10,6 +10,7 @@ import {
   MAX_SEATS,
   clampPlayerCount,
   ABANDON_GRACE_MS,
+  OPEN_TABLE_ADVANCE_MS,
   endGame,
   createTournament,
   newRound,
@@ -109,6 +110,22 @@ export class Room {
   ranked = false;
   /** Profile token per seat, set by `identify`. Ranked results are written against these. */
   playerTokens = new Map<Seat, string>();
+  /** Runs a knockout rather than a single frame. Open tables only. */
+  isTournament = false;
+  /** The scheduled event this table is running, when it is one. */
+  eventId: string | null = null;
+  /** Frames to take a match, when this is a tournament. */
+  tournamentTarget = 1;
+
+  /**
+   * Fixes how many are in the draw, as distinct from how many a *match* seats.
+   *
+   * The same distinction the party bracket needed: eight-ball seats exactly two, so using the
+   * lobby's player limit for both turns an eight-entrant knockout into a single final.
+   */
+  setTournamentEntrants(count: number): void {
+    this.tournamentEntrants = Math.max(2, Math.min(MAX_SEATS, Math.round(count)));
+  }
   /** Called when a ranked frame settles, so the server can write the result it refereed. */
   onRankedResult:
     | ((winner: { seat: Seat; token: string; name: string }, loser: { seat: Seat; token: string; name: string }) => void)
@@ -137,6 +154,8 @@ export class Room {
   private lastEmoteAt = new Map<Seat, number>();
   /** Seats on a disconnection countdown, with the timer that will forfeit them. */
   private forfeitTimers = new Map<Seat, ReturnType<typeof setTimeout>>();
+  /** Pending auto-advance to the next frame on an open table. */
+  private advanceHandle: ReturnType<typeof setTimeout> | null = null;
 
   constructor(code: string, io: IoServer, hostToken: string) {
     this.code = code;
@@ -173,6 +192,8 @@ export class Room {
       ruleSet: this.lobby.ruleSet,
       ranked: this.ranked,
       averageRating: this.averageRating,
+      tournament: this.isTournament,
+      eventId: this.eventId,
       seatsFilled: this.filledSeats(),
       seatsTotal: this.seats().length,
       inPlay: this.started,
@@ -619,6 +640,10 @@ export class Room {
     this.broadcastRoomState();
     this.broadcastGameState();
     this.onTurnReady();
+    // A frame can end by somebody walking out as well as by the black going down, and an open
+    // table has to move on either way. Without this a knockout stopped dead on the result of
+    // the first match anybody quit.
+    this.scheduleAutoAdvance();
   }
 
   /**
@@ -633,7 +658,35 @@ export class Room {
     const seats = this.seats();
     if (seats.length === 0) return;
     if (seats.some((seat) => !this.connections.has(seat))) return;
+
+    if (this.isTournament) {
+      this.startTournament(this.tournamentTarget, seats.length);
+      return;
+    }
     this.startGame();
+  }
+
+  /**
+   * Moves an open table on to its next frame.
+   *
+   * The party version of this is a person pressing "play again" on the result card. An open
+   * table has nobody with the standing to do that on everyone else's behalf, so the server does
+   * it after a pause long enough to read the result — a tournament that jumped straight to the
+   * next match would leave people wondering whether they had won.
+   */
+  scheduleAutoAdvance(delayMs = OPEN_TABLE_ADVANCE_MS): void {
+    if (this.governance !== 'open') return;
+    if (this.gameState.phase !== 'game_over') return;
+    // Nothing to advance to: a finished bracket, or a single frame that is simply over.
+    if (this.tournament?.champion) return;
+    if (!this.isTournament && !this.gameState.series) return;
+    if (this.advanceHandle) return;
+
+    this.advanceHandle = setTimeout(() => {
+      this.advanceHandle = null;
+      if (this.gameState.phase === 'game_over') this.requestRematch();
+    }, delayMs);
+    this.advanceHandle.unref?.();
   }
 
   openSeat(): Seat | null {
@@ -1062,7 +1115,10 @@ export class Room {
         // while the cue ball is still rolling, so `events` here would be empty every time.
         // `summarizeShot` above reads the same accumulated list for the same reason.
         this.rollModifiers(this.shotEvents);
-        if (this.gameState.phase === 'game_over') this.recordFrameResult();
+        if (this.gameState.phase === 'game_over') {
+          this.recordFrameResult();
+          this.scheduleAutoAdvance();
+        }
         this.broadcastGameState();
         this.onTurnReady();
       }
@@ -1279,5 +1335,7 @@ export class Room {
     this.clearBotTimer();
     for (const timer of this.forfeitTimers.values()) clearTimeout(timer);
     this.forfeitTimers.clear();
+    if (this.advanceHandle) clearTimeout(this.advanceHandle);
+    this.advanceHandle = null;
   }
 }

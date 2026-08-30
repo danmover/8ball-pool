@@ -2209,3 +2209,52 @@ body.reduce-motion .case-reveal { animation: none; }
 body.reduce-motion .play-btn.searching {
   animation: none;
 }
+
+/* ---- Scheduled tournaments ---- */
+.events {
+  margin-bottom: 1.6rem;
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.35rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Doors open — the one you can act on right now. */
+.event-row.open {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.event-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.event-main small {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.event-when {
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.event-soon,
+.event-note {
+  font-size: 0.72rem;
+}
+
+.event-note {
+  margin-top: 0.4rem;
+}

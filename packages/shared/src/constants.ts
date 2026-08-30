@@ -170,3 +170,11 @@ export const EIGHT_BALL_ID = 8;
  * people who stayed are not held hostage by someone who has simply left.
  */
 export const ABANDON_GRACE_MS = 30_000;
+
+/**
+ * How long an open table pauses on a result before moving to the next frame.
+ *
+ * Long enough to read who won and what it did to your rating. A tournament that jumped straight
+ * to the next match would leave people wondering whether they had won the last one.
+ */
+export const OPEN_TABLE_ADVANCE_MS = 8000;

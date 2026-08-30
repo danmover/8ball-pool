@@ -13,6 +13,7 @@ import {
   isProvisional,
   matchBand,
   tierFor,
+  upcomingEvents,
 } from '@8ball/shared';
 import type { RoomManager } from './roomManager.js';
 import type { Room } from './room.js';
@@ -84,13 +85,23 @@ export function createOpenTable(
   // Ranked only ever on a straight 1v1. A rating is a statement about one player against one
   // other, and a four-way frame cannot honestly be read as that.
   room.ranked = payload.ranked === true && payload.seats === 2 && mode !== 'teams';
+  // A tournament seats its entrants rather than its players — the bracket decides who is at the
+  // table for each match, exactly as it does for a party knockout.
+  room.isTournament = payload.tournament === true && payload.seats >= 4;
 
   // Applied directly rather than through `updateLobby`, which refuses to run on an open table
   // by design — these are the settings being fixed, not a later change to them.
   room.lobby.mode = mode;
   room.lobby.ruleSet = ruleSet;
   room.lobby.seriesTarget = Math.max(1, Math.min(9, Math.round(payload.seriesTarget || 1)));
-  room.lobby.maxPlayers = clampPlayerCount(mode, Math.max(2, Math.min(MAX_SEATS, payload.seats)));
+  room.lobby.maxPlayers = room.isTournament
+    ? Math.max(4, Math.min(MAX_SEATS, payload.seats))
+    : clampPlayerCount(mode, Math.max(2, Math.min(MAX_SEATS, payload.seats)));
+  if (room.isTournament) {
+    room.tournamentTarget = Math.max(1, Math.min(9, Math.round(payload.seriesTarget || 1)));
+    // Entrants, not match seats: eight-ball seats two per match however many are in the draw.
+    room.setTournamentEntrants(room.lobby.maxPlayers);
+  }
   // Teams alternate around the table and need an even split, same as the party lobby.
   if (mode === 'teams' && room.lobby.maxPlayers % 2 !== 0) {
     room.lobby.maxPlayers = Math.min(MAX_SEATS, room.lobby.maxPlayers + 1);
@@ -181,12 +192,52 @@ function bindPlayer(room: Room, seat: string, socket: IoSocket, players: PlayerR
 /** How often the queue is swept for pairs. Fast enough to feel instant, cheap enough to ignore. */
 const MATCH_TICK_MS = 1000;
 
+/** How often the calendar is checked. Minutes matter here, not seconds. */
+const EVENT_TICK_MS = 20_000;
+
 export function registerOnlineHandlers(
   io: IoServer,
   rooms: RoomManager,
   players: PlayerRepository
 ): void {
   const queue = new MatchQueue();
+  /** The table currently hosting each scheduled event, while its window is open. */
+  const eventTables = new Map<string, string>();
+
+  /**
+   * Opens and closes the scheduled events.
+   *
+   * The calendar itself is derived from the date and stored nowhere — see `shared/events.ts` —
+   * so this only has to notice when a window opens and make the table for it. A fixed weekly
+   * slot is the point: people can plan to be there, which a tournament that starts whenever
+   * eight strangers happen to want one never manages.
+   */
+  const eventTick = setInterval(() => {
+    for (const status of upcomingEvents()) {
+      const existing = eventTables.get(status.event.id);
+
+      if (status.phase === 'signup' && !existing) {
+        const room = createOpenTable(io, rooms, {
+          mode: status.event.mode,
+          ruleSet: status.event.ruleSet,
+          seats: status.event.entrants,
+          visibility: 'public',
+          seriesTarget: status.event.target,
+          tournament: true,
+        });
+        if (room) {
+          room.eventId = status.event.id;
+          eventTables.set(status.event.id, room.code);
+        }
+        continue;
+      }
+
+      // Forget the table once the event is over, so next week opens a fresh one rather than
+      // pointing everybody at a finished bracket.
+      if (status.phase === 'scheduled' && existing) eventTables.delete(status.event.id);
+    }
+  }, EVENT_TICK_MS);
+  eventTick.unref?.();
 
   /**
    * Sweeps the ranked queue.
@@ -244,6 +295,24 @@ export function registerOnlineHandlers(
         provisional: isProvisional(record),
         tier: tierFor(record.rating),
       });
+    });
+
+    socket.on('listEvents', (cb) => {
+      cb(
+        upcomingEvents().map((s) => ({
+          id: s.event.id,
+          name: s.event.name,
+          blurb: s.event.blurb,
+          mode: s.event.mode,
+          ruleSet: s.event.ruleSet,
+          entrants: s.event.entrants,
+          phase: s.phase,
+          opensAt: s.opensAt,
+          startsAt: s.startsAt,
+          // The table only exists once sign-ups open; before that there is nothing to join.
+          code: eventTables.get(s.event.id) ?? null,
+        }))
+      );
     });
 
     socket.on('rankedQueue', ({ mode, ruleSet }, cb) => {
