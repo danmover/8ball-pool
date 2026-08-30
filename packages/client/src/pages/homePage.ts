@@ -64,83 +64,100 @@ export function renderHomePage(root: HTMLElement): () => void {
           <div class="home-player" id="homePlayer"></div>
         </header>
 
-        <section class="mode-section">
-          <div class="section-head">
-            <h2>Choose a game</h2>
-            <div class="rail-nav">
-              <button class="rail-arrow" id="railPrev" title="Previous">${icon('back', { size: 18 })}</button>
-              <button class="rail-arrow" id="railNext" title="Next">${icon('back', { size: 18 })}</button>
+        <!--
+          The cabinet: one mode shown as a poster, the rest as a rack beside it.
+
+          Seven equal tiles gave the page no hierarchy — every mode shouted the same volume and
+          nothing told a new player where to start, so the row read as a settings screen. One
+          featured mode and a list is how a cabinet actually presents its games, and it buys
+          the room to show the mode's art at a size worth looking at.
+        -->
+        <section class="cabinet">
+          <!--
+            Play sits on the poster rather than in the side column, because it acts on the mode
+            the poster is showing — and it is what fills the poster out to the height of the
+            rack instead of leaving a slab of empty panel under the blurb.
+
+            It lives in its own container that drawHero() does not overwrite: rebuilding it
+            with the rest of the poster would throw away its click handler on every mode change.
+          -->
+          <div class="mode-hero">
+            <div class="hero-art" id="heroArt"></div>
+            <div class="hero-body" id="heroBody"></div>
+            <div class="hero-cta">
+              <button class="btn-play" id="playSolo">
+                <span class="btn-play-main">Play</span>
+                <span class="btn-play-sub" id="soloSub">vs the computer</span>
+              </button>
             </div>
           </div>
-          <div class="mode-rail-wrap">
-            <div class="mode-rail" id="modeRail"></div>
+
+          <div class="cabinet-side">
+            <div class="rack-head">Pick your game</div>
+            <div class="mode-rack" id="modeRack"></div>
+
+            <div class="side-pair">
+              <button class="btn-hot" id="onlineBtn">Go Online</button>
+              <button class="btn-quiet" id="hostBtn">Host Table</button>
+            </div>
+
+            <form class="join-box" id="joinForm">
+              <input id="codeInput" maxlength="4" placeholder="CODE" autocapitalize="characters"
+                     autocomplete="off" aria-label="Table code" />
+              <button type="submit" class="btn-quiet" id="joinBtn">Join</button>
+            </form>
+            <p id="joinError" class="error"></p>
           </div>
-          <div class="rail-dots" id="railDots"></div>
         </section>
 
-        <section class="home-actions">
-          <button class="play-btn" id="playSolo">
-            <span class="play-main">PLAY SOLO</span>
-            <span class="play-sub" id="soloSub">vs the computer</span>
+        <!--
+          The shelf. Struck tokens rather than more rectangles: these are six side doors off the
+          menu, not six more things to weigh up against the modes above, and giving them the
+          same card shape made the page read as fourteen equal choices.
+        -->
+        <section class="home-shelf">
+          <button class="token" id="lockerBtn">
+            <span class="token-disc">${icon('locker', { size: 25 })}</span>
+            <span class="token-label">Locker</span>
+            <span class="token-sub" id="lockerSub"></span>
           </button>
-          <button class="play-btn secondary-play" id="onlineBtn">
-            <span class="play-main">PLAY ONLINE</span>
-            <span class="play-sub">Join a table from anywhere</span>
+          <button class="token" id="careerBtn">
+            <span class="token-disc">${icon('trophy', { size: 25 })}</span>
+            <span class="token-label">Career</span>
+            <span class="token-sub" id="careerSub"></span>
           </button>
-          <button class="play-btn secondary-play" id="hostBtn">
-            <span class="play-main">HOST A TABLE</span>
-            <span class="play-sub">Friends join from their phones</span>
+          <button class="token" id="trickShotsBtn">
+            <span class="token-disc">${icon('target', { size: 25 })}</span>
+            <span class="token-label">Trick Shots</span>
+            <span class="token-sub" id="trickSub"></span>
           </button>
-          <form class="join-box" id="joinForm">
-            <input id="codeInput" maxlength="4" placeholder="CODE" autocapitalize="characters"
-                   autocomplete="off" aria-label="Table code" />
-            <button type="submit" class="secondary" id="joinBtn">Join</button>
-          </form>
-          <p id="joinError" class="error"></p>
-        </section>
+          <button class="token" id="progressBtn">
+            <span class="token-disc">${icon('star', { size: 25 })}</span>
+            <span class="token-label">Progress</span>
+            <span class="token-sub" id="progressSub"></span>
+          </button>
+          <button class="token" id="statsBtn">
+            <span class="token-disc">${icon('chart', { size: 25 })}</span>
+            <span class="token-label">Stats</span>
+            <span class="token-sub" id="statsSub"></span>
+          </button>
+          <button class="token" id="settingsBtn">
+            <span class="token-disc">${icon('settings', { size: 25 })}</span>
+            <span class="token-label">Settings</span>
+            <span class="token-sub">Aim, table, audio</span>
+          </button>
 
-        <section class="home-footer">
-          <button class="tile-btn" id="lockerBtn">
-            <span class="tile-icon">${icon('locker', { size: 26 })}</span>
-            <span class="tile-label">Locker</span>
-            <span class="tile-sub" id="lockerSub"></span>
-          </button>
-          <button class="tile-btn" id="settingsBtn">
-            <span class="tile-icon">${icon('settings', { size: 26 })}</span>
-            <span class="tile-label">Settings</span>
-            <span class="tile-sub">Aim guide, table, audio</span>
-          </button>
-          <button class="tile-btn" id="careerBtn">
-            <span class="tile-icon">${icon('trophy', { size: 26 })}</span>
-            <span class="tile-label">Career</span>
-            <span class="tile-sub" id="careerSub"></span>
-          </button>
-          <button class="tile-btn" id="trickShotsBtn">
-            <span class="tile-icon">${icon('target', { size: 26 })}</span>
-            <span class="tile-label">Trick Shots</span>
-            <span class="tile-sub" id="trickSub"></span>
-          </button>
-          <button class="tile-btn" id="progressBtn">
-            <span class="tile-icon">${icon('star', { size: 26 })}</span>
-            <span class="tile-label">Progress</span>
-            <span class="tile-sub" id="progressSub"></span>
-          </button>
-          <button class="tile-btn" id="statsBtn">
-            <span class="tile-icon">${icon('trophy', { size: 26 })}</span>
-            <span class="tile-label">Stats</span>
-            <span class="tile-sub" id="statsSub"></span>
-          </button>
-          <div class="tile-btn challenge" id="challengeTile"></div>
+          <!-- The daily is a ticket, not a seventh token: it expires, and the others don't.
+               It stays a readout rather than a button — there is nowhere for it to go. -->
+          <div class="daily-ticket" id="challengeTile"></div>
         </section>
       </div>
     </div>`;
 
   const backdrop = root.querySelector<HTMLElement>('#homeBackdrop')!;
-  const railEl = root.querySelector<HTMLElement>('#modeRail')!;
-  const railWrap = root.querySelector<HTMLElement>('.mode-rail-wrap')!;
-  const dotsEl = root.querySelector<HTMLElement>('#railDots')!;
-  const prevBtn = root.querySelector<HTMLButtonElement>('#railPrev')!;
-  const nextBtn = root.querySelector<HTMLButtonElement>('#railNext')!;
+  const rackEl = root.querySelector<HTMLElement>('#modeRack')!;
+  const heroArtEl = root.querySelector<HTMLElement>('#heroArt')!;
+  const heroBodyEl = root.querySelector<HTMLElement>('#heroBody')!;
   const playerEl = root.querySelector<HTMLElement>('#homePlayer')!;
   const joinError = root.querySelector<HTMLElement>('#joinError')!;
 
@@ -232,77 +249,66 @@ export function renderHomePage(root: HTMLElement): () => void {
     root.querySelector<HTMLElement>('#lockerBtn')!.classList.toggle('has-reward', spins > 0);
   }
 
-  function drawModes(): void {
-    railEl.innerHTML = modes
+  /** How many can play, said the way a person would say it — "Solo", not "1 players". */
+  function playerRange(mode: (typeof modes)[number]): string {
+    if (mode.minPlayers === mode.maxPlayers) {
+      return mode.minPlayers === 1 ? 'Solo' : `${mode.minPlayers} players`;
+    }
+    return `${mode.minPlayers}–${mode.maxPlayers} players`;
+  }
+
+  /** The same fact, short enough for a rack plate. */
+  function playerBadge(mode: (typeof modes)[number]): string {
+    if (mode.minPlayers === mode.maxPlayers) {
+      return mode.minPlayers === 1 ? 'Solo' : `${mode.minPlayers}P`;
+    }
+    return `${mode.minPlayers}–${mode.maxPlayers}`;
+  }
+
+  /** The rack: every mode as a plate, the chosen one lit. */
+  function drawRack(): void {
+    rackEl.innerHTML = modes
       .map(
         (mode) => `
-        <button class="mode-tile${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}">
-          <span class="mode-art">${modeArtSvg(mode.id)}</span>
-          <span class="mode-title">${mode.name}</span>
-          <span class="mode-blurb">${mode.blurb}</span>
-          <span class="mode-meta">${
-            mode.minPlayers === mode.maxPlayers
-              ? `${mode.minPlayers} players`
-              : `${mode.minPlayers}–${mode.maxPlayers} players`
-          }</span>
-          <span class="mode-rules">${mode.rulesSummary.map((r) => `<span>${r}</span>`).join('')}</span>
+        <button class="rack-plate${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}">
+          <span class="rack-art">${modeArtSvg(mode.id)}</span>
+          <span class="rack-name">${mode.name}</span>
+          <span class="rack-players">${playerBadge(mode)}</span>
         </button>`
       )
       .join('');
 
-    railEl.querySelectorAll<HTMLElement>('.mode-tile').forEach((tile) => {
-      tile.addEventListener('click', () => {
-        selectedMode = tile.dataset.mode as GameMode;
+    rackEl.querySelectorAll<HTMLElement>('.rack-plate').forEach((plate) => {
+      plate.addEventListener('click', () => {
+        selectedMode = plate.dataset.mode as GameMode;
         localStorage.setItem('8ball:lastMode', selectedMode);
-        drawModes();
+        drawRack();
+        drawHero();
         updateSoloSub();
-        scrollToSelected();
-      });
-    });
-
-    drawDots();
-  }
-
-  /** Page dots under the rail — a readable position indicator instead of a scrollbar. */
-  function drawDots(): void {
-    dotsEl.innerHTML = modes
-      .map(
-        (mode) =>
-          `<button class="rail-dot${mode.id === selectedMode ? ' active' : ''}"
-                   data-mode="${mode.id}" title="${mode.name}"></button>`
-      )
-      .join('');
-    dotsEl.querySelectorAll<HTMLElement>('.rail-dot').forEach((dot) => {
-      dot.addEventListener('click', () => {
-        selectedMode = dot.dataset.mode as GameMode;
-        localStorage.setItem('8ball:lastMode', selectedMode);
-        drawModes();
-        updateSoloSub();
-        scrollToSelected();
       });
     });
   }
 
-  /** Brings the selected tile into view, centred where there's room for it. */
-  function scrollToSelected(): void {
-    const tile = railEl.querySelector<HTMLElement>('.mode-tile.active');
-    tile?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
-
-  /** One tile's worth of scroll, so the arrows move in whole cards rather than pixels. */
-  function railStep(): number {
-    const tile = railEl.querySelector<HTMLElement>('.mode-tile');
-    const gap = parseFloat(getComputedStyle(railEl).columnGap || '12') || 12;
-    return (tile?.offsetWidth ?? 240) + gap;
-  }
-
-  /** Greys out an arrow when there's nothing further that way. */
-  function updateArrows(): void {
-    const max = railEl.scrollWidth - railEl.clientWidth;
-    prevBtn.disabled = railEl.scrollLeft <= 2;
-    nextBtn.disabled = railEl.scrollLeft >= max - 2;
-    railWrap.classList.toggle('at-start', railEl.scrollLeft <= 2);
-    railWrap.classList.toggle('at-end', railEl.scrollLeft >= max - 2);
+  /**
+   * The chosen mode, at poster size.
+   *
+   * This is where the space freed up by not drawing seven equal cards goes: the art large
+   * enough to be worth having, the blurb readable, and the rules as chips rather than a list
+   * of small grey lines nobody finished reading.
+   */
+  function drawHero(): void {
+    const mode = modes.find((m) => m.id === selectedMode)!;
+    // The art is drawn 3:2 and the poster frame is wider, so it is sliced to fill rather than
+    // fitted — `meet` left violet bars either side that read as a broken image.
+    heroArtEl.innerHTML = modeArtSvg(mode.id).replace('xMidYMid meet', 'xMidYMid slice');
+    heroBodyEl.innerHTML = `
+      <div class="hero-eyebrow">Now selected</div>
+      <h2 class="hero-name">${mode.name}</h2>
+      <p class="hero-blurb">${mode.blurb}</p>
+      <div class="hero-chips">
+        <span class="chip chip-players">${playerRange(mode)}</span>
+        ${mode.rulesSummary.map((r) => `<span class="chip">${r}</span>`).join('')}
+      </div>`;
   }
 
   function updateSoloSub(): void {
@@ -317,54 +323,22 @@ export function renderHomePage(root: HTMLElement): () => void {
     const challenge = challengeForToday();
     const progress = challengeProgress();
     const done = progress.completed;
-    root.querySelector<HTMLElement>('#challengeTile')!.innerHTML = `
-      <span class="tile-icon">${icon(done ? 'check' : 'target', { size: 26 })}</span>
-      <span class="tile-label">Daily Challenge</span>
-      <span class="tile-sub">${done ? 'Done — come back tomorrow' : challenge.text}</span>
-      ${done ? '' : `<span class="tile-reward">+${challenge.xp} XP &amp; a spin</span>`}`;
+    const tile = root.querySelector<HTMLElement>('#challengeTile')!;
+    tile.classList.toggle('done', done);
+    tile.innerHTML = `
+      <span class="ticket-stub">${icon(done ? 'check' : 'clock', { size: 20 })}</span>
+      <span class="ticket-body">
+        <span class="ticket-label">Today's challenge</span>
+        <span class="ticket-text">${done ? 'Done — come back tomorrow' : challenge.text}</span>
+      </span>
+      ${done ? '' : `<span class="ticket-reward">+${challenge.xp}</span>`}`;
   }
 
-  prevBtn.addEventListener('click', () => {
-    railEl.scrollBy({ left: -railStep(), behavior: 'smooth' });
-  });
-  nextBtn.addEventListener('click', () => {
-    railEl.scrollBy({ left: railStep(), behavior: 'smooth' });
-  });
-  railEl.addEventListener('scroll', updateArrows, { passive: true });
-  window.addEventListener('resize', updateArrows);
-
-  // Drag-to-scroll, so the rail feels like a carousel on a desktop too. A small threshold
-  // keeps a normal click on a tile from being swallowed as a drag.
-  let dragStartX = 0;
-  let dragStartScroll = 0;
-  let dragging = false;
-  railEl.addEventListener('pointerdown', (e) => {
-    dragging = true;
-    dragStartX = e.clientX;
-    dragStartScroll = railEl.scrollLeft;
-  });
-  railEl.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    const dx = e.clientX - dragStartX;
-    if (Math.abs(dx) < 4) return;
-    railWrap.classList.add('dragging');
-    railEl.scrollLeft = dragStartScroll - dx;
-  });
-  const endDrag = (): void => {
-    dragging = false;
-    railWrap.classList.remove('dragging');
-  };
-  window.addEventListener('pointerup', endDrag);
-  window.addEventListener('pointercancel', endDrag);
-
   drawPlayer();
-  drawModes();
+  drawRack();
+  drawHero();
   updateSoloSub();
   drawChallenge();
-  requestAnimationFrame(() => {
-    scrollToSelected();
-    updateArrows();
-  });
 
   // ---- Actions ----
 
