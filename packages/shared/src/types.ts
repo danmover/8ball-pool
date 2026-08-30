@@ -382,6 +382,10 @@ export interface ServerToClientEvents {
   seatReconnected: (payload: { seat: Seat; name: string }) => void;
   /** The countdown ran out; the frame was awarded to whoever stayed. */
   seatForfeited: (payload: { seat: Seat; name: string }) => void;
+  /** Paired — here is the table to go to. */
+  matchFound: (payload: { code: string; opponent: string; opponentRating: number }) => void;
+  /** How the search is going, so a wait is not a blank screen. */
+  matchSearching: (payload: { waitedMs: number; inQueue: number; band: number | null }) => void;
   /** A ranked frame settled: what it did to your rating. Sent only to the two who played it. */
   ratingChanged: (payload: {
     rating: number;
@@ -470,6 +474,13 @@ export interface ClientToServerEvents {
     payload: { token: string; name: string },
     cb: (res: { rating: number; frames: number; provisional: boolean; tier: string }) => void
   ) => void;
+  /** Joins the ranked queue. The pairing arrives as a `matchFound` event. */
+  rankedQueue: (
+    payload: { mode?: GameMode; ruleSet?: RuleSetId },
+    cb: (res: { ok: true } | { ok: false; error: string }) => void
+  ) => void;
+  /** Leaves it again. */
+  rankedCancel: () => void;
   /** The top of the ladder. */
   leaderboard: (
     cb: (rows: { name: string; rating: number; frames: number; wins: number; losses: number }[]) => void

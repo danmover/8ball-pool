@@ -2195,3 +2195,17 @@ body.reduce-motion .case-reveal { animation: none; }
   font-weight: 700;
   opacity: 0.75;
 }
+
+/* A ranked search in progress — a slow pulse, so it reads as working rather than stuck. */
+.play-btn.searching {
+  animation: searchPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes searchPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+body.reduce-motion .play-btn.searching {
+  animation: none;
+}

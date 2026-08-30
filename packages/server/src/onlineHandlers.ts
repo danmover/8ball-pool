@@ -11,11 +11,13 @@ import {
   type ServerToClientEvents,
   type TableSummary,
   isProvisional,
+  matchBand,
   tierFor,
 } from '@8ball/shared';
 import type { RoomManager } from './roomManager.js';
 import type { Room } from './room.js';
 import type { PlayerRepository } from './players/repository.js';
+import { MatchQueue } from './matchmaking.js';
 
 type IoServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IoSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -176,11 +178,57 @@ function bindPlayer(room: Room, seat: string, socket: IoSocket, players: PlayerR
   }
 }
 
+/** How often the queue is swept for pairs. Fast enough to feel instant, cheap enough to ignore. */
+const MATCH_TICK_MS = 1000;
+
 export function registerOnlineHandlers(
   io: IoServer,
   rooms: RoomManager,
   players: PlayerRepository
 ): void {
+  const queue = new MatchQueue();
+
+  /**
+   * Sweeps the ranked queue.
+   *
+   * Pairs are made *before* a table exists, which is the whole reason the queue is not just a
+   * room: it lets the rating band decide who meets rather than whoever happened to click at the
+   * same moment.
+   */
+  const tick = setInterval(() => {
+    for (const { a, b } of queue.drainPairs()) {
+      const room = createOpenTable(io, rooms, {
+        mode: a.mode,
+        ruleSet: a.ruleSet,
+        seats: 2,
+        // Private: this table was made for these two, and a third person wandering in from the
+        // public list would take a seat one of them is on their way to.
+        visibility: 'private',
+        seriesTarget: 1,
+        ranked: true,
+      });
+      if (!room) continue;
+      io.to(a.id).emit('matchFound', { code: room.code, opponent: b.name, opponentRating: b.rating });
+      io.to(b.id).emit('matchFound', { code: room.code, opponent: a.name, opponentRating: a.rating });
+    }
+
+    // Tell everyone still waiting how it is going. A search that shows nothing is a search
+    // people abandon after eight seconds convinced it is broken.
+    const now = Date.now();
+    const inQueue = queue.size;
+    for (const entry of queue.entries()) {
+      const waitedMs = now - entry.joinedAt;
+      const band = matchBand(waitedMs);
+      io.to(entry.id).emit('matchSearching', {
+        waitedMs,
+        inQueue,
+        // Infinity does not survive JSON; null is how "anyone at all" is said on the wire.
+        band: Number.isFinite(band) ? Math.round(band) : null,
+      });
+    }
+  }, MATCH_TICK_MS);
+  tick.unref?.();
+
   io.on('connection', (socket: IoSocket) => {
     socket.on('identify', ({ token, name }, cb) => {
       // The same opaque profile token the profile store uses, so there is one identity rather
@@ -197,6 +245,31 @@ export function registerOnlineHandlers(
         tier: tierFor(record.rating),
       });
     });
+
+    socket.on('rankedQueue', ({ mode, ruleSet }, cb) => {
+      const token = socket.data.playerToken as string | undefined;
+      if (!token) {
+        // Ranked needs an identity to write the result against; without one there is nothing
+        // to move. Said plainly rather than silently doing nothing.
+        cb({ ok: false, error: 'Play a frame first to get a ranked profile' });
+        return;
+      }
+      const record = players.get(token);
+      queue.add({
+        id: socket.id,
+        token,
+        name: (socket.data.playerName as string) ?? record.name,
+        rating: record.rating,
+        mode: mode && isOnlineMode(mode) ? mode : 'classic',
+        ruleSet: ruleSet && RULE_SETS[ruleSet] ? ruleSet : 'casual',
+        joinedAt: Date.now(),
+      });
+      cb({ ok: true });
+    });
+
+    socket.on('rankedCancel', () => queue.remove(socket.id));
+
+    socket.on('disconnect', () => queue.remove(socket.id));
 
     socket.on('leaderboard', (cb) => {
       cb(

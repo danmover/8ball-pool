@@ -48,6 +48,8 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   let me: RankedIdentity | null = rankedIdentity();
   let board: { name: string; rating: number; frames: number; wins: number; losses: number }[] = [];
   let showBoard = false;
+  /** Set while the ranked queue is running, so the button becomes a cancel. */
+  let searching: { waitedMs: number; inQueue: number; band: number | null } | null = null;
 
   function toast(msg: string, kind = 'info'): void {
     const stack = root.querySelector<HTMLElement>('#onlineToasts');
@@ -109,6 +111,18 @@ export function renderOnlinePage(root: HTMLElement): () => void {
           <button class="play-btn" id="quickPlayBtn">
             <span class="play-main">QUICK PLAY</span>
             <span class="play-sub">Straight into a game</span>
+          </button>
+          <button class="play-btn secondary-play${searching ? ' searching' : ''}" id="rankedBtn">
+            <span class="play-main">${searching ? 'SEARCHING…' : 'RANKED MATCH'}</span>
+            <span class="play-sub">${
+              searching
+                ? `${Math.round(searching.waitedMs / 1000)}s · ${
+                    searching.band === null
+                      ? 'anyone at all now'
+                      : `within ${searching.band} rating`
+                  }${searching.inQueue > 1 ? ` · ${searching.inQueue} waiting` : ''}`
+                : 'Matched on rating — counts toward it'
+            }</span>
           </button>
           <form class="join-box" id="codeForm">
             <input id="codeInput" maxlength="4" placeholder="CODE" autocapitalize="characters"
@@ -217,6 +231,23 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     root.querySelector('#backBtn')!.addEventListener('click', () => navigate('/'));
     root.querySelector('#refreshBtn')!.addEventListener('click', refresh);
 
+    root.querySelector('#rankedBtn')!.addEventListener('click', () => {
+      if (searching) {
+        socket.emit('rankedCancel');
+        searching = null;
+        draw();
+        return;
+      }
+      socket.emit('rankedQueue', {}, (res) => {
+        if (!res.ok) {
+          toast(res.error, 'foul');
+          return;
+        }
+        searching = { waitedMs: 0, inQueue: 1, band: null };
+        draw();
+      });
+    });
+
     root.querySelector('#quickPlayBtn')!.addEventListener('click', () => {
       socket.emit('quickPlay', {}, (res) => {
         if (!res.ok) {
@@ -298,6 +329,25 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     });
   }
 
+  const onSearching = (payload: { waitedMs: number; inQueue: number; band: number | null }): void => {
+    if (!searching) return;
+    searching = payload;
+    // Repaint only the button's subtitle, so redrawing the page does not fight the form above.
+    const sub = root.querySelector<HTMLElement>('#rankedBtn .play-sub');
+    if (sub) {
+      sub.textContent = `${Math.round(payload.waitedMs / 1000)}s · ${
+        payload.band === null ? 'anyone at all now' : `within ${payload.band} rating`
+      }${payload.inQueue > 1 ? ` · ${payload.inQueue} waiting` : ''}`;
+    }
+  };
+  const onFound = ({ code, opponent, opponentRating }: { code: string; opponent: string; opponentRating: number }): void => {
+    searching = null;
+    toast(`Matched with ${opponent} (${opponentRating})`, 'reward');
+    navigate(`/t/${code}`);
+  };
+  socket.on('matchSearching', onSearching);
+  socket.on('matchFound', onFound);
+
   draw();
   // Tell the server who we are before anything ranked can happen. Harmless without a token —
   // you can still play, it just does not count.
@@ -315,6 +365,11 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   return () => {
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = null;
+    socket.off('matchSearching', onSearching);
+    socket.off('matchFound', onFound);
+    // Leaving the page should leave the queue — being matched into a table you have navigated
+    // away from is how a ranked frame gets forfeited by somebody who did nothing wrong.
+    if (searching) socket.emit('rankedCancel');
     root.innerHTML = '';
   };
 }
