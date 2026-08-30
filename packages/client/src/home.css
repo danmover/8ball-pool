@@ -2301,3 +2301,47 @@ body.reduce-motion .play-btn.searching {
 .ranked-toggle.disabled input[type='checkbox'] {
   cursor: default;
 }
+
+/* ================= Table HUD: one bottom-left cluster =================
+   The spin pad was a tall column from 120px up to nearly half the screen, and the power
+   readout a separate card below it — two objects covering a third of the left of the table
+   between them. Laid out as a row they are one shorter cluster that reads as a single control
+   panel, which is what they are. */
+.host-spin-wrap {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.75rem !important;
+  bottom: 16px !important;
+  /* Clear of the power readout, which keeps its own corner. */
+  left: 118px !important;
+  padding: 0.55rem 0.85rem !important;
+}
+
+/* The two labelled halves — spin on the left, cue on the right — each stay a column. */
+.host-spin-wrap .spin-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  opacity: 0.5;
+  margin-bottom: -0.15rem;
+}
+
+/* Keyboard hints belong beside the controls, not stacked under them adding height. */
+.host-spin-wrap .spin-hint {
+  max-width: 8.5rem;
+  font-size: 0.6rem;
+  line-height: 1.25;
+  opacity: 0.55;
+}
+
+/* The power readout squares up with the cluster beside it. */
+.host-power-wrap .power-hud {
+  min-width: 86px;
+}
+
+/* Each control keeps its own label directly above it. */
+.host-spin-wrap .ctrl-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}

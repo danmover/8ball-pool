@@ -5,7 +5,14 @@ import { applyCueStrike, stepSimulation, strikeAngle } from './physics.js';
 import type { ShotModifiers } from './pickups.js';
 import { BALL_RADIUS } from './constants.js';
 
-const MAX_BOUNCES_FULL = 2;
+/**
+ * Cushion rebounds drawn ahead of the cue ball.
+ *
+ * One, not two. Two put three long dashed lines across the whole table for a shot into open
+ * cloth, which is noise rather than information — and the second rebound is the least
+ * trustworthy part of the prediction anyway, since any error in the first is doubled by it.
+ */
+const MAX_BOUNCES_FULL = 1;
 const MAX_PREVIEW_LENGTH = 3000;
 /** How far the intended-aim line is drawn when squirt pulls the real one off it. */
 const AIM_LINE_LENGTH = 420;

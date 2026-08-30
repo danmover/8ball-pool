@@ -207,13 +207,34 @@ function glass(c: Ctx, x: number, y: number, r: number, liquid: number): void {
   g.circle(x - r * 0.3, y - r * 0.3, r * 0.22).fill({ color: 0xffffff, alpha: 0.55 });
 }
 
-/** A cube of chalk, lid open. */
+/**
+ * A cube of chalk on the rail.
+ *
+ * Drawn with a top face and a shadow rather than as a flat square. Seen from above with no
+ * depth cue at all it read as a stray coloured rectangle floating on the floor — which is
+ * exactly what it looked like, and what it kept getting mistaken for.
+ */
 function chalk(c: Ctx, x: number, y: number, s: number, color: number): void {
-  shape(c.g, (gg) => gg.roundRect(x, y, s, s, 2), color, 2.5);
-  c.g.roundRect(x + s * 0.18, y + s * 0.18, s * 0.64, s * 0.64, 1.5).fill({
+  const { g } = c;
+  // Grounded first: without a shadow nothing in a top-down scene sits on anything.
+  g.ellipse(x + s * 0.55, y + s * 0.72, s * 0.62, s * 0.3).fill({ color: 0x000000, alpha: 0.3 });
+
+  // The worn face, then the lighter top so the cube has a visible edge.
+  shape(g, (gg) => gg.roundRect(x, y, s, s, 3), shadeInt(color, -0.25), 2.5);
+  g.roundRect(x + s * 0.1, y + s * 0.06, s * 0.8, s * 0.72, 2).fill({ color });
+  // The dished hollow a used cube wears into itself.
+  g.roundRect(x + s * 0.26, y + s * 0.22, s * 0.48, s * 0.4, 1.5).fill({
     color: 0x000000,
-    alpha: 0.22,
+    alpha: 0.26,
   });
+}
+
+/** Lighten (positive) or darken (negative) a 0xRRGGBB colour. */
+function shadeInt(color: number, amount: number): number {
+  const parts = [(color >> 16) & 255, (color >> 8) & 255, color & 255].map((v) =>
+    Math.max(0, Math.min(255, Math.round(v + (amount > 0 ? (255 - v) * amount : v * amount))))
+  );
+  return (parts[0] << 16) | (parts[1] << 8) | parts[2];
 }
 
 /** The triangle, left leaning on the floor. */
@@ -232,19 +253,23 @@ function triangleRack(c: Ctx, x: number, y: number, s: number, color: number): v
  */
 function rug(c: Ctx, fill: number, border: number, pattern?: number): void {
   const { g, table, w, h } = c;
-  const rx = Math.max(6, table.x - table.w * 0.05);
-  const ry = Math.max(6, table.y - table.h * 0.12);
-  const rw = Math.min(w - rx - 6, table.w * 1.1);
-  const rh = Math.min(h - ry - 6, table.h * 1.24);
-  shape(g, (gg) => gg.roundRect(rx, ry, rw, rh, 14), fill, 4);
-  g.roundRect(rx + 14, ry + 14, rw - 28, rh - 28, 8).stroke({ width: 5, color: border, alpha: 0.85 });
-  g.roundRect(rx + 26, ry + 26, rw - 52, rh - 52, 6).stroke({ width: 2, color: border, alpha: 0.5 });
+  // Generous. At 5% it hugged the rails and read as a second frame bolted to the table — two
+  // borders in two unrelated colours, which is exactly what a rug is not. Wide enough to sit
+  // *under* the table, its edge decoration stays out where the eye can ignore it.
+  const rx = Math.max(6, table.x - table.w * 0.11);
+  const ry = Math.max(6, table.y - table.h * 0.2);
+  const rw = Math.min(w - rx - 6, table.w * 1.22);
+  const rh = Math.min(h - ry - 6, table.h * 1.42);
+  shape(g, (gg) => gg.roundRect(rx, ry, rw, rh, 22), fill, 4);
+  // Softened: the woven border used to be as loud as the rails it sat next to.
+  g.roundRect(rx + 18, ry + 18, rw - 36, rh - 36, 12).stroke({ width: 4, color: border, alpha: 0.5 });
+  g.roundRect(rx + 32, ry + 32, rw - 64, rh - 64, 8).stroke({ width: 2, color: border, alpha: 0.28 });
   if (pattern !== undefined) {
-    for (let x = rx + 40; x < rx + rw - 40; x += 56) {
-      g.poly([x, ry + 20, x + 12, ry + 32, x, ry + 44, x - 12, ry + 32]).fill({ color: pattern, alpha: 0.5 });
-      g.poly([x, ry + rh - 20, x + 12, ry + rh - 32, x, ry + rh - 44, x - 12, ry + rh - 32]).fill({
+    for (let x = rx + 52; x < rx + rw - 52; x += 68) {
+      g.poly([x, ry + 26, x + 11, ry + 37, x, ry + 48, x - 11, ry + 37]).fill({ color: pattern, alpha: 0.3 });
+      g.poly([x, ry + rh - 26, x + 11, ry + rh - 37, x, ry + rh - 48, x - 11, ry + rh - 37]).fill({
         color: pattern,
-        alpha: 0.5,
+        alpha: 0.3,
       });
     }
   }

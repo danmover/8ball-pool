@@ -204,12 +204,18 @@ export function renderHostPage(
         <div class="power-tier" id="powerTier">DRAG TO AIM</div>
       </div>
     </div>
+    <!-- Two labelled groups side by side, rather than five loose children in a row: the label
+         belongs above its own control, and a flat row put "SPIN" beside the pad instead. -->
     <div class="host-spin-wrap" id="hostSpinWrap" style="display:none">
-      <div class="spin-label">SPIN</div>
-      <div id="hostSpin"></div>
+      <div class="ctrl-group">
+        <div class="spin-label">SPIN</div>
+        <div id="hostSpin"></div>
+      </div>
+      <div class="ctrl-group">
+        <div class="spin-label">CUE</div>
+        <div id="hostElevation"></div>
+      </div>
       <div class="spin-hint">Arrows nudge spin · Shift+arrows fine-aim · C to centre · R to review</div>
-      <div class="spin-label">CUE</div>
-      <div id="hostElevation"></div>
     </div>
     <div id="lobbyWrap"></div>
   `;

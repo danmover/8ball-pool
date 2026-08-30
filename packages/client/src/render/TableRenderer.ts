@@ -933,13 +933,28 @@ export class TableRenderer {
       g.poly(shape).stroke({ width: 5, color: 0x1a1410, alpha: 0.85 });
       g.poly(shape).fill({ color: cushion });
 
-      // Rounded lit nose along the playing edge — the highlight is what makes the rubber
-      // read as a raised cushion rather than a flat painted band.
-      g.moveTo(...pt(from + 3, nose + 2.5 * side)).lineTo(...pt(to - 3, nose + 2.5 * side));
-      g.stroke({ width: 4, color: 0xffffff, alpha: 0.3, cap: 'round' });
-      // Shadow cast onto the cloth just in front of it.
-      g.moveTo(...pt(from, nose - 3 * side)).lineTo(...pt(to, nose - 3 * side));
-      g.stroke({ width: 6, color: 0x000000, alpha: 0.18 });
+      /*
+       * The rubber is lit in three bands rather than one.
+       *
+       * A single highlight left the cushion reading as a flat painted stripe the same colour as
+       * the cloth, so the table looked like wood with a green void inside it. Real cushion
+       * rubber is a rounded nose: bright right on the playing edge, falling away to shade at
+       * the back where it meets the rail. Three bands is the fewest that reads as curved.
+       */
+      const band = (offset: number, width: number, color: number, alpha: number): void => {
+        g.moveTo(...pt(from + 2, nose + offset * side)).lineTo(...pt(to - 2, nose + offset * side));
+        g.stroke({ width, color, alpha, cap: 'round' });
+      };
+      band(3, 5, 0xffffff, 0.34); // the lit nose itself
+      band(9, 7, 0xffffff, 0.12); // the shoulder falling away from it
+      band(CUSH - 5, 8, 0x000000, 0.3); // shade where it meets the rail
+
+      // Shadow cast onto the cloth just in front of it, which is what seats the cushion on the
+      // table rather than leaving it floating over the baize.
+      g.moveTo(...pt(from, nose - 4 * side)).lineTo(...pt(to, nose - 4 * side));
+      g.stroke({ width: 9, color: 0x000000, alpha: 0.22 });
+      g.moveTo(...pt(from, nose - 1.5 * side)).lineTo(...pt(to, nose - 1.5 * side));
+      g.stroke({ width: 3, color: 0x000000, alpha: 0.3 });
     };
 
     // Long rails are split either side of the middle pocket; short rails run uninterrupted.
@@ -1616,14 +1631,30 @@ export class TableRenderer {
       g.stroke({ width: 2, color: 0xffffff, alpha: 0.22 });
     }
 
-    for (const seg of preview.cueBallPath) {
+    /*
+     * The cue ball's path, fading as it goes.
+     *
+     * Every segment used to be drawn at one weight, so a confident first metre and a
+     * speculative second rebound looked equally certain — three identical white lines across
+     * the cloth. Fading is both cleaner and more honest: the further along the prediction, the
+     * less it deserves to be believed.
+     */
+    preview.cueBallPath.forEach((seg, i) => {
       this.dashedLine(g, seg.from, seg.to);
-    }
-    g.stroke({ width: 4, color: 0xffffff, alpha: 0.55 });
+      g.stroke({
+        width: i === 0 ? 3.5 : 2.5,
+        color: 0xffffff,
+        alpha: i === 0 ? 0.6 : 0.28,
+      });
+    });
 
     if (preview.ghostBallPos) {
-      g.circle(preview.ghostBallPos.x, preview.ghostBallPos.y, BALL_RADIUS);
-      g.stroke({ width: 3, color: 0xffffff, alpha: 0.6 });
+      // The contact point, and the single most useful thing on screen: it is where the cue
+      // ball has to *be* for the cut to work. A thin ring read as one more guide line, so it
+      // gets a fill and a heavier edge than anything else here.
+      const { x, y } = preview.ghostBallPos;
+      g.circle(x, y, BALL_RADIUS).fill({ color: 0xffffff, alpha: 0.16 });
+      g.circle(x, y, BALL_RADIUS).stroke({ width: 3.5, color: 0xffffff, alpha: 0.85 });
     }
 
     if (preview.objectBallPath.length) {
