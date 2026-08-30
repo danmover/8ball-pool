@@ -2258,3 +2258,30 @@ body.reduce-motion .play-btn.searching {
 .event-note {
   margin-top: 0.4rem;
 }
+
+/* ---- Online lobby corrections ----
+   The global `input` rule sets width:100% and a big padding, which turned these checkboxes into
+   what looked like sliders. And .play-btn is sized for the home screen's two hero buttons,
+   which is far too tall for a page that also has a list, a form and a ladder on it. */
+/* `.play-btn` carries `flex: 1 1 240px` for the home screen's side-by-side hero row. This
+   column stacks them, and in a column flex-basis is the *height* — which is why these were
+   240px tall boxes with a line of text at the bottom. */
+.online-page .quick-play .play-btn {
+  flex: 0 0 auto;
+  padding: 0.85rem 1.2rem;
+}
+
+.ranked-toggle input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px var(--ink);
+  accent-color: #d98324;
+  cursor: pointer;
+}
+
+.ranked-toggle.disabled input[type='checkbox'] {
+  cursor: default;
+}
