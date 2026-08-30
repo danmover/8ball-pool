@@ -118,248 +118,323 @@
   height: 34px;
   font-size: 0.9rem;
 }
-/* ==========================================================================
-   The cabinet: one mode as a poster, the rest as a rack beside it.
 
-   What was here before was a carousel of seven equal cards with arrows, page dots and
-   drag-to-scroll — a lot of machinery to make a row of identical tiles navigable, when the
-   real problem was that the row had no hierarchy at all. Nothing on it said where to start,
-   and the modes people play least took exactly as much room as Classic.
+/* ==========================================================================
+   The mode carousel.
 
-   One featured mode earns the space to show its art properly; the rack keeps every other
-   mode one click away, permanently visible, with nothing to scroll.
+   Brought back after a spell as a poster-and-rack. The poster gave the page more hierarchy,
+   but it cost the modes the thing they were good at: every one showing its own art, blurb
+   and rules at once, so you can compare them instead of clicking through them one at a time.
+   The hierarchy is bought on the action row below instead, where it costs nothing.
+
+   The native scrollbar is what made this look cheap, so it is hidden and replaced with
+   arrows, page dots and edge fades. Snap is `proximity` rather than `mandatory` — mandatory
+   fights a drag and yanks the rail around mid-gesture.
    ========================================================================== */
 
-.cabinet {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 268px;
-  gap: 1rem;
-  /* The art keeps a fixed frame and the blurb underneath takes whatever height is left, so
-     the poster squares up with the rack beside it instead of leaving a hole under it.
-     Plain `stretch` without the fixed frame blew the art up to four times its drawn size. */
-  align-items: stretch;
-}
-
-/* --- The poster --- */
-
-.mode-hero {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
-    inset 0 0 0 1.5px var(--wood),
-    0 0 0 2px var(--ink),
-    0 8px 0 var(--panel-3),
-    0 18px 34px rgba(0, 0, 0, 0.5);
-}
-
-/* The mode's own art, at a size worth looking at rather than an 86px strip. */
-.hero-art {
-  position: relative;
-  display: block;
-  /* The art is drawn 3:2. This frame is wider, and the SVG is sliced rather than fitted, so
-     it crops top and bottom instead of sitting in violet pillar bars that read as an image
-     that failed to load. */
-  flex: 0 0 auto;
-  aspect-ratio: 16 / 9;
-  max-height: 290px;
-  overflow: hidden;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.45);
-}
-
-.hero-art svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-/* Lamplight down onto the art, so the poster has somewhere to be lit from. */
-.hero-art::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 62% 54% at 50% 24%, rgba(255, 197, 49, 0.14), transparent 72%),
-    linear-gradient(180deg, transparent 54%, rgba(12, 6, 20, 0.5) 100%);
-}
-
-.hero-body {
-  /* Takes up the slack so the poster matches the rack's height, without pushing the Play
-     button away from the copy it belongs to. */
-  flex: 1 1 auto;
-  padding: 0.85rem 1.1rem 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.hero-cta {
-  flex: 0 0 auto;
-  padding: 0 1.1rem 1.1rem;
-}
-
-.hero-eyebrow {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.58rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.hero-name {
-  margin: 0;
-  font-size: clamp(1.5rem, 3.2vw, 2.1rem);
-  line-height: 1.02;
-  color: var(--paper);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
-}
-
-.hero-blurb {
-  margin: 0.1rem 0 0;
-  font-size: 0.86rem;
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--paper-2);
-  text-wrap: pretty;
-  max-width: 48ch;
-}
-
-.hero-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.45rem;
-}
-
-/* Rules as chips rather than a column of small grey lines nobody finished reading. */
-.chip {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.66rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  color: var(--paper-2);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.12);
-}
-
-.chip-players {
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--accent) 0%, #17b18a 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 0 1.5px var(--ink);
-}
-
-/* --- The rack --- */
-
-.cabinet-side {
+.mode-section {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  min-width: 0;
 }
 
-.rack-head {
+.mode-section .section-head h2 {
+  margin: 0;
   font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
-.mode-rack {
+.rail-nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rail-arrow {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper);
+  background: linear-gradient(180deg, #4d2f63 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--panel-3);
+}
+
+.rail-arrow:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3);
+}
+
+/* One icon, mirrored for "next" — no second glyph needed. */
+#railNext .icon {
+  transform: scaleX(-1);
+}
+
+.rail-arrow:disabled {
+  opacity: 0.3;
+}
+
+.mode-rail-wrap {
+  position: relative;
+}
+
+/*
+ * The edge fade used to be a near-black overlay painted on top. Over the live table backdrop
+ * that read as a dark band laid across the cards rather than the cards running out — the very
+ * thing it was meant to avoid. Masking the rail fades the cards themselves to transparent,
+ * which works over whatever happens to be behind them.
+ */
+.mode-rail {
+  --fade-left: 42px;
+  --fade-right: 42px;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+
+/* Fade only the end there is actually more to scroll toward. Fading a hard edge the rail
+   cannot move past just clips the first card and looks like a rendering fault. */
+.mode-rail-wrap.at-start .mode-rail {
+  --fade-left: 0px;
+}
+
+.mode-rail-wrap.at-end .mode-rail {
+  --fade-right: 0px;
+}
+
+.mode-rail {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  /* Room for the lift on hover and the lip underneath, so neither is clipped by the scroller. */
+  padding: 0.45rem 0.2rem 0.9rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+  cursor: grab;
+}
+
+.mode-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.mode-rail-wrap.dragging .mode-rail {
+  cursor: grabbing;
+  scroll-behavior: auto; /* smooth scrolling fights a live drag */
+  scroll-snap-type: none;
+}
+
+/* A drag shouldn't select the tile text under the cursor. */
+.mode-rail-wrap.dragging .mode-tile {
+  pointer-events: none;
+  user-select: none;
+}
+
+.rail-dots {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.rail-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(247, 236, 255, 0.24);
+  box-shadow: none;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.rail-dot:active {
+  transform: none;
+}
+
+.rail-dot.active {
+  width: 26px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 197, 49, 0.5);
+}
+
+/* --- The tile --- */
+
+.mode-tile {
+  position: relative;
+  overflow: hidden;
+  scroll-snap-align: center;
+  flex: 0 0 236px;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-}
-
-.rack-plate {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.3rem 0.55rem 0.3rem 0.3rem;
-  border: none;
-  border-radius: 11px;
+  gap: 0.4rem;
   text-align: left;
-  cursor: pointer;
-  font-family: inherit;
+  padding: 0.7rem;
+  border-radius: 16px;
   color: var(--paper);
-  background: linear-gradient(180deg, rgba(255, 236, 255, 0.07), rgba(0, 0, 0, 0.3));
+  font-weight: 600;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 255, 0.13),
-    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
-  transition: transform 0.11s ease, background 0.14s ease, box-shadow 0.14s ease;
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--panel-3),
+    0 14px 26px rgba(0, 0, 0, 0.45);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
-.rack-plate:hover {
-  transform: translateX(2px);
-  background: linear-gradient(180deg, rgba(255, 236, 255, 0.14), rgba(0, 0, 0, 0.24));
-}
-
-.rack-plate.active {
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 60%, #e8ac1c 100%);
+.mode-tile:hover:not(.active) {
+  transform: translateY(-3px);
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.6),
-    0 0 0 1.5px var(--ink),
-    0 3px 0 var(--gold-dark),
-    0 0 22px rgba(255, 197, 49, 0.28);
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.22),
+    0 0 0 2px var(--ink),
+    0 9px 0 var(--panel-3),
+    0 18px 30px rgba(0, 0, 0, 0.45);
 }
 
-/* A thumbnail of the same art the poster shows, so the rack and the poster agree. */
-.rack-art {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 30px;
-  border-radius: 7px;
-  overflow: hidden;
-  display: block;
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.5);
+.mode-tile:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3), 0 5px 10px rgba(0, 0, 0, 0.4);
 }
 
-.rack-art svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+.mode-tile.active {
+  background: linear-gradient(180deg, #4a2b60 0%, #2e1943 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.28),
+    0 0 0 2px var(--ink),
+    0 0 0 4px var(--gold),
+    0 6px 0 var(--gold-dark),
+    0 0 30px rgba(255, 197, 49, 0.3),
+    0 14px 26px rgba(0, 0, 0, 0.45);
 }
 
-.rack-name {
-  flex: 1 1 auto;
-  min-width: 0;
+/* A ribbon on the selected tile, because which mode is chosen decides what Play does and a
+   border alone was easy to miss across ten cards. */
+.mode-tile.active::after {
+  content: 'SELECTED';
+  position: absolute;
+  top: 13px;
+  right: -32px;
+  transform: rotate(38deg);
+  width: 124px;
+  text-align: center;
+  padding: 0.16rem 0;
   font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 0.86rem;
-  white-space: nowrap;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.mode-art {
+  display: block;
+  height: 88px;
+  border-radius: 10px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
-.rack-players {
-  flex: 0 0 auto;
-  font-size: 0.64rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.6;
+.mode-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-/* --- Actions ---
-   One dominant button, then two, then the code box. The page should answer "what do I press"
-   before it answers anything else, and three equal play buttons in a row did not. */
+.mode-title {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1.02rem;
+  line-height: 1.1;
+}
+
+.mode-blurb {
+  font-size: 0.75rem;
+  color: var(--paper-2);
+  font-weight: 600;
+  line-height: 1.35;
+  min-height: 2.7em;
+}
+
+.mode-meta {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Rules stay visible on every tile — hiding them for all but the selected mode left the row
+   a patchwork of heights and made the unselected cards look empty. The reserved height keeps
+   every card identical whatever its blurb runs to. */
+.mode-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 5.4em;
+  font-size: 0.71rem;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.3;
+  border-top: 1.5px solid rgba(255, 236, 255, 0.12);
+  padding-top: 0.4rem;
+}
+
+.mode-rules span::before {
+  content: '• ';
+  color: var(--gold);
+}
+
+.mode-tile.active .mode-rules {
+  color: var(--paper-2);
+  border-top-color: rgba(255, 197, 49, 0.3);
+}
+
+/* ==========================================================================
+   The action row.
+
+   This is where the hierarchy the carousel gives up is bought back. Play is one big gold
+   button that names the mode it will start; the two ways to play with other people are a
+   quieter pair beside it; the code box is last, because typing a code is what you do when
+   somebody has already told you one.
+   ========================================================================== */
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.6rem;
+}
 
 .btn-play {
+  flex: 1 1 250px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 0.05rem;
-  width: 100%;
-  padding: 0.75rem 1.1rem 0.85rem;
+  padding: 0.7rem 1.15rem 0.8rem;
   border-radius: var(--radius);
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
@@ -389,16 +464,36 @@
   color: rgba(24, 13, 26, 0.68);
 }
 
-.side-pair {
+.action-pair {
+  flex: 2 1 400px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
-.side-pair button {
-  padding: 0.6rem 0.4rem;
-  font-size: 0.88rem;
-  border-radius: 12px;
+.action-pair button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.05rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.action-main {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.05;
+}
+
+.action-sub {
+  font-size: 0.68rem;
+  font-weight: 700;
+  opacity: 0.72;
+  line-height: 1.2;
 }
 
 /* The one place the cabinet's pink is spent: going online is the outward-facing action. */
@@ -433,6 +528,7 @@
 }
 
 .join-box {
+  flex: 0 1 230px;
   display: flex;
   gap: 0.4rem;
   align-items: stretch;
@@ -453,8 +549,9 @@
   border-radius: 12px;
 }
 
-.cabinet-side .error {
-  margin: 0;
+.home-actions .error {
+  flex: 1 0 100%;
+  margin: -0.2rem 0 0;
   min-height: 1em;
   font-size: 0.76rem;
 }

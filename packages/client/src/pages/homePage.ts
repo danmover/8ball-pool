@@ -65,49 +65,55 @@ export function renderHomePage(root: HTMLElement): () => void {
         </header>
 
         <!--
-          The cabinet: one mode shown as a poster, the rest as a rack beside it.
+          The mode carousel, restored. The poster-and-rack version gave the page more hierarchy
+          but lost what the tiles were good at: every mode showing its own art, blurb and rules
+          at once, so you can compare them rather than click through them one at a time.
 
-          Seven equal tiles gave the page no hierarchy — every mode shouted the same volume and
-          nothing told a new player where to start, so the row read as a settings screen. One
-          featured mode and a list is how a cabinet actually presents its games, and it buys
-          the room to show the mode's art at a size worth looking at.
+          The hierarchy problem it was solving is real, so it is solved on the row below
+          instead — one dominant Play rather than three equal buttons — which costs the modes
+          nothing.
         -->
-        <section class="cabinet">
-          <!--
-            Play sits on the poster rather than in the side column, because it acts on the mode
-            the poster is showing — and it is what fills the poster out to the height of the
-            rack instead of leaving a slab of empty panel under the blurb.
-
-            It lives in its own container that drawHero() does not overwrite: rebuilding it
-            with the rest of the poster would throw away its click handler on every mode change.
-          -->
-          <div class="mode-hero">
-            <div class="hero-art" id="heroArt"></div>
-            <div class="hero-body" id="heroBody"></div>
-            <div class="hero-cta">
-              <button class="btn-play" id="playSolo">
-                <span class="btn-play-main">Play</span>
-                <span class="btn-play-sub" id="soloSub">vs the computer</span>
-              </button>
+        <section class="mode-section">
+          <div class="section-head">
+            <h2>Choose a game</h2>
+            <div class="rail-nav">
+              <button class="rail-arrow" id="railPrev" title="Previous">${icon('back', { size: 18 })}</button>
+              <button class="rail-arrow" id="railNext" title="Next">${icon('back', { size: 18 })}</button>
             </div>
           </div>
-
-          <div class="cabinet-side">
-            <div class="rack-head">Pick your game</div>
-            <div class="mode-rack" id="modeRack"></div>
-
-            <div class="side-pair">
-              <button class="btn-hot" id="onlineBtn">Go Online</button>
-              <button class="btn-quiet" id="hostBtn">Host Table</button>
-            </div>
-
-            <form class="join-box" id="joinForm">
-              <input id="codeInput" maxlength="4" placeholder="CODE" autocapitalize="characters"
-                     autocomplete="off" aria-label="Table code" />
-              <button type="submit" class="btn-quiet" id="joinBtn">Join</button>
-            </form>
-            <p id="joinError" class="error"></p>
+          <div class="mode-rail-wrap">
+            <div class="mode-rail" id="modeRail"></div>
           </div>
+          <div class="rail-dots" id="railDots"></div>
+        </section>
+
+        <!--
+          One dominant action, then the two ways to play with other people, then the code box.
+          Three equal play buttons never said which one a new player should press.
+        -->
+        <section class="home-actions">
+          <button class="btn-play" id="playSolo">
+            <span class="btn-play-main">Play</span>
+            <span class="btn-play-sub" id="soloSub">vs the computer</span>
+          </button>
+
+          <div class="action-pair">
+            <button class="btn-hot" id="onlineBtn">
+              <span class="action-main">Go Online</span>
+              <span class="action-sub">Join a table from anywhere</span>
+            </button>
+            <button class="btn-quiet" id="hostBtn">
+              <span class="action-main">Host Table</span>
+              <span class="action-sub">Friends join from their phones</span>
+            </button>
+          </div>
+
+          <form class="join-box" id="joinForm">
+            <input id="codeInput" maxlength="4" placeholder="CODE" autocapitalize="characters"
+                   autocomplete="off" aria-label="Table code" />
+            <button type="submit" class="btn-quiet" id="joinBtn">Join</button>
+          </form>
+          <p id="joinError" class="error"></p>
         </section>
 
         <!--
@@ -155,9 +161,11 @@ export function renderHomePage(root: HTMLElement): () => void {
     </div>`;
 
   const backdrop = root.querySelector<HTMLElement>('#homeBackdrop')!;
-  const rackEl = root.querySelector<HTMLElement>('#modeRack')!;
-  const heroArtEl = root.querySelector<HTMLElement>('#heroArt')!;
-  const heroBodyEl = root.querySelector<HTMLElement>('#heroBody')!;
+  const railEl = root.querySelector<HTMLElement>('#modeRail')!;
+  const railWrap = root.querySelector<HTMLElement>('.mode-rail-wrap')!;
+  const dotsEl = root.querySelector<HTMLElement>('#railDots')!;
+  const prevBtn = root.querySelector<HTMLButtonElement>('#railPrev')!;
+  const nextBtn = root.querySelector<HTMLButtonElement>('#railNext')!;
   const playerEl = root.querySelector<HTMLElement>('#homePlayer')!;
   const joinError = root.querySelector<HTMLElement>('#joinError')!;
 
@@ -257,58 +265,71 @@ export function renderHomePage(root: HTMLElement): () => void {
     return `${mode.minPlayers}–${mode.maxPlayers} players`;
   }
 
-  /** The same fact, short enough for a rack plate. */
-  function playerBadge(mode: (typeof modes)[number]): string {
-    if (mode.minPlayers === mode.maxPlayers) {
-      return mode.minPlayers === 1 ? 'Solo' : `${mode.minPlayers}P`;
-    }
-    return `${mode.minPlayers}–${mode.maxPlayers}`;
+
+  function pickMode(id: GameMode): void {
+    selectedMode = id;
+    localStorage.setItem('8ball:lastMode', selectedMode);
+    drawModes();
+    updateSoloSub();
+    scrollToSelected();
   }
 
-  /** The rack: every mode as a plate, the chosen one lit. */
-  function drawRack(): void {
-    rackEl.innerHTML = modes
+  /** Every mode as a card: its art, what it is, and the rules that make it different. */
+  function drawModes(): void {
+    railEl.innerHTML = modes
       .map(
         (mode) => `
-        <button class="rack-plate${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}">
-          <span class="rack-art">${modeArtSvg(mode.id)}</span>
-          <span class="rack-name">${mode.name}</span>
-          <span class="rack-players">${playerBadge(mode)}</span>
+        <button class="mode-tile${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}">
+          <span class="mode-art">${modeArtSvg(mode.id)}</span>
+          <span class="mode-title">${mode.name}</span>
+          <span class="mode-blurb">${mode.blurb}</span>
+          <span class="mode-meta">${playerRange(mode)}</span>
+          <span class="mode-rules">${mode.rulesSummary.map((r) => `<span>${r}</span>`).join('')}</span>
         </button>`
       )
       .join('');
 
-    rackEl.querySelectorAll<HTMLElement>('.rack-plate').forEach((plate) => {
-      plate.addEventListener('click', () => {
-        selectedMode = plate.dataset.mode as GameMode;
-        localStorage.setItem('8ball:lastMode', selectedMode);
-        drawRack();
-        drawHero();
-        updateSoloSub();
-      });
+    railEl.querySelectorAll<HTMLElement>('.mode-tile').forEach((tile) => {
+      tile.addEventListener('click', () => pickMode(tile.dataset.mode as GameMode));
+    });
+
+    drawDots();
+  }
+
+  /** Page dots under the rail — a readable position indicator instead of a scrollbar. */
+  function drawDots(): void {
+    dotsEl.innerHTML = modes
+      .map(
+        (mode) =>
+          `<button class="rail-dot${mode.id === selectedMode ? ' active' : ''}"
+                   data-mode="${mode.id}" title="${mode.name}"></button>`
+      )
+      .join('');
+    dotsEl.querySelectorAll<HTMLElement>('.rail-dot').forEach((dot) => {
+      dot.addEventListener('click', () => pickMode(dot.dataset.mode as GameMode));
     });
   }
 
-  /**
-   * The chosen mode, at poster size.
-   *
-   * This is where the space freed up by not drawing seven equal cards goes: the art large
-   * enough to be worth having, the blurb readable, and the rules as chips rather than a list
-   * of small grey lines nobody finished reading.
-   */
-  function drawHero(): void {
-    const mode = modes.find((m) => m.id === selectedMode)!;
-    // The art is drawn 3:2 and the poster frame is wider, so it is sliced to fill rather than
-    // fitted — `meet` left violet bars either side that read as a broken image.
-    heroArtEl.innerHTML = modeArtSvg(mode.id).replace('xMidYMid meet', 'xMidYMid slice');
-    heroBodyEl.innerHTML = `
-      <div class="hero-eyebrow">Now selected</div>
-      <h2 class="hero-name">${mode.name}</h2>
-      <p class="hero-blurb">${mode.blurb}</p>
-      <div class="hero-chips">
-        <span class="chip chip-players">${playerRange(mode)}</span>
-        ${mode.rulesSummary.map((r) => `<span class="chip">${r}</span>`).join('')}
-      </div>`;
+  /** Brings the selected tile into view, centred where there's room for it. */
+  function scrollToSelected(): void {
+    const tile = railEl.querySelector<HTMLElement>('.mode-tile.active');
+    tile?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  /** One tile's worth of scroll, so the arrows move in whole cards rather than pixels. */
+  function railStep(): number {
+    const tile = railEl.querySelector<HTMLElement>('.mode-tile');
+    const gap = parseFloat(getComputedStyle(railEl).columnGap || '12') || 12;
+    return (tile?.offsetWidth ?? 240) + gap;
+  }
+
+  /** Greys out an arrow when there's nothing further that way, and drops the matching fade. */
+  function updateArrows(): void {
+    const max = railEl.scrollWidth - railEl.clientWidth;
+    prevBtn.disabled = railEl.scrollLeft <= 2;
+    nextBtn.disabled = railEl.scrollLeft >= max - 2;
+    railWrap.classList.toggle('at-start', railEl.scrollLeft <= 2);
+    railWrap.classList.toggle('at-end', railEl.scrollLeft >= max - 2);
   }
 
   function updateSoloSub(): void {
@@ -334,11 +355,43 @@ export function renderHomePage(root: HTMLElement): () => void {
       ${done ? '' : `<span class="ticket-reward">+${challenge.xp}</span>`}`;
   }
 
+  prevBtn.addEventListener('click', () => railEl.scrollBy({ left: -railStep(), behavior: 'smooth' }));
+  nextBtn.addEventListener('click', () => railEl.scrollBy({ left: railStep(), behavior: 'smooth' }));
+  railEl.addEventListener('scroll', updateArrows, { passive: true });
+  window.addEventListener('resize', updateArrows);
+
+  // Drag-to-scroll, so the rail behaves like a carousel on a desktop too. The threshold keeps
+  // an ordinary click on a tile from being swallowed as a drag.
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragging = false;
+  railEl.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartScroll = railEl.scrollLeft;
+  });
+  railEl.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    if (Math.abs(dx) < 4) return;
+    railWrap.classList.add('dragging');
+    railEl.scrollLeft = dragStartScroll - dx;
+  });
+  const endDrag = (): void => {
+    dragging = false;
+    railWrap.classList.remove('dragging');
+  };
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
   drawPlayer();
-  drawRack();
-  drawHero();
+  drawModes();
   updateSoloSub();
   drawChallenge();
+  requestAnimationFrame(() => {
+    scrollToSelected();
+    updateArrows();
+  });
 
   // ---- Actions ----
 
