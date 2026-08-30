@@ -1,0 +1,39 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Home", "x": 0, "y": 0, "w": 1180, "h": 900 },
+    { "file": "Table.dc.html", "title": "Playing", "x": 1250, "y": 0, "w": 1180, "h": 760 },
+    { "file": "Locker.dc.html", "title": "The Locker", "x": 0, "y": 990, "w": 1180, "h": 880 },
+    { "file": "Kit.dc.html", "title": "The Kit — pick a font here", "x": 1250, "y": 990, "w": 1180, "h": 940 }
+  ],
+  "annotations": [
+    {
+      "id": "font-first",
+      "x": -340,
+      "y": 990,
+      "w": 300,
+      "text": "START HERE.\n\nThe Kit board has a font picker — four rounded faces on the same sample. Click through them and tell me which one, and I will set the other three boards to match.\n\nEverything is drawn in Fredoka for now."
+    },
+    {
+      "id": "home-note",
+      "x": -340,
+      "y": 0,
+      "w": 300,
+      "text": "The table, cloth, rails, pockets and balls are the game's own values — lifted straight out of tableThemes.ts and ballStyle.ts. Nothing about them is redesigned.\n\nWhat changed is the room around them: oiled wood, brass and leather under the lamp, instead of flat neon.\n\nClick any mode in the rack — the table re-racks and changes cloth."
+    },
+    {
+      "id": "table-note",
+      "x": 2480,
+      "y": 0,
+      "w": 290,
+      "text": "The HUD sits at the edges and the controls are one deck along the bottom, so the table is never competing with a panel.\n\nSpin is an actual cue ball. The aim guide is the dashed line the game already draws."
+    },
+    {
+      "id": "locker-note",
+      "x": 2480,
+      "y": 990,
+      "w": 290,
+      "text": "Every cue is previewed on the cloth it will be seen against, and your kit stays on the left — so equipping something is a change you watch happen rather than go looking for."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -66,7 +66,7 @@ import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
-import { createElevationDial } from '../controller/elevationDial';
+import { createShotTypeControl } from '../controller/shotType';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
@@ -108,7 +108,7 @@ export function renderHostPage(
   let rendererPromise: Promise<TableRenderer> | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
-  let elevation: ReturnType<typeof createElevationDial> | null = null;
+  let cueLift: ReturnType<typeof createShotTypeControl> | null = null;
   /** Listeners registered outside the page root, to be undone when the page is torn down. */
   const cleanups: (() => void)[] = [];
   let lastState: GameState | null = null;
@@ -248,7 +248,7 @@ export function renderHostPage(
       seat: ownedSeat,
       angle: lastAimAngle,
       spin: spinPad?.getValue() ?? ZERO_SPIN,
-      elevation: elevation?.getValue() ?? 0,
+      elevation: cueLift?.getValue() ?? 0,
     });
     renderPreview(lastAimAngle);
   }
@@ -542,11 +542,12 @@ export function renderHostPage(
     root.querySelector<HTMLElement>('#hostSpin')!.appendChild(spinPad.el);
 
     // Raising the cue changes where the ball goes, so the guide has to be recomputed for it
-    // exactly as it is for spin.
-    elevation = createElevationDial(() => {
+    // exactly as it is for spin. It is handed the pad because choosing a curve has to put side
+    // on the ball — a swerve with a centred tip is a shot that quietly does nothing.
+    cueLift = createShotTypeControl(spinPad, () => {
       if (lastAimAngle !== null) renderPreview(lastAimAngle);
     });
-    root.querySelector<HTMLElement>('#hostElevation')!.appendChild(elevation.el);
+    root.querySelector<HTMLElement>('#hostElevation')!.appendChild(cueLift.el);
 
     // Keyboard shortcuts, because setting spin on a desktop by dragging a small circle with the
     // mouse and *then* dragging the table to aim is two hands' worth of work for one shot.
@@ -562,11 +563,11 @@ export function renderHostPage(
       const aiming = e.shiftKey;
       switch (e.key) {
         case 'ArrowUp':
-          if (aiming) elevation?.setValue((elevation?.getValue() ?? 0) + 0.08);
+          if (aiming) cueLift?.setValue((cueLift?.getValue() ?? 0) + 0.08);
           else spinPad?.nudge(0, -step);
           break;
         case 'ArrowDown':
-          if (aiming) elevation?.setValue((elevation?.getValue() ?? 0) - 0.08);
+          if (aiming) cueLift?.setValue((cueLift?.getValue() ?? 0) - 0.08);
           else spinPad?.nudge(0, step);
           break;
         case 'ArrowLeft':
@@ -580,7 +581,7 @@ export function renderHostPage(
         case 'c':
         case 'C':
           spinPad?.reset();
-          elevation?.reset();
+          cueLift?.reset();
           break;
         default:
           return;
@@ -617,8 +618,12 @@ export function renderHostPage(
     });
 
     aimController = new AimController(canvasEl, {
-      onAimChange: (angle, power) => {
+      onAimChange: (angle, rawPower) => {
         if (!ownedSeat || !lastState) return;
+        // A jump needs pace: below the floor the strike has nothing to trade for height and the
+        // ball just rolls. Clamping here rather than warning afterwards means the shot you are
+        // shown is the shot you get.
+        const power = Math.max(rawPower, cueLift?.getMinPower() ?? 0);
         lastAimAngle = angle;
         lastAimPower = power;
         renderer?.setAimVisual(angle, power, true);
@@ -627,31 +632,32 @@ export function renderHostPage(
           seat: ownedSeat,
           angle,
           spin: spinPad?.getValue() ?? ZERO_SPIN,
-          elevation: elevation?.getValue() ?? 0,
+          elevation: cueLift?.getValue() ?? 0,
         });
         renderPreview(angle);
       },
-      onShoot: (angle, power) => {
+      onShoot: (angle, rawPower) => {
         if (!ownedSeat) return;
+        const power = Math.max(rawPower, cueLift?.getMinPower() ?? 0);
         setPowerHud(0);
         socket.emit('takeShot', {
           seat: ownedSeat,
           angle,
           power,
           spin: spinPad?.getValue() ?? ZERO_SPIN,
-          elevation: elevation?.getValue() ?? 0,
+          elevation: cueLift?.getValue() ?? 0,
           call:
             calledBall !== null && calledPocket !== null
               ? { ballId: calledBall, pocketIndex: calledPocket }
               : null,
         });
         shotKind = {
-          elevated: elevation?.getValue() ?? 0,
+          elevated: cueLift?.getValue() ?? 0,
           called: calledBall !== null && calledPocket !== null,
           miscued: false,
         };
         spinPad?.reset();
-        elevation?.reset();
+        cueLift?.reset();
         calledBall = null;
         calledPocket = null;
       },
@@ -1447,10 +1453,19 @@ export function renderHostPage(
       guideMode,
       spinPad?.getValue() ?? ZERO_SPIN,
       lastAimPower,
-      elevation?.getValue() ?? 0,
+      cueLift?.getValue() ?? 0,
       lastState.modifiers ?? undefined
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
+
+    /*
+     * If the first thing this line touches is a ball you are not allowed to hit, you are
+     * snookered on it — and the two shots that get you out are the two nobody ever finds.
+     * Say so, on the control that does it, at the moment it is the answer.
+     */
+    const first = preview.firstContactBallId;
+    const legal = legalTargetBallIds(lastState);
+    cueLift?.setSnookered(first !== null && legal.length > 0 && !legal.includes(first));
 
     // A new target ball means the previous nomination is stale — re-read it from the guide.
     if (preview.firstContactBallId !== calledBall) calledPocket = null;

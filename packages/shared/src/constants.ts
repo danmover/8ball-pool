@@ -128,6 +128,41 @@ export const CLOTH_REBOUND = 0.52;
 export const LANDING_RESTITUTION = 0.32;
 
 /**
+ * ---- Shot types ----
+ *
+ * Elevation used to be a bare angle on a dial, which is the wrong unit for the decision being
+ * made. Nobody wants 37°; they want *round that ball* or *over it*. Worse, the dial let you
+ * pick settings that quietly do nothing — a 55° cue at low power just squirts along the cloth,
+ * and a raised cue with the tip dead centre curves not at all, because a curve is elevation
+ * *times side spin*. Both look like the game ignoring you.
+ *
+ * So the two shots that people actually want get named presets that arrive already working:
+ * enough angle, enough power, and — for the curve — enough side.
+ */
+
+/** Elevation for a swerve. Steep enough to bend the ball, shallow enough to keep it on the cloth. */
+export const CURVE_ELEVATION = 0.6; // ~34°
+
+/** Elevation for a jump. Past the point where the cloth throws the ball back at you. */
+export const JUMP_ELEVATION = 0.95; // ~54°
+
+/**
+ * The least power that actually gets a ball airborne at `JUMP_ELEVATION`.
+ *
+ * Below this the strike has no pace to trade for height and the shot is just a bad roll. The
+ * control raises the power floor to here rather than letting you play a jump that cannot jump.
+ */
+export const JUMP_MIN_POWER = 0.55;
+
+/**
+ * The least side spin that makes a swerve visible.
+ *
+ * A curve is elevation acting on side spin, so choosing "curve" with a centred tip is a
+ * contradiction. Picking the preset moves the tip out this far if it is not already.
+ */
+export const CURVE_MIN_SIDE = 0.5;
+
+/**
  * Cue-ball deflection — "squirt" — at maximum side offset, in radians.
  *
  * The tip has mass, so striking off centre shoves the ball slightly away from the english

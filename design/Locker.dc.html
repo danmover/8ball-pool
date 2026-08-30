@@ -1,0 +1,319 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap">
+  <style>
+    /* The locker as a cue cabinet behind the counter: oiled wood, brass fittings,
+       everything sat on a swatch of the felt it will actually be seen against. */
+    :root {
+      --wood: #4a3220; --wood-lt: #6b4a30; --wood-dk: #2a1c11;
+      --brass: #ffd569; --brass-mid: #e0a92e; --brass-dk: #a06f14; --brass-deep: #6b4708;
+      --cream: #fdf6e3; --cream-dim: rgba(253,246,227,0.6); --cream-faint: rgba(253,246,227,0.33);
+      --ember: #d94b3a; --ember-dk: #8a2418;
+      --mint: #34e2b0; --mint-dk: #12806a;
+      --rail-dk: #7d5533;
+      --r: 16px; --r-s: 11px;
+    }
+    body {
+      margin: 0;
+      font-family: 'Nunito', system-ui, sans-serif;
+      color: var(--cream);
+      background:
+        radial-gradient(ellipse 60% 40% at 50% -4%, rgba(255,213,105,0.15), transparent 62%),
+        radial-gradient(ellipse 92% 74% at 50% 40%, #2a1e14 0%, #16110c 58%, #0a0705 100%);
+    }
+    a { color: var(--brass); }
+    a:hover { color: #ffe9a8; }
+    .d { font-family: 'Fredoka', system-ui, sans-serif; font-weight: 600; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .panel { border-radius: var(--r);
+      background:
+        repeating-linear-gradient(92deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 7px),
+        linear-gradient(180deg, var(--wood-lt) 0%, var(--wood) 48%, var(--wood-dk) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.24), inset 0 0 0 1.5px rgba(0,0,0,0.5),
+                  0 7px 0 rgba(0,0,0,0.4), 0 16px 26px rgba(0,0,0,0.5); }
+
+    .btn { cursor: pointer; border: none; font-family: 'Fredoka', system-ui, sans-serif; font-weight: 600;
+      color: var(--fg, #3d2a08); border-radius: var(--r-s);
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 62%, var(--c3) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.55), 0 0 0 1.5px rgba(0,0,0,0.5),
+                  0 var(--lip,5px) 0 var(--c4), 0 calc(var(--lip,5px) + 7px) 14px rgba(0,0,0,0.45);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.14s ease; }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(calc(var(--lip,5px) - 1px));
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.45), 0 0 0 1.5px rgba(0,0,0,0.5), 0 1px 0 var(--c4), 0 3px 6px rgba(0,0,0,0.4); }
+    .brass { --c1: #ffe9a8; --c2: var(--brass); --c3: var(--brass-mid); --c4: var(--brass-dk); --fg: #3d2a08; }
+    .oak { --c1: #7d5836; --c2: #57391f; --c3: #422a15; --c4: #1f1409; --fg: var(--cream); }
+    .fire { --c1: #f07a63; --c2: var(--ember); --c3: #b53324; --c4: var(--ember-dk); --fg: #fff2ee; }
+    .jade { --c1: #7cf2d3; --c2: var(--mint); --c3: #1aa88a; --c4: var(--mint-dk); --fg: #06342a; }
+
+    /* Shelf tabs — brass drawer pulls along the top of the cabinet. */
+    .tab { cursor: pointer; border: none; font-family: 'Fredoka', sans-serif; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: var(--r-s);
+      color: var(--cream);
+      background: linear-gradient(180deg, rgba(255,231,178,0.1), rgba(0,0,0,0.32));
+      box-shadow: inset 0 1px 0 rgba(255,231,178,0.15), inset 0 0 0 1.5px rgba(0,0,0,0.45);
+      transition: background 0.15s ease, transform 0.1s ease; }
+    .tab:hover { background: linear-gradient(180deg, rgba(255,231,178,0.18), rgba(0,0,0,0.26)); }
+    .tab-on { color: #3d2a08;
+      background: linear-gradient(180deg, #ffe9a8 0%, var(--brass) 60%, var(--brass-mid) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.6), 0 0 0 1.5px rgba(0,0,0,0.5), 0 3px 0 var(--brass-dk); }
+
+    /* An item in the cabinet. Rarity is the ONLY thing that varies in colour. */
+    .item { position: relative; overflow: hidden; cursor: pointer; border: none; font-family: inherit;
+      padding: 9px 9px 11px; border-radius: 13px; display: flex; flex-direction: column; gap: 7px;
+      color: var(--cream);
+      background: linear-gradient(180deg, #5c4028 0%, #342315 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.2), inset 0 0 0 1.5px rgba(0,0,0,0.5),
+                  0 5px 0 rgba(0,0,0,0.42), 0 11px 16px rgba(0,0,0,0.42);
+      transition: transform 0.11s ease, box-shadow 0.11s ease; }
+    .item:hover { transform: translateY(-3px); box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.24), inset 0 0 0 1.5px rgba(0,0,0,0.5), 0 8px 0 rgba(0,0,0,0.42), 0 15px 20px rgba(0,0,0,0.45); }
+    .item:active { transform: translateY(4px); box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.2), 0 1px 0 rgba(0,0,0,0.42), 0 3px 6px rgba(0,0,0,0.4); }
+    .item-on { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.3), 0 0 0 2.5px var(--brass-mid),
+                           0 5px 0 var(--brass-deep), 0 0 26px rgba(255,213,105,0.34), 0 11px 16px rgba(0,0,0,0.42); }
+    /* a small brass plate rather than a shouted ribbon */
+    .item-on::after { content: 'IN USE'; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      font-family: 'Fredoka', sans-serif; font-size: 0.48rem; letter-spacing: 0.14em; padding: 2px 8px;
+      border-radius: 999px; background: linear-gradient(180deg, #ffe9a8, var(--brass-mid)); color: #3d2a08;
+      box-shadow: 0 0 0 1.5px rgba(0,0,0,0.5); }
+    .locked { opacity: 0.38; }
+
+    .slot { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px;
+      background: rgba(0,0,0,0.3); box-shadow: inset 0 0 0 1.5px rgba(255,231,178,0.09); }
+    .slot-live { background: linear-gradient(180deg, rgba(255,213,105,0.18), rgba(255,213,105,0.05));
+      box-shadow: inset 0 0 0 1.5px var(--brass-mid); }
+  </style>
+</helmet>
+
+<div style="width: 1180px; padding: 26px 30px 32px; display: flex; flex-direction: column; gap: 16px">
+
+  <!-- ════ counter ════ -->
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px">
+    <div style="display: flex; align-items: center; gap: 15px">
+      <button class="btn oak" onClick="{{ noop }}" style="--lip: 4px; width: 44px; height: 44px; display: grid; place-items: center">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fdf6e3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>
+      </button>
+      <div>
+        <div class="d" style="font-size: 1.85rem; line-height: 1; font-weight: 700; background: linear-gradient(180deg, #fff4cf 0%, var(--brass) 36%, var(--brass-mid) 62%, #ffe9a8 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 0 rgba(90,58,6,0.9)) drop-shadow(0 4px 8px rgba(0,0,0,0.5))">The Locker</div>
+        <div style="font-size: 0.8rem; font-weight: 700; color: var(--cream-dim); margin-top: 5px">81 of 131 collected · two sets finished</div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 9px; padding: 11px 16px; border-radius: var(--r-s); background: linear-gradient(180deg, #100c08, #060403); box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 0 0 2px var(--brass-mid), 0 0 0 3.5px rgba(0,0,0,0.55)">
+        <span style="width: 19px; height: 19px; border-radius: 50%; background: radial-gradient(circle at 32% 26%, #fff4cf, var(--brass) 42%, var(--brass-mid) 78%); box-shadow: inset 0 0 0 1.5px rgba(107,71,8,0.7)"></span>
+        <span class="d num" style="font-size: 1.15rem; color: var(--brass)">2,480</span>
+      </div>
+      <button class="btn fire" onClick="{{ noop }}" style="--lip: 5px; padding: 13px 22px; font-size: 0.94rem">Open a Case</button>
+    </div>
+  </div>
+
+  <!-- ════ shelf tabs ════ -->
+  <div style="display: flex; gap: 7px; flex-wrap: wrap">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+      <button class="tab {{ t.on }}" onClick="{{ t.pick }}">
+        <span style="font-size: 0.9rem">{{ t.name }}</span>
+        <span class="num" style="font-size: 0.66rem; font-weight: 800; opacity: 0.6">{{ t.count }}</span>
+      </button>
+    </sc-for>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 292px 1fr; gap: 16px; align-items: start">
+
+    <!-- ════ YOUR KIT — stays on screen, so a change is something you watch happen ════ -->
+    <div class="panel" style="padding: 16px 15px 14px">
+      <div class="d" style="font-size: 0.6rem; letter-spacing: 0.2em; color: var(--brass); margin-bottom: 11px">YOUR KIT</div>
+
+      <!-- the cue on its felt, big -->
+      <div style="height: 120px; border-radius: 12px; position: relative; overflow: hidden; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5), inset 0 0 26px rgba(0,0,0,0.35); background: {{ kit.felt }}">
+        <div style="position: absolute; inset: 0; background: radial-gradient(ellipse 62% 56% at 50% 36%, rgba(255,255,255,0.16), transparent 74%)"></div>
+        <div style="position: absolute; left: 7%; right: 7%; top: 50%; height: 13px; margin-top: -6.5px; transform: rotate(-11deg); border-radius: 7px; background: {{ kit.cue }}; box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.35), 0 0 0 1.5px rgba(0,0,0,0.55), 0 5px 9px rgba(0,0,0,0.5)"></div>
+      </div>
+
+      <div style="text-align: center; margin: 12px 0 2px">
+        <div class="d" style="font-size: 1.25rem; line-height: 1.05">{{ kit.name }}</div>
+        <div class="d" style="font-size: 0.6rem; letter-spacing: 0.16em; margin-top: 4px; color: {{ kit.rarityFg }}">{{ kit.rarity }}</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 12px">
+        <sc-for list="{{ slots }}" as="s" hint-placeholder-count="6">
+          <div class="slot {{ s.live }}">
+            <span style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; background: {{ s.swatch }}; box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.28), 0 0 0 1.5px rgba(0,0,0,0.5)"></span>
+            <span style="flex: 1 1 auto; min-width: 0">
+              <span class="d" style="display: block; font-size: 0.5rem; letter-spacing: 0.14em; color: var(--cream-faint)">{{ s.slot }}</span>
+              <span class="d" style="display: block; font-size: 0.84rem; line-height: 1.15">{{ s.name }}</span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+
+      <button class="btn jade" onClick="{{ noop }}" style="--lip: 4px; width: 100%; margin-top: 13px; padding: 10px; font-size: 0.9rem">Save as preset</button>
+    </div>
+
+    <!-- ════ THE CABINET ════ -->
+    <div style="display: flex; flex-direction: column; gap: 12px">
+
+      <!-- sets, as brass-cornered cards -->
+      <div style="display: flex; gap: 8px">
+        <sc-for list="{{ sets }}" as="s" hint-placeholder-count="4">
+          <div style="flex: 1 1 0; min-width: 0; padding: 10px 12px; border-radius: 11px; color: {{ s.fg }}; background: {{ s.bg }}; box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.24), inset 0 0 0 1.5px rgba(0,0,0,0.45), 0 4px 0 {{ s.sh }}">
+            <div class="d" style="font-size: 0.82rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ s.name }}</div>
+            <div style="display: flex; gap: 3px; margin-top: 7px">
+              <sc-for list="{{ s.pips }}" as="p" hint-placeholder-count="6">
+                <span style="flex: 1 1 0; height: 6px; border-radius: 3px; background: {{ p }}; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.4)"></span>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- filters -->
+      <div style="display: flex; gap: 7px; align-items: center; flex-wrap: wrap">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+          <button class="tab {{ f.on }}" onClick="{{ f.pick }}" style="padding: 6px 14px; border-radius: 999px; font-size: 0.8rem">{{ f.name }}</button>
+        </sc-for>
+        <span class="d num" style="margin-left: auto; font-size: 0.76rem; color: var(--cream-faint)">{{ shown }}</span>
+      </div>
+
+      <!-- the grid -->
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{ items }}" as="i" hint-placeholder-count="15">
+          <button class="item {{ i.cls }}" onClick="{{ i.pick }}">
+            <span style="display: block; height: 78px; border-radius: 9px; position: relative; overflow: hidden; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.5), inset 0 0 18px rgba(0,0,0,0.32); background: {{ i.felt }}">
+              <span style="position: absolute; inset: 0; background: radial-gradient(ellipse 66% 58% at 50% 34%, rgba(255,255,255,0.15), transparent 74%)"></span>
+              <span style="position: absolute; left: 8%; right: 8%; top: 50%; height: 10px; margin-top: -5px; transform: rotate(-11deg); border-radius: 5px; background: {{ i.cue }}; box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 0 0 1.5px rgba(0,0,0,0.55), 0 3px 6px rgba(0,0,0,0.45)"></span>
+            </span>
+            <span style="display: block; text-align: center">
+              <span class="d" style="display: block; font-size: 0.84rem; line-height: 1.12">{{ i.name }}</span>
+              <span class="d" style="display: block; font-size: 0.52rem; letter-spacing: 0.14em; margin-top: 3px; color: {{ i.rarityFg }}">{{ i.rarity }}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":880}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'Cues', equipped: 'Nightshade', filter: 'All' };
+  }
+
+  renderVals() {
+    const CR = '#fdf6e3';
+    const DK = '#3d2a08';
+
+    /* Rarity is the only colour that carries meaning here. Everything else is wood. */
+    const RARITY = {
+      Common: 'rgba(253,246,227,0.5)',
+      Rare: '#7ec8ff',
+      Epic: '#c99bf0',
+      Mystic: '#ffd569'
+    };
+
+    /* Cue previews sit on real cloth colours, since that is where you will see them. */
+    const felt = (a, b) => 'radial-gradient(ellipse 68% 62% at 50% 38%,' + a + ' 0%,' + b + ' 100%)';
+    const GREEN = felt('#5fd88a', '#28a85c');
+    const BLUE = felt('#4fa8e8', '#1a5a94');
+    const RED = felt('#e26070', '#9e2436');
+
+    const DEFS = [
+      { name: 'House Cue', rarity: 'Common', felt: GREEN, cue: 'linear-gradient(90deg,#3d2a15,#c99a63 62%,#f0dcb4 90%,#2a6ee0)' },
+      { name: 'Brass Tack', rarity: 'Common', felt: GREEN, cue: 'linear-gradient(90deg,#2e2416,#a08a52 60%,#e8d9a8 90%,#17a85a)' },
+      { name: 'Snooker Ash', rarity: 'Common', felt: GREEN, cue: 'linear-gradient(90deg,#332e22,#b5ad8e 62%,#e8e4d0 90%,#9e3226)' },
+      { name: 'Cobalt', rarity: 'Rare', felt: BLUE, cue: 'linear-gradient(90deg,#13233f,#3f6fb8 60%,#8fc0f0 90%,#f6f2e6)' },
+      { name: 'Ember', rarity: 'Rare', felt: RED, cue: 'linear-gradient(90deg,#3d1a10,#c05a35 60%,#f0b48a 90%,#ffcf2e)' },
+      { name: 'Crimson Run', rarity: 'Rare', felt: RED, cue: 'linear-gradient(90deg,#3a0f0f,#b03a3a 60%,#f0a0a0 90%,#111111)' },
+      { name: 'Sandstorm', rarity: 'Rare', felt: GREEN, cue: 'linear-gradient(90deg,#4a3418,#c9a05c 60%,#f0dcae 90%,#ff8a1f)' },
+      { name: 'Nightshade', rarity: 'Epic', felt: BLUE, cue: 'linear-gradient(90deg,#251a3d,#6b4a9e 58%,#c0a0e8 88%,#8b4bd8)' },
+      { name: 'Frostbite', rarity: 'Epic', felt: BLUE, cue: 'linear-gradient(90deg,#12333d,#4a94a8 58%,#b0e4ef 88%,#f6f2e6)' },
+      { name: 'Void Line', rarity: 'Epic', felt: GREEN, cue: 'linear-gradient(90deg,#101018,#3a3a4a 58%,#9a9ab8 88%,#111111)' },
+      { name: 'Hot Streak', rarity: 'Epic', felt: RED, cue: 'linear-gradient(90deg,#3d1024,#c4407f 58%,#f0a0c4 88%,#ffcf2e)' },
+      { name: 'Gilded', rarity: 'Mystic', felt: GREEN, cue: 'linear-gradient(90deg,#3d2a08,#e0a92e 55%,#fff4cf 86%,#ffd569)' },
+      { name: 'Aurora', rarity: 'Mystic', felt: BLUE, cue: 'linear-gradient(90deg,#0f3038,#2f9e8a 55%,#a0f0dc 86%,#34e2b0)' },
+      { name: 'Last Orders', rarity: 'Mystic', felt: GREEN, cue: 'linear-gradient(90deg,#2e1608,#a05a26 58%,#f0c090 88%,#d94b3a)', locked: true },
+      { name: 'Eclipse', rarity: 'Mystic', felt: RED, cue: 'linear-gradient(90deg,#0d0a14,#3a3050 58%,#8878b0 88%,#ffd569)', locked: true }
+    ];
+
+    const FILTERS = ['All', 'Common', 'Rare', 'Epic', 'Mystic'];
+    const filters = FILTERS.map((f) => ({
+      name: f,
+      on: this.state.filter === f ? 'tab-on' : '',
+      pick: () => this.setState({ filter: f })
+    }));
+
+    const visible = DEFS.filter((d) => this.state.filter === 'All' || d.rarity === this.state.filter);
+
+    const items = visible.map((d) => ({
+      name: d.name,
+      rarity: d.rarity.toUpperCase(),
+      rarityFg: RARITY[d.rarity],
+      felt: d.felt,
+      cue: d.cue,
+      cls: (this.state.equipped === d.name ? 'item-on ' : '') + (d.locked ? 'locked' : ''),
+      pick: () => { if (!d.locked) this.setState({ equipped: d.name }); }
+    }));
+
+    const eq = DEFS.find((d) => d.name === this.state.equipped) || DEFS[0];
+
+    const tabs = [
+      { name: 'Cues', count: '13/24' }, { name: 'Tables', count: '7/12' },
+      { name: 'Ball Sets', count: '9/14' }, { name: 'Trails', count: '11/19' },
+      { name: 'Banners', count: '24/38' }, { name: 'Chalk', count: '12/24' }
+    ].map((t) => ({
+      name: t.name, count: t.count,
+      on: this.state.tab === t.name ? 'tab-on' : '',
+      pick: () => this.setState({ tab: t.name })
+    }));
+
+    const pips = (have, total, colour) => {
+      const out = [];
+      for (let i = 0; i < total; i++) out.push(i < have ? colour : 'rgba(0,0,0,0.45)');
+      return out;
+    };
+    const oak = 'linear-gradient(180deg, #5c4028, #342315)';
+
+    return {
+      tabs,
+      items,
+      filters,
+      shown: visible.length + ' of ' + DEFS.length,
+      kit: {
+        name: eq.name,
+        rarity: eq.rarity.toUpperCase(),
+        rarityFg: RARITY[eq.rarity],
+        felt: eq.felt,
+        cue: eq.cue
+      },
+      slots: [
+        { slot: 'CUE', name: eq.name, swatch: eq.cue, live: 'slot-live' },
+        { slot: 'TABLE', name: 'Midnight Blue', swatch: 'linear-gradient(160deg,#4fa8e8,#1a5a94)', live: '' },
+        { slot: 'BALL SET', name: 'House Set', swatch: 'linear-gradient(160deg,#ffcf2e,#f03a2e)', live: '' },
+        { slot: 'TRAIL', name: 'Ember Dust', swatch: 'linear-gradient(160deg,#ff8a1f,#d94b3a)', live: '' },
+        { slot: 'BANNER', name: 'Laurel Plate', swatch: 'linear-gradient(160deg,#ffe9a8,#a06f14)', live: '' },
+        { slot: 'CHALK', name: 'House Blue', swatch: 'linear-gradient(160deg,#4f8fe0,#1a4a94)', live: '' }
+      ],
+      sets: [
+        { name: 'Neon Nights', bg: oak, fg: CR, sh: 'rgba(0,0,0,0.45)', pips: pips(5, 6, 'linear-gradient(180deg,#f07a63,#b53324)') },
+        { name: 'House Kit ✓', bg: 'linear-gradient(180deg,#ffe9a8,#e0a92e)', fg: DK, sh: 'var(--brass-deep)', pips: pips(6, 6, 'linear-gradient(180deg,#fff4cf,#a06f14)') },
+        { name: 'Deep Freeze', bg: oak, fg: CR, sh: 'rgba(0,0,0,0.45)', pips: pips(2, 6, 'linear-gradient(180deg,#7cf2d3,#1aa88a)') },
+        { name: 'Mystic', bg: oak, fg: CR, sh: 'rgba(0,0,0,0.45)', pips: pips(1, 7, 'linear-gradient(180deg,#ffe9a8,#a06f14)') }
+      ],
+      noop: () => {}
+    };
+  }
+}
+</script>
+</body>
+</html>

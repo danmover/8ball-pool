@@ -1,0 +1,268 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap">
+  <style>
+    /* The play screen. The table and balls are the shipped renderer's, untouched —
+       only the furniture around them is new, and it stays at the edges. */
+    :root {
+      --cloth: #5fd88a; --cloth-dk: #28a85c; --cushion: #0d4d29;
+      --rail: #c99a63; --rail-dk: #7d5533;
+      --pocket: #4a3524; --pocket-dk: #140d07; --diamond: #fdf6e3;
+
+      --wood: #4a3220; --wood-lt: #6b4a30; --wood-dk: #2a1c11;
+      --brass: #ffd569; --brass-mid: #e0a92e; --brass-dk: #a06f14; --brass-deep: #6b4708;
+      --cream: #fdf6e3; --cream-dim: rgba(253,246,227,0.6); --cream-faint: rgba(253,246,227,0.33);
+      --ember: #d94b3a; --ember-dk: #8a2418;
+      --mint: #34e2b0;
+      --r: 16px; --r-s: 11px;
+    }
+    body {
+      margin: 0;
+      font-family: 'Nunito', system-ui, sans-serif;
+      color: var(--cream);
+      background: radial-gradient(ellipse 90% 72% at 50% 36%, #2a1e14 0%, #16110c 58%, #080604 100%);
+    }
+    a { color: var(--brass); }
+    a:hover { color: #ffe9a8; }
+    .d { font-family: 'Fredoka', system-ui, sans-serif; font-weight: 600; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .ball { position: relative; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+      box-shadow: inset 0 0 0 var(--rim, 2px) rgba(12,10,20,0.72), 0 var(--lift,3px) var(--blur,6px) rgba(0,0,0,0.5); }
+    .ball::before { content: ''; position: absolute; left: 20%; top: 15%; width: 27%; height: 20%;
+      border-radius: 50%; background: rgba(255,255,255,0.9); transform: rotate(-40deg); }
+    .ball::after { content: ''; position: absolute; right: 15%; bottom: 17%; width: 15%; height: 9%;
+      border-radius: 50%; background: rgba(255,255,255,0.85); transform: rotate(-40deg); }
+    .pip { position: relative; z-index: 1; display: grid; place-items: center; width: 48%; height: 48%;
+      border-radius: 50%; background: #fbf8ef; color: #14141a; font-weight: 900;
+      box-shadow: inset 0 0 0 1px rgba(12,10,20,0.4), inset -1px -2px 3px rgba(0,0,0,0.18); }
+
+    .panel { border-radius: var(--r);
+      background:
+        repeating-linear-gradient(92deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 7px),
+        linear-gradient(180deg, var(--wood-lt) 0%, var(--wood) 48%, var(--wood-dk) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.24), inset 0 0 0 1.5px rgba(0,0,0,0.5),
+                  0 7px 0 rgba(0,0,0,0.4), 0 16px 26px rgba(0,0,0,0.5); }
+
+    .btn { cursor: pointer; border: none; font-family: 'Fredoka', system-ui, sans-serif; font-weight: 600;
+      color: var(--fg, #3d2a08); border-radius: var(--r-s);
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 62%, var(--c3) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.55), 0 0 0 1.5px rgba(0,0,0,0.5),
+                  0 var(--lip,5px) 0 var(--c4), 0 calc(var(--lip,5px) + 7px) 14px rgba(0,0,0,0.45);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.14s ease; }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(calc(var(--lip,5px) - 1px));
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.45), 0 0 0 1.5px rgba(0,0,0,0.5), 0 1px 0 var(--c4), 0 3px 6px rgba(0,0,0,0.4); }
+    .brass { --c1: #ffe9a8; --c2: var(--brass); --c3: var(--brass-mid); --c4: var(--brass-dk); --fg: #3d2a08; }
+    .oak { --c1: #7d5836; --c2: #57391f; --c3: #422a15; --c4: #1f1409; --fg: var(--cream); }
+  </style>
+</helmet>
+
+<div style="width: 1180px; height: 760px; position: relative; overflow: hidden">
+
+  <!-- the lamp -->
+  <div style="position: absolute; left: 50%; top: -210px; width: 860px; height: 570px; margin-left: -430px; background: radial-gradient(ellipse 50% 50% at 50% 100%, rgba(255,213,105,0.17), transparent 72%)"></div>
+
+  <!-- ══════ THE TABLE — Classic Green, exactly as it renders ══════ -->
+  <div style="position: absolute; left: 50%; top: 51%; width: 780px; height: 390px; margin: -195px 0 0 -390px; border-radius: 12px;
+              background: radial-gradient(ellipse 64% 60% at 50% 40%, var(--cloth) 0%, var(--cloth-dk) 100%);
+              box-shadow:
+                0 0 0 14px var(--cushion),
+                0 0 0 44px var(--rail),
+                0 0 0 47px rgba(0,0,0,0.55),
+                inset 0 0 44px rgba(0,0,0,0.26),
+                0 34px 0 var(--rail-dk),
+                0 54px 60px rgba(0,0,0,0.6)">
+
+    <!-- cushion nose, lit -->
+    <div style="position: absolute; inset: -14px; border-radius: 18px; box-shadow: inset 0 0 0 3px rgba(255,255,255,0.15); pointer-events: none"></div>
+    <!-- baulk line and spot -->
+    <div style="position: absolute; left: 25%; top: 0; bottom: 0; width: 2px; background: rgba(253,246,227,0.15)"></div>
+    <div style="position: absolute; left: 75%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: rgba(253,246,227,0.28)"></div>
+
+    <!-- pockets -->
+    <sc-for list="{{ pockets }}" as="p" hint-placeholder-count="6">
+      <span style="position: absolute; width: {{ p.w }}; height: {{ p.w }}; border-radius: 50%; background: radial-gradient(circle at 50% 32%, var(--pocket-dk) 44%, var(--pocket) 100%); box-shadow: inset 0 4px 9px rgba(0,0,0,0.92), 0 0 0 4px var(--pocket); left: {{ p.x }}; top: {{ p.y }}"></span>
+    </sc-for>
+
+    <!-- diamond sights on the rail -->
+    <sc-for list="{{ diamonds }}" as="d" hint-placeholder-count="8">
+      <span style="position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--diamond); opacity: 0.8; box-shadow: 0 1px 2px rgba(0,0,0,0.5); left: {{ d.x }}; top: {{ d.y }}"></span>
+    </sc-for>
+
+    <!-- balls on the cloth -->
+    <sc-for list="{{ balls }}" as="b" hint-placeholder-count="8">
+      <span class="ball" style="--rim: 1.6px; --lift: 3px; --blur: 6px; width: 33px; height: 33px; position: absolute; left: {{ b.x }}; top: {{ b.y }}; background: {{ b.bg }}">
+        <span class="pip" style="font-size: 0.68rem">{{ b.n }}</span>
+      </span>
+    </sc-for>
+
+    <!-- the aim guide: the game's own dashed line, ghost ball and cue -->
+    <div style="position: absolute; left: 216px; top: 268px; width: 254px; height: 3px; transform-origin: 0 50%; transform: rotate(-28deg); background: repeating-linear-gradient(90deg, rgba(253,246,227,0.92) 0 11px, rgba(253,246,227,0) 11px 21px)"></div>
+    <span style="position: absolute; left: 434px; top: 132px; width: 33px; height: 33px; border-radius: 50%; background: rgba(253,246,227,0.14); box-shadow: inset 0 0 0 2.5px rgba(253,246,227,0.8)"></span>
+    <span class="ball" style="--rim: 1.6px; --lift: 3px; --blur: 6px; width: 33px; height: 33px; position: absolute; left: 190px; top: 254px; background: {{ cueBall }}"></span>
+    <div style="position: absolute; left: -46px; top: 386px; width: 268px; height: 10px; transform-origin: 100% 50%; transform: rotate(-28deg); border-radius: 5px; background: linear-gradient(90deg, #2a1c11 0%, #6b4a2a 16%, #c99a63 60%, #f0dcb4 88%, #2a6ee0 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 1px rgba(0,0,0,0.5), 0 5px 9px rgba(0,0,0,0.5)"></div>
+  </div>
+
+  <!-- ══════ SCOREBOARD — two plates, edges of the screen ══════ -->
+  <div style="position: absolute; left: 22px; top: 20px; width: 272px">
+    <div class="panel" style="padding: 14px 15px 12px; box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.26), inset 0 0 0 1.5px rgba(0,0,0,0.5), 0 0 0 2.5px var(--brass-mid), 0 7px 0 rgba(0,0,0,0.4), 0 0 34px rgba(255,213,105,0.28), 0 16px 26px rgba(0,0,0,0.5)">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div style="width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(160deg, #3f8f5e, #14522f); box-shadow: inset 0 2px 0 rgba(255,255,255,0.24), 0 0 0 1.5px rgba(0,0,0,0.55); font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 1.45rem">D</div>
+        <div style="flex: 1 1 auto; min-width: 0">
+          <div class="d" style="font-size: 1.1rem; line-height: 1.05">Daniel</div>
+          <div class="d" style="font-size: 0.68rem; letter-spacing: 0.1em; color: var(--brass); margin-top: 1px">SOLIDS · YOUR SHOT</div>
+        </div>
+        <div class="d num" style="font-size: 2rem; line-height: 1; color: var(--brass); text-shadow: 0 2px 0 rgba(0,0,0,0.6)">2</div>
+      </div>
+      <div style="display: flex; gap: 5px; margin-top: 11px">
+        <sc-for list="{{ mine }}" as="b" hint-placeholder-count="7">
+          <span class="ball" style="--rim: 1.2px; --lift: 1px; --blur: 3px; width: 25px; height: 25px; opacity: {{ b.o }}; background: {{ b.bg }}">
+            <span class="pip" style="font-size: 0.52rem">{{ b.n }}</span>
+          </span>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; right: 22px; top: 20px; width: 272px">
+    <div class="panel" style="padding: 14px 15px 12px; opacity: 0.86">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div class="d num" style="font-size: 2rem; line-height: 1; color: var(--cream-dim); text-shadow: 0 2px 0 rgba(0,0,0,0.6)">1</div>
+        <div style="flex: 1 1 auto; min-width: 0; text-align: right">
+          <div class="d" style="font-size: 1.1rem; line-height: 1.05">Ray</div>
+          <div class="d" style="font-size: 0.68rem; letter-spacing: 0.1em; color: var(--cream-faint); margin-top: 1px">STRIPES</div>
+        </div>
+        <div style="width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(160deg, #c95a48, #7a1f14); box-shadow: inset 0 2px 0 rgba(255,255,255,0.2), 0 0 0 1.5px rgba(0,0,0,0.55); font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 1.45rem">R</div>
+      </div>
+      <div style="display: flex; gap: 5px; margin-top: 11px; justify-content: flex-end">
+        <sc-for list="{{ theirs }}" as="b" hint-placeholder-count="7">
+          <span class="ball" style="--rim: 1.2px; --lift: 1px; --blur: 3px; width: 25px; height: 25px; opacity: {{ b.o }}; background: {{ b.bg }}">
+            <span class="pip" style="font-size: 0.52rem">{{ b.n }}</span>
+          </span>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ frame + clock, on the brass plate over the table ══════ -->
+  <div style="position: absolute; left: 50%; top: 18px; margin-left: -96px; width: 192px; text-align: center">
+    <div style="padding: 8px 12px 9px; border-radius: var(--r-s); background: linear-gradient(180deg, #100c08, #060403); box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 0 0 2.5px var(--brass-mid), 0 0 0 4px rgba(0,0,0,0.55), 0 6px 0 rgba(0,0,0,0.4)">
+      <div class="d" style="font-size: 0.56rem; letter-spacing: 0.2em; color: var(--cream-faint)">FRAME 3 OF 5</div>
+      <div class="d num" style="font-size: 1.5rem; line-height: 1.12; color: var(--brass); text-shadow: 0 0 16px rgba(255,213,105,0.75)">0:24</div>
+    </div>
+  </div>
+
+  <!-- ══════ callout — chalked on the board, only when it earned it ══════ -->
+  <div style="position: absolute; left: 50%; top: 112px; margin-left: -122px; width: 244px; transform: rotate(-1.6deg)">
+    <div class="d" style="text-align: center; padding: 9px 14px; border-radius: var(--r-s); font-size: 1.1rem; color: var(--cream); background: linear-gradient(180deg, #23342c, #16211c); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.1), 0 0 0 3px var(--rail-dk), 0 0 0 4.5px rgba(0,0,0,0.5), 0 6px 0 rgba(0,0,0,0.42)">Three on the trot!</div>
+  </div>
+
+  <!-- ══════ CONTROL DECK ══════ -->
+  <div class="panel" style="position: absolute; left: 50%; bottom: 16px; margin-left: -444px; width: 888px; display: flex; align-items: flex-end; gap: 14px; padding: 13px 17px 15px">
+
+    <div style="flex: 0 0 auto; text-align: center">
+      <div class="d" style="font-size: 0.52rem; letter-spacing: 0.18em; color: var(--cream-faint); margin-bottom: 6px">SPIN</div>
+      <div class="ball" style="--rim: 2px; --lift: 4px; --blur: 8px; width: 70px; height: 70px; background: {{ cueBall }}">
+        <span style="position: absolute; left: 50%; top: 50%; width: 74%; height: 1.5px; margin: -0.75px 0 0 -37%; background: rgba(20,10,20,0.16)"></span>
+        <span style="position: absolute; left: 50%; top: 50%; width: 1.5px; height: 74%; margin: -37% 0 0 -0.75px; background: rgba(20,10,20,0.16)"></span>
+        <span style="position: absolute; z-index: 2; left: 41px; top: 18px; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(180deg, #f07a63, #b53324); box-shadow: 0 0 0 2px rgba(0,0,0,0.5), inset 0 1.5px 0 rgba(255,255,255,0.4)"></span>
+      </div>
+    </div>
+
+    <div style="flex: 0 0 auto; text-align: center">
+      <div class="d" style="font-size: 0.52rem; letter-spacing: 0.18em; color: var(--cream-faint); margin-bottom: 6px">MASSÉ</div>
+      <div style="width: 58px; height: 70px; border-radius: var(--r-s); background: linear-gradient(180deg, #100c08, #060403); box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 0 0 1.5px rgba(0,0,0,0.6), inset 0 0 0 1.5px rgba(255,231,178,0.1); display: grid; place-items: center">
+        <svg width="40" height="50" viewBox="0 0 42 52" fill="none">
+          <path d="M6 46 L31 8" stroke="#c99a63" stroke-width="5" stroke-linecap="round"/>
+          <path d="M6 46 L31 8" stroke="rgba(255,255,255,0.28)" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="32" cy="6" r="3.6" fill="#2a6ee0"/>
+          <path d="M6 46 L36 46" stroke="#fdf6e3" stroke-width="1.6" stroke-dasharray="3 3" opacity="0.4"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- power: the game's own tiers, on a brass gauge -->
+    <div style="flex: 1 1 auto; min-width: 0">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+        <span class="d" style="font-size: 0.52rem; letter-spacing: 0.18em; color: var(--cream-faint)">POWER</span>
+        <span class="d" style="font-size: 0.86rem; color: var(--brass)">{{ powerLabel }}</span>
+      </div>
+      <div style="height: 26px; border-radius: 999px; padding: 3px; background: linear-gradient(180deg, #0c0906, #050302); box-shadow: inset 0 3px 7px rgba(0,0,0,0.9), 0 0 0 1.5px rgba(0,0,0,0.6)">
+        <div style="width: {{ powerPct }}; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3fbf6a 0%, #ffd569 58%, #d94b3a 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 0 16px rgba(255,213,105,0.42)"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.62rem; font-weight: 800; color: var(--cream-faint)">
+        <span>TAP</span><span>FIRM</span><span>BREAK</span>
+      </div>
+    </div>
+
+    <button class="btn brass" onClick="{{ noop }}" style="--lip: 7px; flex: 0 0 auto; padding: 17px 34px; border-radius: var(--r); font-size: 1.3rem; font-weight: 700">Shoot</button>
+
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px">
+      <button class="btn oak" onClick="{{ noop }}" style="--lip: 3px; width: 46px; height: 31px; font-size: 0.7rem">↺ 2</button>
+      <button class="btn oak" onClick="{{ noop }}" style="--lip: 3px; width: 46px; height: 31px; font-size: 0.7rem">Chat</button>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":760}}'>
+class Component extends DCLogic {
+  ballBg(hex, stripe) {
+    const base = stripe
+      ? 'linear-gradient(180deg, #fbf8ef 0 21%, ' + hex + ' 21% 79%, #fbf8ef 79% 100%)'
+      : hex;
+    return (
+      'radial-gradient(circle at 68% 72%, rgba(20,10,30,0.4) 0%, rgba(20,10,30,0.1) 42%, rgba(20,10,30,0) 66%),' +
+      'radial-gradient(circle at 30% 24%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 34%, rgba(255,255,255,0) 60%),' +
+      base
+    );
+  }
+
+  ball(id) {
+    const SOLID = { 1: '#ffcf2e', 2: '#2a6ee0', 3: '#f03a2e', 4: '#8b4bd8', 5: '#ff8a1f', 6: '#17a85a', 7: '#9e3226' };
+    if (id === 0) return { n: '', bg: this.ballBg('#f6f2e6', false) };
+    if (id === 8) return { n: '8', bg: this.ballBg('#111111', false) };
+    if (id <= 7) return { n: String(id), bg: this.ballBg(SOLID[id], false) };
+    return { n: String(id), bg: this.ballBg(SOLID[id - 8], true) };
+  }
+
+  renderVals() {
+    const at = (id, x, y) => { const b = this.ball(id); return { n: b.n, bg: b.bg, x: x + 'px', y: y + 'px' }; };
+    const chip = (id, potted) => { const b = this.ball(id); return { n: b.n, bg: b.bg, o: potted ? '0.28' : '1' }; };
+
+    return {
+      pockets: [
+        { x: '-15px', y: '-15px', w: '34px' }, { x: '761px', y: '-15px', w: '34px' },
+        { x: '-15px', y: '371px', w: '34px' }, { x: '761px', y: '371px', w: '34px' },
+        { x: '374px', y: '-19px', w: '32px' }, { x: '374px', y: '377px', w: '32px' }
+      ],
+      diamonds: [
+        { x: '190px', y: '-27px' }, { x: '390px', y: '-27px' }, { x: '590px', y: '-27px' },
+        { x: '190px', y: '410px' }, { x: '390px', y: '410px' }, { x: '590px', y: '410px' },
+        { x: '-27px', y: '191px' }, { x: '800px', y: '191px' }
+      ],
+      balls: [
+        at(11, 468, 92), at(3, 536, 204), at(14, 452, 296), at(2, 604, 122),
+        at(9, 386, 336), at(15, 646, 292), at(8, 578, 236), at(5, 314, 126)
+      ],
+      cueBall: this.ballBg('#f6f2e6', false),
+      mine: [chip(1, true), chip(2, true), chip(3, false), chip(4, false), chip(5, false), chip(6, false), chip(7, false)],
+      theirs: [chip(9, true), chip(10, false), chip(11, false), chip(12, false), chip(13, false), chip(14, false), chip(15, false)],
+      powerLabel: 'Firm',
+      powerPct: '64%',
+      noop: () => {}
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -327,6 +327,14 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
 export interface TrajectorySegment {
   from: Vec2;
   to: Vec2;
+  /**
+   * True while the ball is off the cloth.
+   *
+   * A jump shot is the one case where the guide's line passes *through* a ball rather than
+   * stopping at it, and a dashed line that does that without explanation looks like a bug.
+   * Drawn differently, it reads as the hop it is.
+   */
+  airborne?: boolean;
 }
 
 export interface TrajectoryPreview {
@@ -341,6 +349,13 @@ export interface TrajectoryPreview {
   cueAfterPath: TrajectorySegment[];
   /** Resting place of the cue ball, drawn as a ghost. */
   cueRestPos: Vec2 | null;
+  /**
+   * Where a jumped cue ball comes back down, when it left the cloth at all.
+   *
+   * The single most useful thing to know about a jump before you play it: whether the ball
+   * lands past the obstruction or on top of it.
+   */
+  landingPos?: Vec2 | null;
   /**
    * The line you pointed at, when side spin has deflected the real one off it.
    *

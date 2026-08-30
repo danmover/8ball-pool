@@ -217,6 +217,103 @@ function nearPocket(point: Vec2): boolean {
 }
 
 /**
+ * Above this the cue ball no longer travels in a straight line, so the ray cast below stops
+ * being a description of the shot and starts being a lie about it.
+ */
+const CURVED_ELEVATION = 0.12; // ~7°
+
+interface CueTrace {
+  /** Sampled positions, with whether the ball was off the cloth at each. */
+  points: { pos: Vec2; airborne: boolean }[];
+  /** Where the cue ball first touched another ball, and which one. */
+  contact: { pos: Vec2; ballId: number } | null;
+  /** Where a jumped ball first came back down. */
+  landing: Vec2 | null;
+}
+
+/**
+ * The cue ball's path for a shot that will not travel in a straight line.
+ *
+ * The ordinary guide ray-casts, which is exact and cheap for a level cue and completely wrong
+ * for a raised one: a swerve bends away from the line, and a jump passes clean *over* the ball
+ * the ray stops at. Drawing a line that ends at a ball the shot is about to fly above is worse
+ * than drawing nothing, because it is confidently wrong.
+ *
+ * So for an elevated cue the guide does what the rest of this file already does after contact —
+ * plays the shot on a throwaway table and traces what happened. The path is whatever the real
+ * simulation did, curve, hop, landing and all.
+ */
+function traceCuePath(
+  balls: Ball[],
+  cueBallId: number,
+  angle: number,
+  power: number,
+  tip: { x: number; y: number },
+  elevation: number,
+  modifiers?: ShotModifiers
+): CueTrace {
+  const clone: Ball[] = balls.map((b) => ({
+    ...b,
+    pos: { ...b.pos },
+    vel: { ...b.vel },
+    angVel: { ...b.angVel },
+  }));
+  const cue = clone.find((b) => b.id === cueBallId);
+  const out: CueTrace = { points: [], contact: null, landing: null };
+  if (!cue) return out;
+
+  // Never miscue in the preview, for the same reason the post-contact simulation doesn't: the
+  // guide shows what the shot does if it comes off.
+  applyCueStrike(cue, angle, power, tip, () => 1, elevation);
+
+  let elapsed = 0;
+  let travelled = 0;
+  let prev: Vec2 = { ...cue.pos };
+  let wasAirborne = cue.z > 1e-4;
+
+  while (elapsed < PREVIEW_SECONDS && travelled < MAX_PREVIEW_LENGTH) {
+    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT, { modifiers });
+    elapsed += PREVIEW_SAMPLE_DT;
+    if (cue.pocketed) break;
+
+    const airborne = cue.z > 1e-4;
+    // The moment it comes back down is worth marking on its own — it is the whole question a
+    // jump asks: does it land past the obstruction, or on it?
+    if (wasAirborne && !airborne && !out.landing) out.landing = { ...cue.pos };
+    wasAirborne = airborne;
+
+    travelled += Vec2.distance(prev, cue.pos);
+    out.points.push({ pos: { ...cue.pos }, airborne });
+    prev = { ...cue.pos };
+
+    const first = events.find(
+      (e) => e.type === 'ballCollision' && (e.a === cueBallId || e.b === cueBallId)
+    );
+    if (first && first.type === 'ballCollision') {
+      const otherId = first.a === cueBallId ? first.b : first.a;
+      out.contact = { pos: { ...cue.pos }, ballId: otherId };
+      break;
+    }
+
+    if (settled) break;
+  }
+
+  return out;
+}
+
+/** Sampled points to drawable segments, keeping the airborne flag on each. */
+function toTracedSegments(trace: CueTrace, from: Vec2): TrajectorySegment[] {
+  const segments: TrajectorySegment[] = [];
+  let prev = from;
+  for (const p of trace.points) {
+    if (Vec2.distance(prev, p.pos) < 2) continue;
+    segments.push({ from: prev, to: p.pos, airborne: p.airborne });
+    prev = p.pos;
+  }
+  return segments;
+}
+
+/**
  * Which pocket the previewed object ball is heading for, if any.
  *
  * Call shot needs a nomination, and asking for a second gesture — aim, then tap a pocket —
@@ -282,6 +379,29 @@ export function computeTrajectoryPreview(
       to: Vec2.add(cue.pos, Vec2.scale(Vec2.fromAngle(angle), AIM_LINE_LENGTH)),
     };
   }
+
+  /*
+   * A raised cue means the ball curves, or leaves the cloth, or both — and the ray cast below
+   * can describe neither. Trace the real shot instead.
+   */
+  if (elevation > CURVED_ELEVATION) {
+    const trace = traceCuePath(balls, cueBallId, angle, power, spin, elevation, modifiers);
+    result.cueBallPath = toTracedSegments(trace, cue.pos);
+    result.landingPos = trace.landing;
+    if (trace.contact) {
+      result.ghostBallPos = trace.contact.pos;
+      result.firstContactBallId = trace.contact.ballId;
+      if (mode === 'full') {
+        const paths = simulatePaths(balls, cueBallId, angle, power, spin, elevation, modifiers);
+        const struck = balls.find((b) => b.id === trace.contact!.ballId);
+        result.objectBallPath = toSegments(paths.objectBall, struck ? struck.pos : trace.contact.pos);
+        result.cueAfterPath = toSegments(paths.cueAfter, trace.contact.pos);
+        result.cueRestPos = paths.cueRest;
+      }
+    }
+    return result;
+  }
+
   let remaining = MAX_PREVIEW_LENGTH;
   const maxBounces = mode === 'full' ? MAX_BOUNCES_FULL : 0;
   let bounces = 0;

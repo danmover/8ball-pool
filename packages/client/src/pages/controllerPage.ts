@@ -25,7 +25,7 @@ import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
 import { AimController } from '../controller/aimController';
 import { createSpinPad } from '../controller/spinPad';
-import { createElevationDial } from '../controller/elevationDial';
+import { createShotTypeControl } from '../controller/shotType';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
 import { icon } from '../render/icons';
@@ -57,7 +57,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   let renderer: TableRenderer | null = null;
   let aimController: AimController | null = null;
   let spinPad: ReturnType<typeof createSpinPad> | null = null;
-  let elevationDial: ReturnType<typeof createElevationDial> | null = null;
+  let cueLift: ReturnType<typeof createShotTypeControl> | null = null;
   let placing = false;
   let lastAimAngle = 0;
   /** Latest drag power, so the cue-ball preview scales with how hard the shot will be. */
@@ -207,7 +207,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       guideMode,
       spinPad?.getValue() ?? { x: 0, y: 0 },
       lastAimPower,
-      elevationDial?.getValue() ?? 0,
+      cueLift?.getValue() ?? 0,
       mods ?? undefined
     );
     renderer.setAimPreview(CUE_BALL_ID, preview);
@@ -407,9 +407,9 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     Object.assign(spinPad.el.style, { position: 'absolute', bottom: '54px', right: '18px' });
     controlArea.appendChild(spinPad.el);
 
-    elevationDial = createElevationDial(() => renderPreview(lastAimAngle));
-    Object.assign(elevationDial.el.style, { position: 'absolute', bottom: '54px', left: '18px' });
-    controlArea.appendChild(elevationDial.el);
+    cueLift = createShotTypeControl(spinPad, () => renderPreview(lastAimAngle));
+    Object.assign(cueLift.el.style, { position: 'absolute', bottom: '54px', left: '18px' });
+    controlArea.appendChild(cueLift.el);
 
     root.querySelector('#leaveBtn')!.addEventListener('click', () => {
       confirmLeave('Leave this table?', 'Your seat opens up for whoever is waiting.', () => {
@@ -447,25 +447,28 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     }
 
     aimController = new AimController(controlArea, {
-      onAimChange: (angle, power) => {
+      onAimChange: (angle, rawPower) => {
         if (!seat) return;
+        // See hostPage: a jump below the power floor is a shot that cannot jump.
+        const power = Math.max(rawPower, cueLift?.getMinPower() ?? 0);
         lastAimAngle = angle;
         lastAimPower = power;
         setPowerHud(power);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
-        socket.emit('updateAim', { seat, angle, spin, elevation: elevationDial?.getValue() ?? 0 });
+        socket.emit('updateAim', { seat, angle, spin, elevation: cueLift?.getValue() ?? 0 });
         renderer?.setAimVisual(angle, power, true);
         renderPreview(angle);
       },
-      onShoot: (angle, power) => {
+      onShoot: (angle, rawPower) => {
         if (!seat) return;
+        const power = Math.max(rawPower, cueLift?.getMinPower() ?? 0);
         setPowerHud(0);
         const spin = spinPad?.getValue() ?? { x: 0, y: 0 };
         socket.emit('takeShot', {
-          seat, angle, power, spin, elevation: elevationDial?.getValue() ?? 0,
+          seat, angle, power, spin, elevation: cueLift?.getValue() ?? 0,
         });
         spinPad?.reset();
-        elevationDial?.reset();
+        cueLift?.reset();
       },
     });
 

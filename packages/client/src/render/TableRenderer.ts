@@ -1640,6 +1640,14 @@ export class TableRenderer {
      * less it deserves to be believed.
      */
     preview.cueBallPath.forEach((seg, i) => {
+      if (seg.airborne) {
+        // Off the cloth. Drawn as a thin bright thread rather than the usual dashes, because
+        // this is the part of the line that passes *through* balls — without a different
+        // treatment it reads as the guide having gone wrong.
+        g.moveTo(seg.from.x, seg.from.y).lineTo(seg.to.x, seg.to.y);
+        g.stroke({ width: 2, color: 0x9ad8ff, alpha: 0.85 });
+        return;
+      }
       this.dashedLine(g, seg.from, seg.to);
       g.stroke({
         width: i === 0 ? 3.5 : 2.5,
@@ -1647,6 +1655,16 @@ export class TableRenderer {
         alpha: i === 0 ? 0.6 : 0.28,
       });
     });
+
+    // Where a jumped ball comes back down — the one thing a jump shot is actually asking.
+    if (preview.landingPos) {
+      const { x, y } = preview.landingPos;
+      g.circle(x, y, BALL_RADIUS * 0.9).stroke({ width: 2.5, color: 0x9ad8ff, alpha: 0.9 });
+      const tick = BALL_RADIUS * 0.45;
+      g.moveTo(x - tick, y).lineTo(x + tick, y);
+      g.moveTo(x, y - tick).lineTo(x, y + tick);
+      g.stroke({ width: 2, color: 0x9ad8ff, alpha: 0.7 });
+    }
 
     if (preview.ghostBallPos) {
       // The contact point, and the single most useful thing on screen: it is where the cue

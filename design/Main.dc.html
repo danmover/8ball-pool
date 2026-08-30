@@ -1,0 +1,525 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap">
+  <style>
+    /* ==========================================================================
+       THE POOL HALL — cartoon shapes, real materials.
+       Every colour below is lifted from the game as it already renders: the cloth
+       and rails are Classic Green's actual values, the balls are the real palette
+       with the real cartoon shading recipe. Nothing about the table is redesigned.
+       What changed is the furniture around it: brass, oiled wood and leather,
+       lit by the lamp over the table.
+       ========================================================================== */
+    :root {
+      /* --- straight out of tableThemes.ts / ballStyle.ts --- */
+      --cloth: #5fd88a;
+      --cloth-dk: #28a85c;
+      --cushion: #0d4d29;
+      --rail: #c99a63;
+      --rail-dk: #7d5533;
+      --pocket: #4a3524;
+      --pocket-dk: #140d07;
+      --diamond: #fdf6e3;
+
+      /* --- the room --- */
+      --room-0: #0d0906;
+      --room-1: #16110c;
+      --room-2: #241a12;
+      --wood: #4a3220;
+      --wood-lt: #6b4a30;
+      --wood-dk: #2a1c11;
+
+      --brass: #ffd569;
+      --brass-mid: #e0a92e;
+      --brass-dk: #a06f14;
+      --brass-deep: #6b4708;
+
+      --cream: #fdf6e3;
+      --cream-dim: rgba(253, 246, 227, 0.62);
+      --cream-faint: rgba(253, 246, 227, 0.34);
+
+      --ember: #d94b3a;
+      --ember-dk: #8a2418;
+      --mint: #34e2b0;
+      --mint-dk: #12806a;
+
+      --r: 18px;
+      --r-s: 12px;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Nunito', system-ui, sans-serif;
+      color: var(--cream);
+      background:
+        radial-gradient(ellipse 62% 46% at 50% -6%, rgba(255, 213, 105, 0.2), transparent 62%),
+        radial-gradient(ellipse 92% 74% at 50% 40%, #2a1e14 0%, #16110c 58%, #0a0705 100%);
+    }
+    a { color: var(--brass); }
+    a:hover { color: #ffe9a8; }
+
+    .d { font-family: 'Fredoka', 'Baloo 2', system-ui, sans-serif; font-weight: 600; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* --- A REAL BALL. The recipe is the one the renderer paints:
+           flat saturated fill, soft shade low-right, broad sheen upper-left,
+           one hard catchlight, and a crisp dark rim at 4.5% of the diameter. --- */
+    .ball { position: relative; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+      box-shadow: inset 0 0 0 var(--rim, 2px) rgba(12, 10, 20, 0.72),
+                  0 var(--lift, 3px) var(--blur, 6px) rgba(0, 0, 0, 0.5); }
+    .ball::before { content: ''; position: absolute; left: 20%; top: 15%; width: 27%; height: 20%;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.9); transform: rotate(-40deg); }
+    .ball::after { content: ''; position: absolute; right: 15%; bottom: 17%; width: 15%; height: 9%;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.85); transform: rotate(-40deg); }
+    /* the number patch, as its own disc the way the renderer sprites it */
+    .pip { position: relative; z-index: 1; display: grid; place-items: center; width: 48%; height: 48%;
+      border-radius: 50%; background: #fbf8ef; color: #14141a; font-weight: 900;
+      box-shadow: inset 0 0 0 1px rgba(12, 10, 20, 0.4), inset -1px -2px 3px rgba(0, 0, 0, 0.18); }
+
+    /* --- The furniture: oiled wood with a brass edge, lit from above. --- */
+    .panel { position: relative; border-radius: var(--r);
+      background:
+        repeating-linear-gradient(92deg, rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 7px),
+        linear-gradient(180deg, var(--wood-lt) 0%, var(--wood) 48%, var(--wood-dk) 100%);
+      box-shadow:
+        inset 0 1.5px 0 rgba(255, 231, 178, 0.26),
+        inset 0 0 0 1.5px rgba(0, 0, 0, 0.5),
+        0 8px 0 rgba(0, 0, 0, 0.42),
+        0 18px 30px rgba(0, 0, 0, 0.5); }
+
+    /* --- Moulded buttons: a real top face, a lip you can see, and an ambient shadow.
+           Pressing pushes it into the lip. --- */
+    .btn { cursor: pointer; border: none; font-family: 'Fredoka', system-ui, sans-serif;
+      font-weight: 600; color: var(--fg, #2a1c11); border-radius: var(--r-s);
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 62%, var(--c3) 100%);
+      box-shadow:
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+        0 0 0 1.5px rgba(0, 0, 0, 0.5),
+        0 var(--lip, 5px) 0 var(--c4),
+        0 calc(var(--lip, 5px) + 7px) 14px rgba(0, 0, 0, 0.45);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.14s ease; }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(calc(var(--lip, 5px) - 1px));
+      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.45), 0 0 0 1.5px rgba(0, 0, 0, 0.5),
+                  0 1px 0 var(--c4), 0 3px 6px rgba(0, 0, 0, 0.4); }
+
+    .brass { --c1: #ffe9a8; --c2: var(--brass); --c3: var(--brass-mid); --c4: var(--brass-dk); --fg: #3d2a08; }
+    .oak   { --c1: #7d5836; --c2: #57391f; --c3: #422a15; --c4: #1f1409; --fg: var(--cream); }
+    .fire  { --c1: #f07a63; --c2: var(--ember); --c3: #b53324; --c4: var(--ember-dk); --fg: #fff2ee; }
+    .jade  { --c1: #7cf2d3; --c2: var(--mint); --c3: #1aa88a; --c4: var(--mint-dk); --fg: #06342a; }
+
+    /* --- The mode rack: brass-edged plates on the wall --- */
+    .plate { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px;
+      border-radius: var(--r-s); text-align: left; color: var(--cream); cursor: pointer; border: none;
+      font-family: inherit;
+      background: linear-gradient(180deg, rgba(255, 231, 178, 0.09), rgba(0, 0, 0, 0.3));
+      box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 231, 178, 0.14);
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.11s ease; }
+    .plate:hover { transform: translateX(2px);
+      background: linear-gradient(180deg, rgba(255, 231, 178, 0.16), rgba(0, 0, 0, 0.24)); }
+    .plate-on { color: #3d2a08;
+      background: linear-gradient(180deg, #ffe9a8 0%, var(--brass) 60%, var(--brass-mid) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.6), 0 0 0 1.5px rgba(0, 0, 0, 0.5),
+                  0 3px 0 var(--brass-dk), 0 0 26px rgba(255, 213, 105, 0.3); }
+    .plate-on:hover { transform: translateX(2px); background: linear-gradient(180deg, #fff0bd 0%, var(--brass) 60%, var(--brass-mid) 100%); }
+
+    /* --- Engraved brass lettering for the sign over the door --- */
+    .engrave {
+      background: linear-gradient(180deg, #fff4cf 0%, var(--brass) 34%, var(--brass-mid) 58%, #ffe9a8 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 2px 0 rgba(90, 58, 6, 0.9)) drop-shadow(0 4px 1px rgba(0, 0, 0, 0.55))
+              drop-shadow(0 14px 22px rgba(0, 0, 0, 0.6)); }
+
+    .tag { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 0.66rem;
+      letter-spacing: 0.09em; padding: 4px 11px; border-radius: 999px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1.5px rgba(0, 0, 0, 0.45); }
+
+    /* --- Token discs along the bottom: struck brass --- */
+    .tok { background: none; border: none; cursor: pointer; padding: 0; display: flex;
+      flex-direction: column; align-items: center; gap: 7px; font-family: inherit; }
+    .tok .disc { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
+      background: linear-gradient(180deg, var(--t1), var(--t2));
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 6px rgba(0, 0, 0, 0.3),
+                  0 0 0 1.5px rgba(0, 0, 0, 0.5), 0 5px 0 var(--t3), 0 11px 16px rgba(0, 0, 0, 0.45);
+      transition: transform 0.11s ease, box-shadow 0.11s ease; }
+    .tok:hover .disc { transform: translateY(-3px); box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 0 1.5px rgba(0,0,0,0.5), 0 8px 0 var(--t3), 0 15px 20px rgba(0,0,0,0.45); }
+    .tok:active .disc { transform: translateY(4px); box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 0 0 1.5px rgba(0,0,0,0.5), 0 1px 0 var(--t3), 0 3px 6px rgba(0,0,0,0.4); }
+  </style>
+</helmet>
+
+<div style="width: 1180px; padding: 26px 30px 32px; display: flex; flex-direction: column; gap: 20px">
+
+  <!-- ════════ THE SIGN OVER THE DOOR ════════ -->
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 26px">
+
+    <div style="display: flex; align-items: center; gap: 20px">
+      <!-- the 8 ball, painted the way the renderer paints it -->
+      <div class="ball" style="--rim: 4px; --lift: 7px; --blur: 16px; width: 84px; height: 84px; background: {{ eightBall }}">
+        <span class="pip" style="font-size: 1.5rem">8</span>
+      </div>
+
+      <div>
+        <div class="d engrave" style="font-size: 3.4rem; line-height: 0.94; letter-spacing: -0.005em; font-weight: 700">8-Ball</div>
+        <div class="d" style="font-size: 0.72rem; letter-spacing: 0.3em; color: var(--ember); margin-top: 8px; text-shadow: 0 0 16px rgba(217, 75, 58, 0.7)">POOL HALL · OPEN ALL HOURS</div>
+      </div>
+    </div>
+
+    <!-- the player's plate on the wall -->
+    <div class="panel" style="padding: 15px 18px; display: flex; align-items: center; gap: 15px">
+      <div style="width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(160deg, #3f8f5e, #14522f); box-shadow: inset 0 2px 0 rgba(255,255,255,0.24), 0 0 0 1.5px rgba(0,0,0,0.55), 0 4px 0 rgba(0,0,0,0.4); font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 1.7rem; color: var(--cream)">D</div>
+      <div>
+        <div class="d" style="font-size: 1.24rem; line-height: 1; font-weight: 600">Daniel</div>
+        <!-- xp as a brass tube, filling -->
+        <div style="width: 158px; height: 10px; border-radius: 999px; margin: 8px 0 6px; background: rgba(0,0,0,0.5); box-shadow: inset 0 2px 3px rgba(0,0,0,0.7), 0 0 0 1.5px rgba(0,0,0,0.5)">
+          <div style="width: 64%; height: 100%; border-radius: 999px; background: linear-gradient(180deg, #ffe9a8, var(--brass-mid)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.6)"></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 13px">
+          <span class="d num" style="font-size: 0.76rem; color: var(--brass)">LEVEL 12</span>
+          <span style="display: flex; align-items: center; gap: 6px">
+            <span style="width: 17px; height: 17px; border-radius: 50%; background: radial-gradient(circle at 32% 26%, #fff4cf, var(--brass) 42%, var(--brass-mid) 78%); box-shadow: inset 0 0 0 1.5px rgba(107,71,8,0.7), 0 1px 2px rgba(0,0,0,0.5)"></span>
+            <span class="d num" style="font-size: 0.92rem">2,480</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ HERO TABLE + MODE RACK ════════ -->
+  <div style="display: grid; grid-template-columns: 1fr 288px; gap: 18px; align-items: stretch">
+
+    <!-- ── the featured mode, shown as a real table under a lamp ── -->
+    <div class="panel" style="overflow: hidden; padding: 0">
+      <!-- lamplight falling on the cloth -->
+      <div style="position: relative; padding: 20px 24px 22px; display: flex; flex-direction: column; gap: 14px; height: 100%">
+        <div style="position: absolute; left: 50%; top: -140px; width: 620px; height: 400px; margin-left: -310px; background: radial-gradient(ellipse 50% 50% at 50% 100%, rgba(255,213,105,0.16), transparent 72%); pointer-events: none"></div>
+
+        <div style="position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px">
+          <div>
+            <div class="d" style="font-size: 0.62rem; letter-spacing: 0.22em; color: var(--cream-faint)">NOW SELECTED</div>
+            <div class="d" style="font-size: 2.5rem; line-height: 1.02; font-weight: 700; margin-top: 3px; text-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 8px 18px rgba(0,0,0,0.5)">{{ hero.name }}</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: 0 0 auto">
+            <sc-for list="{{ hero.badges }}" as="b" hint-placeholder-count="2">
+              <span class="tag" style="background: {{ b.bg }}; color: {{ b.fg }}">{{ b.t }}</span>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- THE TABLE — Classic Green, exactly as it renders -->
+        <div style="position: relative; flex: 1 1 auto; display: grid; place-items: center; min-height: 208px">
+          <div style="position: relative; width: 396px; height: 198px; border-radius: 10px; transform: rotate(-1.6deg);
+                      background: radial-gradient(ellipse 66% 62% at 50% 40%, {{ hero.cloth }} 0%, {{ hero.clothDk }} 100%);
+                      box-shadow:
+                        0 0 0 9px {{ hero.cushion }},
+                        0 0 0 26px {{ hero.rail }},
+                        0 0 0 28px rgba(0,0,0,0.55),
+                        inset 0 0 26px rgba(0,0,0,0.28),
+                        0 22px 0 {{ hero.railDk }},
+                        0 34px 40px rgba(0,0,0,0.55)">
+
+            <!-- cushion nose highlight, the way the renderer bands it -->
+            <div style="position: absolute; inset: -9px; border-radius: 13px; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.16); pointer-events: none"></div>
+            <!-- baulk line and spot -->
+            <div style="position: absolute; left: 25%; top: 0; bottom: 0; width: 1.5px; background: rgba(253,246,227,0.16)"></div>
+            <div style="position: absolute; left: 25%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: rgba(253,246,227,0.3)"></div>
+
+            <!-- pockets: leather throat, the real colours -->
+            <sc-for list="{{ pockets }}" as="p" hint-placeholder-count="6">
+              <span style="position: absolute; width: {{ p.w }}; height: {{ p.w }}; border-radius: 50%; background: radial-gradient(circle at 50% 34%, {{ hero.pocketDk }} 42%, {{ hero.pocket }} 100%); box-shadow: inset 0 3px 6px rgba(0,0,0,0.9), 0 0 0 2.5px {{ hero.pocket }}; left: {{ p.x }}; top: {{ p.y }}"></span>
+            </sc-for>
+
+            <!-- diamonds on the rail -->
+            <sc-for list="{{ diamonds }}" as="d" hint-placeholder-count="6">
+              <span style="position: absolute; width: 5px; height: 5px; border-radius: 50%; background: {{ hero.diamond }}; opacity: 0.85; left: {{ d.x }}; top: {{ d.y }}"></span>
+            </sc-for>
+
+            <!-- the rack, in the real ball palette -->
+            <sc-for list="{{ hero.rack }}" as="b" hint-placeholder-count="10">
+              <span class="ball" style="--rim: 1.4px; --lift: 2px; --blur: 4px; width: 28px; height: 28px; position: absolute; left: {{ b.x }}; top: {{ b.y }}; background: {{ b.bg }}">
+                <span class="pip" style="font-size: 0.58rem">{{ b.n }}</span>
+              </span>
+            </sc-for>
+
+            <!-- cue ball and the cue -->
+            <span class="ball" style="--rim: 1.4px; --lift: 2px; --blur: 4px; width: 28px; height: 28px; position: absolute; left: 62px; top: 85px; background: {{ cueBall }}"></span>
+            <div style="position: absolute; left: -128px; top: 96px; width: 168px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #2a1c11 0%, #6b4a2a 18%, #c99a63 62%, #f0dcb4 90%, #2a6ee0 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 1px rgba(0,0,0,0.5), 0 4px 7px rgba(0,0,0,0.5)"></div>
+          </div>
+        </div>
+
+        <div style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px">
+          <div style="max-width: 440px">
+            <div style="font-size: 0.9rem; font-weight: 700; color: var(--cream-dim); line-height: 1.45; text-wrap: pretty">{{ hero.blurb }}</div>
+            <div style="display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap">
+              <sc-for list="{{ hero.rules }}" as="r" hint-placeholder-count="3">
+                <span class="tag" style="background: rgba(0,0,0,0.45); color: var(--cream-dim); box-shadow: inset 0 0 0 1.5px rgba(255,231,178,0.16)">{{ r }}</span>
+              </sc-for>
+            </div>
+          </div>
+          <div style="text-align: right; flex: 0 0 auto">
+            <div class="d" style="font-size: 0.58rem; letter-spacing: 0.2em; color: var(--cream-faint)">YOUR BEST</div>
+            <div class="d num engrave" style="font-size: 1.85rem; line-height: 1.15; font-weight: 700">{{ hero.best }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── the rack of modes, and the way in ── -->
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div class="d" style="font-size: 0.62rem; letter-spacing: 0.2em; color: var(--brass)">PICK YOUR GAME</div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <sc-for list="{{ modes }}" as="m" hint-placeholder-count="6">
+          <button class="plate {{ m.on }}" onClick="{{ m.pick }}">
+            <span class="ball" style="--rim: 1.3px; --lift: 1px; --blur: 3px; width: 26px; height: 26px; background: {{ m.bg }}">
+              <span class="pip" style="font-size: 0.54rem">{{ m.n }}</span>
+            </span>
+            <span class="d" style="flex: 1 1 auto; font-size: 0.94rem">{{ m.name }}</span>
+            <span class="num" style="font-size: 0.66rem; font-weight: 800; opacity: 0.55">{{ m.players }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="flex: 1 1 auto"></div>
+
+      <button class="btn brass" onClick="{{ noop }}" style="--lip: 7px; padding: 16px 20px; border-radius: var(--r); width: 100%">
+        <span class="d" style="display: block; font-size: 1.55rem; line-height: 1; font-weight: 700">Play</span>
+        <span style="display: block; font-size: 0.76rem; font-weight: 800; margin-top: 4px; color: rgba(61,42,8,0.72)">{{ startSub }}</span>
+      </button>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 7px">
+        <button class="btn fire" onClick="{{ noop }}" style="padding: 11px 8px; font-size: 0.92rem">Go Online</button>
+        <button class="btn oak" onClick="{{ noop }}" style="padding: 11px 8px; font-size: 0.92rem">Host Table</button>
+      </div>
+
+      <!-- the code, on a lit slate the way a table number reads across a room -->
+      <div style="display: flex; gap: 7px; align-items: stretch">
+        <div class="d num" style="flex: 1 1 auto; text-align: center; letter-spacing: 0.28em; font-size: 1.1rem; font-weight: 600; padding: 11px 4px 11px 12px; border-radius: var(--r-s); background: linear-gradient(180deg, #100c08, #060403); color: var(--brass); text-shadow: 0 0 14px rgba(255,213,105,0.6); box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 0 0 1.5px rgba(0,0,0,0.6), inset 0 0 0 1.5px rgba(255,231,178,0.1)">AB12</div>
+        <button class="btn oak" onClick="{{ noop }}" style="padding: 11px 18px; font-size: 0.92rem">Join</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ THE SHELF ════════ -->
+  <div style="border-radius: var(--r); padding: 15px 22px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+              background: linear-gradient(180deg, rgba(255,231,178,0.05), rgba(0,0,0,0.32));
+              box-shadow: inset 0 1px 0 rgba(255,231,178,0.14), inset 0 0 0 1.5px rgba(0,0,0,0.45)">
+
+    <button class="tok" onClick="{{ noop }}" style="--t1: #8c6a44; --t2: #5c3d22; --t3: #241609">
+      <span class="disc"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#fdf6e3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2.5"/><path d="M8 6V4h8v2M3 12h18"/></svg></span>
+      <span class="d" style="font-size: 0.8rem">Locker</span>
+      <span style="font-size: 0.66rem; font-weight: 800; color: var(--brass); margin-top: -5px">3 new</span>
+    </button>
+
+    <button class="tok" onClick="{{ noop }}" style="--t1: #ffe9a8; --t2: var(--brass-mid); --t3: var(--brass-deep)">
+      <span class="disc"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#3d2a08" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 20h6M12 14v6"/></svg></span>
+      <span class="d" style="font-size: 0.8rem">Career</span>
+      <span style="font-size: 0.66rem; font-weight: 800; color: var(--cream-faint); margin-top: -5px">Chapter 3</span>
+    </button>
+
+    <button class="tok" onClick="{{ noop }}" style="--t1: #f07a63; --t2: #b53324; --t3: #6b1a11">
+      <span class="disc"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#fff2ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6"/></svg></span>
+      <span class="d" style="font-size: 0.8rem">Trick Shots</span>
+      <span style="font-size: 0.66rem; font-weight: 800; color: var(--cream-faint); margin-top: -5px">8 / 24</span>
+    </button>
+
+    <button class="tok" onClick="{{ noop }}" style="--t1: #7cf2d3; --t2: #1aa88a; --t3: #0a5b4a">
+      <span class="disc"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#06342a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9 6.7 19.7l1.1-5.9L3.5 9.7l5.9-.8L12 3.5Z"/></svg></span>
+      <span class="d" style="font-size: 0.8rem">Progress</span>
+      <span style="font-size: 0.66rem; font-weight: 800; color: var(--cream-faint); margin-top: -5px">Tier 14</span>
+    </button>
+
+    <button class="tok" onClick="{{ noop }}" style="--t1: #6bd992; --t2: #1e8a4c; --t3: #0c4a28">
+      <span class="disc"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#f2fff6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+      <span class="d" style="font-size: 0.8rem">Stats</span>
+      <span style="font-size: 0.66rem; font-weight: 800; color: var(--cream-faint); margin-top: -5px">68% pot</span>
+    </button>
+
+    <button class="tok" onClick="{{ noop }}" style="--t1: #6b5b4a; --t2: #3d3025; --t3: #191108">
+      <span class="disc"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#fdf6e3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg></span>
+      <span class="d" style="font-size: 0.8rem">Settings</span>
+      <span style="font-size: 0.66rem; font-weight: 800; color: var(--cream-faint); margin-top: -5px">&nbsp;</span>
+    </button>
+
+    <!-- the daily, on a chalkboard so it never reads as a seventh token -->
+    <button onClick="{{ noop }}" style="flex: 0 0 268px; margin-left: 8px; cursor: pointer; border: none; font-family: inherit; text-align: left; display: flex; align-items: center; gap: 12px; padding: 12px 15px; border-radius: var(--r-s); color: var(--cream); background: linear-gradient(180deg, #23342c, #16211c); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.1), 0 0 0 3px var(--rail-dk), 0 0 0 4.5px rgba(0,0,0,0.5), 0 6px 0 rgba(0,0,0,0.4), 0 12px 18px rgba(0,0,0,0.45)">
+      <span style="flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(180deg, #ffe9a8, var(--brass-mid)); box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.5), 0 0 0 1.5px rgba(0,0,0,0.5)">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#3d2a08" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 3v3M12 10.2v3.6l2.6 1.6"/></svg>
+      </span>
+      <span style="min-width: 0; flex: 1 1 auto">
+        <span class="d" style="display: block; font-size: 0.92rem; line-height: 1.1">Today's Challenge</span>
+        <span style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--cream-faint); margin-top: 2px">Pot four in a row, no cushions</span>
+      </span>
+      <span class="d num" style="flex: 0 0 auto; font-size: 0.8rem; color: var(--brass)">+120</span>
+    </button>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: 'classic' };
+  }
+
+  /* The renderer's own recipe, in CSS: flat saturated fill, soft shade low-right,
+     broad sheen upper-left. The two catchlights are the ::before/::after. */
+  ballBg(hex, stripe) {
+    const base = stripe
+      ? 'linear-gradient(180deg, #fbf8ef 0 21%, ' + hex + ' 21% 79%, #fbf8ef 79% 100%)'
+      : hex;
+    return (
+      'radial-gradient(circle at 68% 72%, rgba(20,10,30,0.4) 0%, rgba(20,10,30,0.1) 42%, rgba(20,10,30,0) 66%),' +
+      'radial-gradient(circle at 30% 24%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 34%, rgba(255,255,255,0) 60%),' +
+      base
+    );
+  }
+
+  /* The real palette, straight out of ballStyle.ts. 9-15 are the same seven, striped. */
+  ball(id) {
+    const SOLID = { 1: '#ffcf2e', 2: '#2a6ee0', 3: '#f03a2e', 4: '#8b4bd8', 5: '#ff8a1f', 6: '#17a85a', 7: '#9e3226' };
+    if (id === 0) return { n: '', bg: this.ballBg('#f6f2e6', false) };
+    if (id === 8) return { n: '8', bg: this.ballBg('#111111', false) };
+    if (id <= 7) return { n: String(id), bg: this.ballBg(SOLID[id], false) };
+    return { n: String(id), bg: this.ballBg(SOLID[id - 8], true) };
+  }
+
+  /** A triangle, laid out by hand so it reads as a rack. */
+  rack(ids) {
+    const out = [];
+    let i = 0;
+    for (let c = 0; c < 5; c++) {
+      const count = c + 1;
+      for (let r = 0; r < count; r++) {
+        if (i >= ids.length) break;
+        const b = this.ball(ids[i]);
+        out.push({
+          n: b.n, bg: b.bg,
+          x: (232 + c * 25) + 'px',
+          y: (85 - (count - 1) * 13 + r * 26) + 'px'
+        });
+        i++;
+      }
+    }
+    return out;
+  }
+
+  renderVals() {
+    const CR = '#fdf6e3';
+    const DK = '#3d2a08';
+
+    /* Cloth and rails per mode are the game's OWN table themes, not invented ones. */
+    const T = {
+      classic:  { cloth: '#5fd88a', clothDk: '#28a85c', cushion: '#0d4d29', rail: '#c99a63', railDk: '#7d5533', pocket: '#4a3524', pocketDk: '#140d07', diamond: '#fdf6e3' },
+      midnight: { cloth: '#4fa8e8', clothDk: '#1a5a94', cushion: '#08203a', rail: '#6b4a3a', railDk: '#3d2921', pocket: '#2a1f18', pocketDk: '#0a0705', diamond: '#e8f2fb' },
+      crimson:  { cloth: '#e26070', clothDk: '#9e2436', cushion: '#4a0d18', rail: '#7a3b2a', railDk: '#432016', pocket: '#33201a', pocketDk: '#0d0605', diamond: '#fbe8ea' }
+    };
+
+    const MODES = [
+      { id: 'classic', name: 'Classic 8-Ball', chip: 8, players: '2P', table: T.classic,
+        blurb: 'Solids or stripes — clear your group, then call the 8 and sink it. Miss it and the frame is theirs.',
+        rules: ['2 PLAYERS', 'CALL THE 8', 'FOUL = BALL IN HAND'],
+        badges: [{ t: 'HOUSE FAVOURITE', bg: 'linear-gradient(180deg,#f07a63,#b53324)', fg: '#fff2ee' },
+                 { t: 'RANKED', bg: 'linear-gradient(180deg,#ffe9a8,#e0a92e)', fg: DK }],
+        best: '7 frame run',
+        ids: [1, 11, 3, 8, 6, 14, 2, 12, 4, 9, 5, 13, 7, 15, 10] },
+
+      { id: 'nine', name: '9-Ball', chip: 9, players: '2P', table: T.midnight,
+        blurb: 'Lowest ball first, every shot. Sink the 9 however it goes down and the rack is yours on the spot.',
+        rules: ['2 PLAYERS', 'LOWEST FIRST', 'COMBOS COUNT'],
+        badges: [{ t: 'FAST', bg: 'linear-gradient(180deg,#7cf2d3,#1aa88a)', fg: '#06342a' },
+                 { t: 'RANKED', bg: 'linear-gradient(180deg,#ffe9a8,#e0a92e)', fg: DK }],
+        best: '4 in a row',
+        ids: [1, 2, 3, 9, 4, 5, 6, 7, 8] },
+
+      { id: 'speed', name: 'Speed Pool', chip: 3, players: '1-2P', table: T.crimson,
+        blurb: 'All fifteen off the table before the clock runs out. Every foul bolts another ten seconds on.',
+        rules: ['SOLO OR VERSUS', 'FOUL = +10s', 'THREE STARS'],
+        badges: [{ t: 'AGAINST THE CLOCK', bg: 'linear-gradient(180deg,#ffe9a8,#e0a92e)', fg: DK }],
+        best: '01:48',
+        ids: [1, 11, 3, 6, 14, 2, 12, 4, 5, 13, 7, 15, 9, 10, 8] },
+
+      { id: 'killer', name: 'Killer', chip: 4, players: '3-8P', table: T.classic,
+        blurb: 'Three lives each and one shot a turn. Miss a pot, lose a life. Last one still standing takes it.',
+        rules: ['3 TO 8 PLAYERS', '3 LIVES EACH', 'ONE SHOT A TURN'],
+        badges: [{ t: 'PARTY', bg: 'linear-gradient(180deg,#f0a860,#c06a12)', fg: '#3a1f04' }],
+        best: 'won 6',
+        ids: [1, 3, 4, 6, 2, 5, 7, 8, 9, 10] },
+
+      { id: 'cutthroat', name: 'Cutthroat', chip: 5, players: '3P', table: T.crimson,
+        blurb: 'Five balls each and no friends. Knock everybody else off the table and be the one still on it.',
+        rules: ['3 PLAYERS', '5 BALLS EACH', 'LAST GROUP WINS'],
+        badges: [{ t: 'PARTY', bg: 'linear-gradient(180deg,#f0a860,#c06a12)', fg: '#3a1f04' }],
+        best: 'won 2',
+        ids: [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 8] },
+
+      { id: 'powerup', name: 'Power-Ups', chip: 6, players: '2-4P', table: T.midnight,
+        blurb: 'Pickups scattered over the cloth. Grab a magnet, take a second shot, or block a pocket on somebody.',
+        rules: ['2 TO 4 PLAYERS', 'PICKUPS SPAWN', 'NOT RANKED'],
+        badges: [{ t: 'CHAOS', bg: 'linear-gradient(180deg,#b98bee,#7038c4)', fg: '#f4ecff' }],
+        best: '11 wins',
+        ids: [1, 3, 6, 2, 4, 5, 7, 8, 9, 10] }
+    ];
+
+    const picked = MODES.find((m) => m.id === this.state.picked) || MODES[0];
+
+    const modes = MODES.map((m) => {
+      const b = this.ball(m.chip);
+      return {
+        name: m.name, players: m.players, n: b.n, bg: b.bg,
+        on: this.state.picked === m.id ? 'plate-on' : '',
+        pick: () => this.setState({ picked: m.id })
+      };
+    });
+
+    /* Pocket geometry on a 396 x 198 cloth. Corners sit proud of the corner, middles on the rail. */
+    const pockets = [
+      { x: '-13px', y: '-13px', w: '30px' }, { x: '379px', y: '-13px', w: '30px' },
+      { x: '-13px', y: '181px', w: '30px' }, { x: '379px', y: '181px', w: '30px' },
+      { x: '184px', y: '-15px', w: '28px' }, { x: '184px', y: '185px', w: '28px' }
+    ];
+    const diamonds = [
+      { x: '96px', y: '-17px' }, { x: '294px', y: '-17px' },
+      { x: '96px', y: '210px' }, { x: '294px', y: '210px' },
+      { x: '-17px', y: '96px' }, { x: '408px', y: '96px' }
+    ];
+
+    return {
+      modes,
+      pockets,
+      diamonds,
+      eightBall: this.ballBg('#111111', false),
+      cueBall: this.ballBg('#f6f2e6', false),
+      hero: {
+        name: picked.name,
+        blurb: picked.blurb,
+        rules: picked.rules,
+        badges: picked.badges,
+        best: picked.best,
+        cloth: picked.table.cloth,
+        clothDk: picked.table.clothDk,
+        cushion: picked.table.cushion,
+        rail: picked.table.rail,
+        railDk: picked.table.railDk,
+        pocket: picked.table.pocket,
+        pocketDk: picked.table.pocketDk,
+        diamond: picked.table.diamond,
+        rack: this.rack(picked.ids)
+      },
+      startSub: 'vs the computer — ' + picked.name,
+      noop: () => {}
+    };
+  }
+}
+</script>
+</body>
+</html>

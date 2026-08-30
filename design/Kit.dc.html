@@ -1,0 +1,304 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Fredoka:wght@500;600;700&family=Grandstander:wght@600;700;800&family=Nunito:wght@600;700;800;900&family=Sniglet:wght@400;800&display=swap">
+  <style>
+    :root {
+      /* the game's own values, not invented ones */
+      --cloth: #5fd88a; --cloth-dk: #28a85c; --cushion: #0d4d29;
+      --rail: #c99a63; --rail-dk: #7d5533; --pocket: #4a3524; --diamond: #fdf6e3;
+
+      --wood: #4a3220; --wood-lt: #6b4a30; --wood-dk: #2a1c11;
+      --brass: #ffd569; --brass-mid: #e0a92e; --brass-dk: #a06f14; --brass-deep: #6b4708;
+      --cream: #fdf6e3; --cream-dim: rgba(253,246,227,0.6); --cream-faint: rgba(253,246,227,0.33);
+      --ember: #d94b3a; --ember-dk: #8a2418; --mint: #34e2b0; --mint-dk: #12806a;
+      --r: 16px; --r-s: 11px;
+    }
+    body {
+      margin: 0;
+      font-family: 'Nunito', system-ui, sans-serif;
+      color: var(--cream);
+      background: radial-gradient(ellipse 92% 74% at 50% 26%, #2a1e14 0%, #16110c 58%, #0a0705 100%);
+    }
+    a { color: var(--brass); }
+    a:hover { color: #ffe9a8; }
+    .num { font-variant-numeric: tabular-nums; }
+    .cap { font-size: 0.76rem; font-weight: 700; color: var(--cream-dim); line-height: 1.5; }
+    .sec-h { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 0.62rem;
+      letter-spacing: 0.2em; color: var(--brass); padding-bottom: 8px;
+      border-bottom: 1.5px solid rgba(255,213,105,0.24); }
+
+    .panel { border-radius: var(--r);
+      background:
+        repeating-linear-gradient(92deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 7px),
+        linear-gradient(180deg, var(--wood-lt) 0%, var(--wood) 48%, var(--wood-dk) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,231,178,0.24), inset 0 0 0 1.5px rgba(0,0,0,0.5),
+                  0 7px 0 rgba(0,0,0,0.4), 0 16px 26px rgba(0,0,0,0.5); }
+
+    .btn { cursor: pointer; border: none; font-weight: 600; color: var(--fg, #3d2a08);
+      border-radius: var(--r-s); padding: 12px 22px; font-size: 1rem;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 62%, var(--c3) 100%);
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.2),
+                  0 0 0 1.5px rgba(0,0,0,0.5), 0 var(--lip,5px) 0 var(--c4),
+                  0 calc(var(--lip,5px) + 7px) 14px rgba(0,0,0,0.45);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.14s ease; }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(calc(var(--lip,5px) - 1px));
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.45), 0 0 0 1.5px rgba(0,0,0,0.5), 0 1px 0 var(--c4), 0 3px 6px rgba(0,0,0,0.4); }
+    .btn[disabled] { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .brass { --c1: #ffe9a8; --c2: var(--brass); --c3: var(--brass-mid); --c4: var(--brass-dk); --fg: #3d2a08; }
+    .oak   { --c1: #7d5836; --c2: #57391f; --c3: #422a15; --c4: #1f1409; --fg: var(--cream); }
+    .fire  { --c1: #f07a63; --c2: var(--ember); --c3: #b53324; --c4: var(--ember-dk); --fg: #fff2ee; }
+    .jade  { --c1: #7cf2d3; --c2: var(--mint); --c3: #1aa88a; --c4: var(--mint-dk); --fg: #06342a; }
+    .slate { --c1: #6b5b4a; --c2: #3d3025; --c3: #2a2018; --c4: #140e08; --fg: var(--cream); }
+
+    /* the real ball recipe */
+    .ball { position: relative; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+      box-shadow: inset 0 0 0 var(--rim,2px) rgba(12,10,20,0.72), 0 var(--lift,3px) var(--blur,6px) rgba(0,0,0,0.5); }
+    .ball::before { content: ''; position: absolute; left: 20%; top: 15%; width: 27%; height: 20%;
+      border-radius: 50%; background: rgba(255,255,255,0.9); transform: rotate(-40deg); }
+    .ball::after { content: ''; position: absolute; right: 15%; bottom: 17%; width: 15%; height: 9%;
+      border-radius: 50%; background: rgba(255,255,255,0.85); transform: rotate(-40deg); }
+    .pip { position: relative; z-index: 1; display: grid; place-items: center; width: 48%; height: 48%;
+      border-radius: 50%; background: #fbf8ef; color: #14141a; font-weight: 900;
+      box-shadow: inset 0 0 0 1px rgba(12,10,20,0.4), inset -1px -2px 3px rgba(0,0,0,0.18); }
+
+    .sw { height: 58px; border-radius: 11px;
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.22), inset 0 0 0 1.5px rgba(0,0,0,0.45), 0 4px 0 rgba(0,0,0,0.4); }
+    .sw-l { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 0.74rem; margin-top: 7px; }
+    .sw-v { font-size: 0.62rem; font-weight: 700; color: var(--cream-faint); }
+
+    .pick { cursor: pointer; border: none; font-family: 'Fredoka', sans-serif; font-weight: 600;
+      font-size: 0.82rem; padding: 8px 15px; border-radius: 999px; color: var(--cream);
+      background: linear-gradient(180deg, rgba(255,231,178,0.1), rgba(0,0,0,0.32));
+      box-shadow: inset 0 1px 0 rgba(255,231,178,0.15), inset 0 0 0 1.5px rgba(0,0,0,0.45); }
+    .pick:hover { background: linear-gradient(180deg, rgba(255,231,178,0.18), rgba(0,0,0,0.26)); }
+    .pick-on { color: #3d2a08; background: linear-gradient(180deg, #ffe9a8, var(--brass-mid));
+      box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.6), 0 0 0 1.5px rgba(0,0,0,0.5), 0 3px 0 var(--brass-dk); }
+  </style>
+</helmet>
+
+<div style="width: 1180px; padding: 30px 34px 38px; display: flex; flex-direction: column; gap: 28px">
+
+  <div>
+    <div style="font-family: 'Fredoka', sans-serif; font-weight: 700; font-size: 1.7rem; line-height: 1; background: linear-gradient(180deg,#fff4cf 0%,var(--brass) 36%,var(--brass-mid) 62%,#ffe9a8 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 0 rgba(90,58,6,0.9)) drop-shadow(0 4px 8px rgba(0,0,0,0.5))">The Kit</div>
+    <div class="cap" style="margin-top: 12px; max-width: 720px">
+      Four rules hold it together. Surfaces are <b>oiled wood with a lit top edge</b>. Anything you press is
+      a <b>moulded button with a visible lip</b>, and pressing pushes it into that lip. Colour is spent, not
+      spread — brass means <i>press this</i>. And the table, the cloth and the balls are the game's own,
+      pixel for pixel: those values come out of <span class="num">tableThemes.ts</span> and
+      <span class="num">ballStyle.ts</span>, not out of a mood board.
+    </div>
+  </div>
+
+  <!-- ════ THE FONT QUESTION ════ -->
+  <div class="panel" style="padding: 20px 22px">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+      <div>
+        <div class="sec-h" style="border: none; padding: 0">LETTERING — PICK ONE</div>
+        <div class="cap" style="margin-top: 7px; max-width: 420px">Same sample, four faces. All of them rounded and warm; they differ in how much of a toy the game reads as.</div>
+      </div>
+      <div style="display: flex; gap: 7px; flex-wrap: wrap">
+        <sc-for list="{{ faces }}" as="f" hint-placeholder-count="4">
+          <button class="pick {{ f.on }}" onClick="{{ f.pick }}">{{ f.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 320px; gap: 26px; align-items: center">
+      <div style="font-family: {{ face.stack }}">
+        <div style="font-weight: {{ face.heavy }}; font-size: 3.1rem; line-height: 1; background: linear-gradient(180deg,#fff4cf 0%,var(--brass) 34%,var(--brass-mid) 58%,#ffe9a8 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 0 rgba(90,58,6,0.9)) drop-shadow(0 4px 1px rgba(0,0,0,0.55))">8-Ball</div>
+        <div style="font-weight: {{ face.mid }}; font-size: 1.9rem; line-height: 1.15; margin-top: 8px">Classic 8-Ball</div>
+        <div class="num" style="font-weight: {{ face.heavy }}; font-size: 1.5rem; letter-spacing: 0.06em; color: var(--brass); margin-top: 6px">0:24 · 2,480 · 68%</div>
+        <div style="font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 0.9rem; color: var(--cream-dim); margin-top: 10px; max-width: 470px; line-height: 1.45">
+          Nunito stays for the sentences underneath, whichever face wins — blurbs, rules and hints. The display face is only ever for things you glance at.
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+        <button class="btn brass" style="font-family: {{ face.stack }}; font-weight: {{ face.mid }}; --lip: 6px; font-size: 1.15rem; padding: 14px 28px">Play</button>
+        <div style="display: flex; gap: 8px">
+          <button class="btn fire" style="font-family: {{ face.stack }}; font-weight: {{ face.mid }}; padding: 10px 16px; font-size: 0.92rem">Go Online</button>
+          <button class="btn oak" style="font-family: {{ face.stack }}; font-weight: {{ face.mid }}; padding: 10px 16px; font-size: 0.92rem">Host Table</button>
+        </div>
+        <div class="cap" style="font-size: 0.7rem">{{ face.note }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ PAINT ════ -->
+  <div style="display: flex; flex-direction: column; gap: 13px">
+    <div class="sec-h">PAINT — the top row is the game's, untouched</div>
+    <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px">
+      <sc-for list="{{ game }}" as="c" hint-placeholder-count="8">
+        <div>
+          <div class="sw" style="background: {{ c.bg }}"></div>
+          <div class="sw-l">{{ c.name }}</div>
+          <div class="sw-v num">{{ c.hex }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin-top: 6px">
+      <sc-for list="{{ room }}" as="c" hint-placeholder-count="8">
+        <div>
+          <div class="sw" style="background: {{ c.bg }}"></div>
+          <div class="sw-l">{{ c.name }}</div>
+          <div class="sw-v num">{{ c.hex }}</div>
+          <div class="sw-v" style="color: var(--cream-dim); margin-top: 2px">{{ c.use }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ════ CONTROLS + BALLS ════ -->
+  <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 28px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 13px">
+      <div class="sec-h">PRESSABLES</div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-family: 'Fredoka', sans-serif">
+        <button class="btn brass" style="--lip: 6px">Play</button>
+        <button class="btn fire">Go Online</button>
+        <button class="btn jade">Claim</button>
+        <button class="btn oak">Host Table</button>
+        <button class="btn slate">Cancel</button>
+        <button class="btn slate" disabled>Waiting…</button>
+      </div>
+      <div class="cap">One moulded shape, five finishes. The lip is the whole feedback system — press any of them.</div>
+
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap">
+        <div class="num" style="font-family: 'Fredoka', sans-serif; font-weight: 600; letter-spacing: 0.28em; font-size: 1.1rem; padding: 12px 6px 12px 18px; border-radius: var(--r-s); background: linear-gradient(180deg,#100c08,#060403); color: var(--brass); text-shadow: 0 0 14px rgba(255,213,105,0.6); box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 0 0 1.5px rgba(0,0,0,0.6), inset 0 0 0 1.5px rgba(255,231,178,0.1)">AB12</div>
+        <sc-for list="{{ tags }}" as="t" hint-placeholder-count="4">
+          <span style="font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 0.68rem; letter-spacing: 0.09em; padding: 5px 12px; border-radius: 999px; background: {{ t.bg }}; color: {{ t.fg }}; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 1.5px rgba(0,0,0,0.45)">{{ t.t }}</span>
+        </sc-for>
+      </div>
+      <div class="cap">Anything you read a value off is a <b>lit slate</b>, not a white field — room codes, clocks, coin counts.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 13px">
+      <div class="sec-h">BALLS — the renderer's, rebuilt in CSS</div>
+      <div style="display: flex; gap: 9px; flex-wrap: wrap">
+        <sc-for list="{{ balls }}" as="b" hint-placeholder-count="8">
+          <span class="ball" style="--rim: 2px; --lift: 3px; --blur: 7px; width: 44px; height: 44px; background: {{ b.bg }}">
+            <span class="pip" style="font-size: 0.8rem">{{ b.n }}</span>
+          </span>
+        </sc-for>
+      </div>
+      <div class="cap">Flat saturated fill, soft shade low-right, broad sheen upper-left, one hard catchlight and a crisp rim at 4.5% of the diameter — the same recipe <span class="num">TableRenderer.ts</span> paints, so a ball in the HUD and a ball on the cloth are the same object.</div>
+
+      <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px">
+        <sc-for list="{{ small }}" as="b" hint-placeholder-count="7">
+          <span class="ball" style="--rim: 1.2px; --lift: 1px; --blur: 3px; width: 26px; height: 26px; opacity: {{ b.o }}; background: {{ b.bg }}">
+            <span class="pip" style="font-size: 0.54rem">{{ b.n }}</span>
+          </span>
+        </sc-for>
+        <span class="cap" style="margin-left: 8px; font-size: 0.7rem">potted balls fade — they never vanish</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":940}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { face: 'fredoka' };
+  }
+
+  ballBg(hex, stripe) {
+    const base = stripe
+      ? 'linear-gradient(180deg, #fbf8ef 0 21%, ' + hex + ' 21% 79%, #fbf8ef 79% 100%)'
+      : hex;
+    return (
+      'radial-gradient(circle at 68% 72%, rgba(20,10,30,0.4) 0%, rgba(20,10,30,0.1) 42%, rgba(20,10,30,0) 66%),' +
+      'radial-gradient(circle at 30% 24%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 34%, rgba(255,255,255,0) 60%),' +
+      base
+    );
+  }
+
+  ball(id) {
+    const SOLID = { 1: '#ffcf2e', 2: '#2a6ee0', 3: '#f03a2e', 4: '#8b4bd8', 5: '#ff8a1f', 6: '#17a85a', 7: '#9e3226' };
+    if (id === 0) return { n: '', bg: this.ballBg('#f6f2e6', false) };
+    if (id === 8) return { n: '8', bg: this.ballBg('#111111', false) };
+    if (id <= 7) return { n: String(id), bg: this.ballBg(SOLID[id], false) };
+    return { n: String(id), bg: this.ballBg(SOLID[id - 8], true) };
+  }
+
+  renderVals() {
+    const FACES = {
+      fredoka: {
+        label: 'Fredoka', stack: "'Fredoka', system-ui, sans-serif", mid: 600, heavy: 700,
+        note: 'Rounded but even-width — reads as a well-made game rather than a kids’ app. My pick.'
+      },
+      baloo: {
+        label: 'Baloo 2', stack: "'Baloo 2', system-ui, sans-serif", mid: 700, heavy: 800,
+        note: 'What ships today. Chunkier and bouncier; the most cartoon of the four.'
+      },
+      grandstander: {
+        label: 'Grandstander', stack: "'Grandstander', system-ui, sans-serif", mid: 700, heavy: 800,
+        note: 'A shade more playful than Fredoka, with a wobblier baseline. Good if it feels too tidy.'
+      },
+      sniglet: {
+        label: 'Sniglet', stack: "'Sniglet', system-ui, sans-serif", mid: 400, heavy: 800,
+        note: 'Softest and roundest. Charming small, but it gets mushy at headline size.'
+      }
+    };
+    const order = ['fredoka', 'baloo', 'grandstander', 'sniglet'];
+    const faces = order.map((k) => ({
+      label: FACES[k].label,
+      on: this.state.face === k ? 'pick-on' : '',
+      pick: () => this.setState({ face: k })
+    }));
+
+    const g = (a, b) => 'linear-gradient(180deg,' + a + ',' + b + ')';
+
+    return {
+      faces,
+      face: FACES[this.state.face] || FACES.fredoka,
+
+      game: [
+        { name: 'Cloth', hex: '#5fd88a', bg: 'radial-gradient(ellipse 70% 62% at 50% 38%, #5fd88a, #28a85c)' },
+        { name: 'Cushion', hex: '#0d4d29', bg: '#0d4d29' },
+        { name: 'Rail', hex: '#c99a63', bg: g('#d9ac76', '#c99a63') },
+        { name: 'Rail dark', hex: '#7d5533', bg: '#7d5533' },
+        { name: 'Pocket', hex: '#4a3524', bg: g('#4a3524', '#140d07') },
+        { name: 'Diamond', hex: '#fdf6e3', bg: '#fdf6e3' },
+        { name: 'Cue ball', hex: '#f6f2e6', bg: '#f6f2e6' },
+        { name: 'Eight', hex: '#111111', bg: '#111111' }
+      ],
+      room: [
+        { name: 'Wood', hex: '#4a3220', bg: g('#6b4a30', '#2a1c11'), use: 'every panel' },
+        { name: 'Brass', hex: '#ffd569', bg: g('#ffe9a8', '#e0a92e'), use: 'press this' },
+        { name: 'Brass dark', hex: '#a06f14', bg: '#a06f14', use: 'the lip' },
+        { name: 'Cream', hex: '#fdf6e3', bg: '#fdf6e3', use: 'all type' },
+        { name: 'Ember', hex: '#d94b3a', bg: g('#f07a63', '#b53324'), use: 'online, fouls' },
+        { name: 'Mint', hex: '#34e2b0', bg: g('#7cf2d3', '#1aa88a'), use: 'claim, good news' },
+        { name: 'Slate', hex: '#0d0906', bg: g('#100c08', '#050302'), use: 'lit readouts' },
+        { name: 'Chalkboard', hex: '#23342c', bg: g('#23342c', '#16211c'), use: 'callouts, daily' }
+      ],
+
+      tags: [
+        { t: 'RANKED', bg: 'linear-gradient(180deg,#ffe9a8,#e0a92e)', fg: '#3d2a08' },
+        { t: 'HOUSE FAVOURITE', bg: 'linear-gradient(180deg,#f07a63,#b53324)', fg: '#fff2ee' },
+        { t: 'PARTY', bg: 'linear-gradient(180deg,#f0a860,#c06a12)', fg: '#3a1f04' },
+        { t: 'MYSTIC', bg: 'rgba(0,0,0,0.45)', fg: '#ffd569' }
+      ],
+
+      balls: [1, 2, 3, 5, 6, 8, 11, 0].map((id) => this.ball(id)),
+      small: [
+        { ...this.ball(1), o: '0.28' }, { ...this.ball(2), o: '0.28' },
+        { ...this.ball(3), o: '1' }, { ...this.ball(4), o: '1' },
+        { ...this.ball(5), o: '1' }, { ...this.ball(6), o: '1' }, { ...this.ball(7), o: '1' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

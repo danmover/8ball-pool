@@ -1825,100 +1825,114 @@ body.reduce-motion .star.big.earned {
   border-color: rgba(200, 60, 45, 0.55);
 }
 
-/* --- Cue elevation ---
-   Drawn from the side, because a raised cue is invisible in a top-down game: the gauge shows a
-   cue resting on the cloth against a ball, pivoting at the contact point. Drag it up, or take
-   one of the three presets. */
+/* --- Shot type: level, curve, jump ---
+   This replaced a side-view dial you dragged to an angle. The dial was honest about degrees
+   and useless about intent: it happily let you set 55° and then hit the ball softly, which
+   does nothing, or pick a swerve with the tip dead centre, which also does nothing. Three
+   named shots that arrive already working is the whole idea, so the buttons are the control
+   and the angle is a fine-tune that only appears once it matters. */
 
-.elev-control {
+.shot-type {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.shot-type-row {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.shot-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 0.5rem;
+  letter-spacing: 0.05em;
+  padding: 0.3rem 0.42rem 0.26rem;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3);
+  touch-action: manipulation;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.shot-type-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 0.5px 0 var(--paper-3);
+}
+
+.shot-type-btn.active {
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--gold-dark);
+}
+
+/* The game noticing you are snookered and pointing at the way out. Without this, curve and
+   jump are two buttons most people never press once. */
+.shot-type.offered .shot-type-btn[data-kind='curve'],
+.shot-type.offered .shot-type-btn[data-kind='jump'] {
+  animation: shotOffer 1.1s ease-in-out infinite;
+}
+
+@keyframes shotOffer {
+  0%, 100% { box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3); }
+  50% { box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3), 0 0 12px 2px var(--gold); }
+}
+
+body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='curve'],
+body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='jump'] {
+  animation: none;
+  box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3), 0 0 10px 2px var(--gold);
+}
+
+/* Stated in what it does to the ball, not only in degrees — the readout is where the two
+   mechanics are actually taught. */
+.shot-type-hint {
+  max-width: 190px;
+  text-align: center;
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--muted);
+  min-height: 2.2em;
+}
+
+.shot-type.raised .shot-type-hint {
+  color: var(--accent-2);
+}
+
+/* Hidden until a shot that uses it is chosen: a slider that does nothing in the default
+   state is clutter with a tooltip. */
+.shot-fine {
+  display: none;
   align-items: center;
   gap: 0.35rem;
 }
 
-.elev-gauge {
-  position: relative;
-  width: 108px;
-  height: 62px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -4px 8px rgba(26, 20, 16, 0.15);
-  cursor: ns-resize;
-  touch-action: none;
-  overflow: hidden;
-}
-
-.elev-cloth {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  height: 3px;
-  background: var(--felt);
-}
-
-.elev-ball {
-  position: absolute;
-  left: 24px;
-  bottom: 13px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 32%, #fff, #d9cdb6);
-  box-shadow: 0 0 0 1.5px var(--ink);
-}
-
-/* Pivots at the ball, so raising the angle lifts the butt exactly as a real cue does. */
-.elev-cue {
-  position: absolute;
-  left: 32px;
-  bottom: 20px;
-  width: 68px;
-  height: 4px;
-  border-radius: 2px;
-  transform-origin: 0 50%;
-  background: linear-gradient(90deg, #5aa9d8 0 6%, var(--wood) 6% 62%, #2a1c12 62% 100%);
-  box-shadow: 0 0 0 1.2px var(--ink);
-  transition: transform 0.08s linear;
-}
-
-.elev-readout {
-  font-family: 'Baloo 2', sans-serif;
-  font-weight: 800;
-  font-size: 0.6rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  min-height: 1em;
-}
-
-.elev-control.raised .elev-readout {
-  color: var(--accent-2);
-}
-
-.elev-presets {
+.shot-type.raised .shot-fine {
   display: flex;
-  gap: 0.22rem;
 }
 
-.elev-presets button {
+.shot-fine-range {
+  width: 108px;
+  accent-color: var(--gold);
+  touch-action: none;
+}
+
+.shot-fine-deg {
   font-family: 'Baloo 2', sans-serif;
   font-weight: 900;
-  font-size: 0.48rem;
-  letter-spacing: 0.05em;
-  padding: 0.24rem 0.3rem;
-  border: none;
-  border-radius: 7px;
-  cursor: pointer;
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
-  background: var(--paper-2);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--paper-3);
-  touch-action: manipulation;
-}
-
-.elev-presets button.active {
-  background: var(--gold);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--wood-dark);
+  min-width: 2.2em;
 }
 
 /* --- Rule set picker ---
