@@ -256,7 +256,7 @@ export function careerOpponentById(id: string): CareerOpponent | undefined {
   return careerOpponents().find((o) => o.id === id);
 }
 
-export function careerChapterOf(opponentId: string): CareerChapter | undefined {
+function careerChapterOf(opponentId: string): CareerChapter | undefined {
   return CAREER.find((c) => c.opponents.some((o) => o.id === opponentId));
 }
 

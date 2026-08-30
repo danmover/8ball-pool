@@ -217,11 +217,11 @@ export function setAmbienceVolume(volume: number): void {
   if (bus) bus.gain.value = Math.max(0, Math.min(1, volume));
 }
 
-export function isAmbiencePlaying(): boolean {
+function isAmbiencePlaying(): boolean {
   return nodes.length > 0;
 }
 
 /** Theme ids that have a room of their own, for tests and for the settings copy. */
-export function ambienceThemeIds(): string[] {
+function ambienceThemeIds(): string[] {
   return Object.keys(ROOMS);
 }

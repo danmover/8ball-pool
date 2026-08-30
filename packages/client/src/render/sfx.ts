@@ -107,7 +107,7 @@ function noise(o: NoiseOpts): void {
  * Ball on ball. Hard hits are brighter and shorter — a sharp phenolic *click* — while soft
  * contacts are duller and rounder, which is how you can hear the weight of a shot.
  */
-export function playBallClick(volume: number, intensity = 1): void {
+function playBallClick(volume: number, intensity = 1): void {
   const i = Math.min(1.4, Math.max(0.05, intensity));
   const bright = 900 + i * 1500;
 
@@ -316,36 +316,5 @@ export function playLevelUp(volume: number): void {
       type: 'triangle',
       delay,
     });
-  });
-}
-
-/** Win fanfare — bigger than a level-up, with a low swell under it. */
-export function playWin(volume: number): void {
-  [0, 0.12, 0.24].forEach((delay, i) => {
-    tone({ freq: 392 * Math.pow(1.26, i), duration: 0.5, volume: 0.24 * volume, type: 'triangle', delay });
-    tone({ freq: 196 * Math.pow(1.26, i), duration: 0.5, volume: 0.14 * volume, type: 'sine', delay });
-  });
-  tone({ freq: 784, duration: 0.9, volume: 0.2 * volume, type: 'triangle', delay: 0.38 });
-  noise({ duration: 0.7, volume: 0.05 * volume, freq: 5000, to: 800, q: 0.4, delay: 0.36 });
-}
-
-/** UI: a soft click for taps on menu items. */
-export function playUiClick(volume: number): void {
-  noise({ duration: 0.02, volume: 0.1 * volume, freq: 2200, q: 1.6 });
-  tone({ freq: 660, to: 520, duration: 0.05, volume: 0.1 * volume, type: 'sine' });
-}
-
-/** UI: a whoosh for panels sliding in. */
-export function playWhoosh(volume: number): void {
-  noise({ duration: 0.26, volume: 0.09 * volume, freq: 500, to: 2600, q: 0.5 });
-}
-
-/** Power meter charging up — pitch rises with the pull-back. */
-export function playCharge(volume: number, power: number): void {
-  tone({
-    freq: 200 + power * 700,
-    duration: 0.05,
-    volume: 0.05 * volume,
-    type: 'sawtooth',
   });
 }

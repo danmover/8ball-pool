@@ -200,7 +200,7 @@ export function inPocketApproach(point: Vec2, slack = BALL_RADIUS): boolean {
 }
 
 /** The nearest point on a cushion segment's nose line to `p`, clamped to the run. */
-export function closestOnCushion(c: CushionSegment, p: Vec2): Vec2 {
+function closestOnCushion(c: CushionSegment, p: Vec2): Vec2 {
   const along = Math.max(c.from, Math.min(c.to, c.axis === 'h' ? p.x : p.y));
   return c.axis === 'h' ? { x: along, y: c.base } : { x: c.base, y: along };
 }

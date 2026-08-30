@@ -286,7 +286,7 @@ export function newlyEarned(
   return ACHIEVEMENTS.filter((a) => !have.has(a.id) && a.progress(stats) >= 1);
 }
 
-export function achievementProgress(
+function achievementProgress(
   stats: AchievementStats,
   unlocked: readonly string[]
 ): { earned: number; total: number } {

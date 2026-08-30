@@ -18,12 +18,12 @@ export type { ShotContext, ShotOutcome };
 export { isGroupCleared, lowestBallId };
 
 /** Next seat in turn order, wrapping around. Skips players who are out of the frame. */
-export function nextSeat(state: GameState, seat: Seat): Seat {
+function nextSeat(state: GameState, seat: Seat): Seat {
   return nextActiveSeat(state, seat);
 }
 
 /** In teams mode seats alternate teams around the table, exactly like real doubles. */
-export function teamForIndex(index: number): Team {
+function teamForIndex(index: number): Team {
   return index % 2 === 0 ? 'a' : 'b';
 }
 

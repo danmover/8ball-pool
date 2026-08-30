@@ -328,6 +328,6 @@ export function setMusicVolume(vol: number): void {
   if (bus) bus.gain.value = vol > 0 ? 1 : 0;
 }
 
-export function isMusicPlaying(): boolean {
+function isMusicPlaying(): boolean {
   return timer !== null;
 }

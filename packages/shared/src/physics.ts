@@ -65,14 +65,14 @@ const SUBSTEP_DT = 1 / SIM_HZ;
 /** Contact-patch speed below which the ball is treated as rolling rather than skidding. */
 const ROLL_EPSILON = 1;
 
-export function isAtRest(ball: Ball): boolean {
+function isAtRest(ball: Ball): boolean {
   // A ball in mid-air has to count as moving even when its horizontal speed is nil, or a
   // straight-up jump would end the shot while the ball was still off the cloth.
   if (ball.z > 1e-4 || ball.vz !== 0) return false;
   return Vec2.length(ball.vel) < REST_EPSILON;
 }
 
-export function allBallsAtRest(balls: Ball[]): boolean {
+function allBallsAtRest(balls: Ball[]): boolean {
   return balls.every((b) => b.pocketed || isAtRest(b));
 }
 

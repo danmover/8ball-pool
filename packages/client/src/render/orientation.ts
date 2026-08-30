@@ -20,7 +20,7 @@ export function identity(): Mat3 {
 }
 
 /** A rotation of `angle` radians about a unit axis, by Rodrigues' formula. */
-export function fromAxisAngle(x: number, y: number, z: number, angle: number): Mat3 {
+function fromAxisAngle(x: number, y: number, z: number, angle: number): Mat3 {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   const t = 1 - c;

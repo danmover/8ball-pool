@@ -2,6 +2,13 @@ import type { Server, Socket } from 'socket.io';
 import type { ClientToServerEvents, Seat, ServerToClientEvents } from '@8ball/shared';
 import { RoomManager } from './roomManager.js';
 import type { Room } from './room.js';
+import {
+  SocketGuard,
+  guardSocket,
+  isValidAim,
+  isValidPlacement,
+  isValidShot,
+} from './guard.js';
 
 type IoServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IoSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -22,7 +29,13 @@ function ownsSeat(room: Room, socket: IoSocket, seat: Seat): boolean {
 }
 
 export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
+  const guard = new SocketGuard();
+
   io.on('connection', (socket: IoSocket) => {
+    // Applied before any handler is registered, so a new event cannot be added without the
+    // limit — the failure mode of doing it per-handler is the one somebody forgets.
+    guardSocket(socket, guard);
+
     socket.on('hostCreateRoom', (_payload, cb) => {
       const room = rooms.createRoom(io);
       room.hostSocketId = socket.id;
@@ -157,18 +170,23 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomManager): void {
     });
 
     socket.on('updateAim', (input) => {
+      if (!isValidAim(input)) return;
       const room = rooms.get(socket.data.roomCode);
       if (!room || !ownsSeat(room, socket, input.seat)) return;
       room.handleAim(input);
     });
 
     socket.on('takeShot', (input) => {
+      // Checked before anything touches it: a NaN angle or a power of 1e9 reaching
+      // `applyCueStrike` puts the cue ball somewhere no rule anticipated.
+      if (!isValidShot(input)) return;
       const room = rooms.get(socket.data.roomCode);
       if (!room || !ownsSeat(room, socket, input.seat)) return;
       room.handleShoot(input);
     });
 
     socket.on('placeCueBall', (payload) => {
+      if (!isValidPlacement(payload)) return;
       const room = rooms.get(socket.data.roomCode);
       if (!room || !ownsSeat(room, socket, payload.seat)) return;
       room.handlePlaceCueBall(payload);
