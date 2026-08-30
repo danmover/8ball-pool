@@ -1076,6 +1076,22 @@ body.reduce-motion .shot-callout {
   opacity: 0.8;
 }
 
+/* ================= Document-shaped pages =================
+   `body` is `overflow: hidden`, which is right for the table — a full-screen canvas that must
+   never scroll under the cue. It is wrong for a page of content, and `.page` had no layout at
+   all, so anything past the fold on the stats and online screens was simply unreachable.
+
+   Same shape `.profile-page` already uses: fill the viewport, scroll inside, and leave room at
+   the bottom so the last row is not flush against the edge. */
+.page {
+  height: 100%;
+  overflow-y: auto;
+  /* Momentum scrolling on a phone, and never a horizontal bar. */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 3rem;
+}
+
 /* ---- Stats page ---- */
 .stats-page {
   max-width: 900px;
