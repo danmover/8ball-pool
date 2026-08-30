@@ -58,7 +58,10 @@
   padding: 1.6rem 1.2rem 2rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* `safe` matters: plain `center` in a scrolling column pushes the overflow off the *top*,
+     where no scrollbar can reach it. Centred while it fits, top-aligned once it does not —
+     which is the whole reason the bottom of this page was unreachable. */
+  justify-content: safe center;
   gap: 1.4rem;
 }
 
@@ -184,14 +187,44 @@
 }
 
 /* The fade has to be opaque at the very edge or a half-cut tile still shows a hard slice. */
-.mode-rail-wrap::before {
-  left: -12px;
-  background: linear-gradient(90deg, #0c0a08 4%, rgba(12, 10, 8, 0.6) 45%, transparent);
+/*
+ * The fade used to be a near-black overlay painted on top. Over the live green table backdrop
+ * that read as a dark band laid across the cards rather than the cards running out — the very
+ * thing it was meant to avoid. Painting nothing and masking the rail instead fades the cards
+ * themselves to transparent, which works over whatever happens to be behind them.
+ */
+.mode-rail-wrap::before,
+.mode-rail-wrap::after {
+  display: none;
 }
 
-.mode-rail-wrap::after {
-  right: -12px;
-  background: linear-gradient(270deg, #0c0a08 4%, rgba(12, 10, 8, 0.6) 45%, transparent);
+.mode-rail {
+  --fade-left: 42px;
+  --fade-right: 42px;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+
+/* Fade only the end there is actually more to scroll toward. Fading a hard edge the rail
+   cannot move past just clips the first card and looks like a rendering fault. */
+.mode-rail-wrap.at-start .mode-rail {
+  --fade-left: 0px;
+}
+
+.mode-rail-wrap.at-end .mode-rail {
+  --fade-right: 0px;
 }
 
 .mode-rail-wrap.at-start::before,
@@ -428,10 +461,22 @@
 
 /* --- Footer tiles --- */
 
+/*
+ * Seven tiles. `auto-fit` with a 200px floor put five on the first row and two orphans on a
+ * second, which reads as a mistake rather than a layout. A smaller floor lets them find an
+ * even split at any width the game is actually played at.
+ */
 .home-footer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.7rem;
+}
+
+@media (min-width: 1100px) {
+  /* Wide enough for four and three, which balances far better than five and two. */
+  .home-footer {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .tile-btn {
