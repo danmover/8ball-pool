@@ -72,6 +72,7 @@ import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+import { identify } from '../net/identity';
 
 /** Centre-ball, used when no pad exists yet. */
 const ZERO_SPIN = { x: 0, y: 0 };
@@ -149,6 +150,8 @@ export function renderHostPage(
   let replayRaf = 0;
   /** The last thing the game said about a shot, reused as the share card's headline. */
   let lastCalloutText: string | null = null;
+  /** What the last ranked frame did to our rating, for the result card. */
+  let lastRating: { rating: number; delta: number; provisional: boolean; tier: string } | null = null;
   /** Set while the review bar is open, so the R key can toggle it shut again. */
   let closeReplay: () => void = () => {};
   /** Balls potted in the current unbroken visit, for the "clearance" feats. */
@@ -283,7 +286,9 @@ export function renderHostPage(
   }
 
   if (online) {
-    joinOnlineTable();
+    // Identify before joining, so the seat is bound to a player and a ranked frame can be
+    // written against it. Without a token you still play; it just does not count.
+    void identify().then(() => joinOnlineTable());
   } else {
     const hostSession = loadSession(code, 'host');
     if (!hostSession) {
@@ -1061,6 +1066,7 @@ export function renderHostPage(
           </thead>
           <tbody>${statRows}</tbody>
         </table>
+        <div id="ratingSlot">${ratingHtml()}</div>
         <div id="rewardSlot"></div>
         <div class="result-actions">
           ${lastShotFrames.length >= 2 ? `<button class="secondary" id="replayBtn">${icon('replay', { size: 18 })}Watch that again</button>` : ''}
@@ -1090,8 +1096,27 @@ export function renderHostPage(
   }
 
   /** Clears everything scoped to a single frame, so the next one starts from zero. */
+  /**
+   * The ranked line on the result card.
+   *
+   * Only ever drawn from what the server sent — the client never computes a rating, which is
+   * the entire reason this one is worth anything.
+   */
+  function ratingHtml(): string {
+    if (!lastRating) return '';
+    const { rating, delta, provisional, tier } = lastRating;
+    const sign = delta > 0 ? '+' : '';
+    return `
+      <div class="rating-line${delta >= 0 ? ' up' : ' down'}">
+        <span class="rating-delta">${sign}${delta}</span>
+        <span class="rating-now">${provisional ? `${tier} · placing` : `${tier} · ${rating}`}</span>
+      </div>`;
+  }
+
   function resetFrameBookkeeping(): void {
     rewardsShown = false;
+    // Last frame's rating move must not linger on the next frame's result card.
+    lastRating = null;
     for (const seat of Object.keys(streaks)) streaks[seat] = 0;
     for (const seat of Object.keys(frameStats)) delete frameStats[seat];
   }
@@ -1749,6 +1774,13 @@ export function renderHostPage(
     root.querySelector<HTMLElement>('#toastStack')!.appendChild(el);
     setTimeout(() => el.remove(), 2600);
   }
+
+  socket.on('ratingChanged', ({ rating, delta, provisional, tier }) => {
+    lastRating = { rating, delta, provisional, tier };
+    // The result card may already be on screen when this lands, so paint it in if so.
+    const slot = root.querySelector<HTMLElement>('#ratingSlot');
+    if (slot) slot.innerHTML = ratingHtml();
+  });
 
   socket.on('seatDisconnected', ({ seat, name, forfeitsAt }) => {
     // Said out loud to everyone. Sitting in front of a table that has silently stopped is the

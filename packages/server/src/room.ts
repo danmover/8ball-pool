@@ -100,6 +100,19 @@ export class Room {
   visibility: TableVisibility = 'private';
   /** When this table was created — the public list shows the freshest first. */
   readonly createdAt = Date.now();
+  /**
+   * Counts toward the players' ratings.
+   *
+   * Only ever set on two-seat open tables. A rating is a statement about one player against
+   * one other, and there is no honest way to read a four-way frame as that.
+   */
+  ranked = false;
+  /** Profile token per seat, set by `identify`. Ranked results are written against these. */
+  playerTokens = new Map<Seat, string>();
+  /** Called when a ranked frame settles, so the server can write the result it refereed. */
+  onRankedResult:
+    | ((winner: { seat: Seat; token: string; name: string }, loser: { seat: Seat; token: string; name: string }) => void)
+    | null = null;
 
   private preShotGroupCleared = false;
   /** The ball and pocket nominated for the shot in flight, when call shot is on. */
@@ -144,6 +157,9 @@ export class Room {
     return this.hostSocketId === socketId;
   }
 
+  /** Mean rating of the seated players, for the list. Null when nobody is seated. */
+  averageRating: number | null = null;
+
   /** How many seats currently have somebody (or some bot) in them. */
   filledSeats(): number {
     return this.seats().filter((seat) => this.connections.has(seat)).length;
@@ -155,6 +171,8 @@ export class Room {
       code: this.code,
       mode: this.lobby.mode,
       ruleSet: this.lobby.ruleSet,
+      ranked: this.ranked,
+      averageRating: this.averageRating,
       seatsFilled: this.filledSeats(),
       seatsTotal: this.seats().length,
       inPlay: this.started,
@@ -907,6 +925,37 @@ export class Room {
     this.io.to(this.code).emit('emote', { seat, emote });
   }
 
+  /**
+   * Hands a ranked frame to whoever is keeping the ratings.
+   *
+   * Called from `recordFrameResult`, which is the one place in the server where a frame result
+   * exists — and it exists there because the server refereed the physics that produced it.
+   * That is the whole basis for the rating being trustworthy, so it is deliberately not
+   * reachable from anywhere a client can reach.
+   *
+   * Bots never count. A rating earned against the shot search would mean nothing, and losing to
+   * one would be a strange thing to be punished for.
+   */
+  private reportRankedResult(winner: Seat): void {
+    if (!this.ranked || !this.onRankedResult) return;
+    const seats = this.gameState.seatOrder;
+    if (seats.length !== 2) return;
+
+    const loser = seats.find((s) => s !== winner);
+    if (!loser) return;
+    if (this.connections.get(winner)?.bot || this.connections.get(loser)?.bot) return;
+
+    const winnerToken = this.playerTokens.get(winner);
+    const loserToken = this.playerTokens.get(loser);
+    // No identity, no rating. Playing anonymously is allowed; it just does not count.
+    if (!winnerToken || !loserToken || winnerToken === loserToken) return;
+
+    this.onRankedResult(
+      { seat: winner, token: winnerToken, name: this.gameState.players[winner]?.name ?? 'Player' },
+      { seat: loser, token: loserToken, name: this.gameState.players[loser]?.name ?? 'Player' }
+    );
+  }
+
   // ---- Spectator betting ----
 
   /**
@@ -1073,6 +1122,7 @@ export class Room {
     const { winner } = this.gameState;
     this.settleBets(winner);
     if (!winner) return;
+    this.reportRankedResult(winner);
 
     if (this.tournament) {
       const current = nextMatch(this.tournament);

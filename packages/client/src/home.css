@@ -2100,3 +2100,98 @@ body.reduce-motion .case-reveal { animation: none; }
     display: none;
   }
 }
+
+/* ---- Ranked ---- */
+.rank-badge {
+  margin-left: auto;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ranked-tag {
+  color: #ffd569;
+  letter-spacing: 0.04em;
+}
+
+.ranked-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.ranked-toggle.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ranked-toggle span {
+  display: flex;
+  flex-direction: column;
+}
+
+.ranked-toggle small {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.board-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.4rem;
+}
+
+.board-table th,
+.board-table td {
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  font-size: 0.82rem;
+}
+
+.board-table thead th {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+.board-table tbody tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.board-table td:nth-child(3) {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+/* The rating move on the result card. */
+.rating-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.3rem 0;
+}
+
+.rating-delta {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-line.up .rating-delta { color: #2f9d5e; }
+.rating-line.down .rating-delta { color: #c0392b; }
+
+.rating-now {
+  font-size: 0.85rem;
+  font-weight: 700;
+  opacity: 0.75;
+}

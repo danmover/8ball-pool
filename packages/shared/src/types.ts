@@ -382,6 +382,14 @@ export interface ServerToClientEvents {
   seatReconnected: (payload: { seat: Seat; name: string }) => void;
   /** The countdown ran out; the frame was awarded to whoever stayed. */
   seatForfeited: (payload: { seat: Seat; name: string }) => void;
+  /** A ranked frame settled: what it did to your rating. Sent only to the two who played it. */
+  ratingChanged: (payload: {
+    rating: number;
+    delta: number;
+    frames: number;
+    provisional: boolean;
+    tier: string;
+  }) => void;
 }
 
 /** The fixed reaction set. Server-validated, so clients can't inject arbitrary content. */
@@ -452,6 +460,20 @@ export interface ClientToServerEvents {
   ) => void;
   /** Gives up a seat deliberately, as distinct from dropping off the network. */
   leaveTable: () => void;
+  /**
+   * Tells the server which player this socket is.
+   *
+   * The same opaque profile token the profile store already uses, so there is one identity
+   * rather than two. Sent once on connect; without it you can still play, just not ranked.
+   */
+  identify: (
+    payload: { token: string; name: string },
+    cb: (res: { rating: number; frames: number; provisional: boolean; tier: string }) => void
+  ) => void;
+  /** The top of the ladder. */
+  leaderboard: (
+    cb: (rows: { name: string; rating: number; frames: number; wins: number; losses: number }[]) => void
+  ) => void;
 }
 
 /**
@@ -476,6 +498,9 @@ export interface TableSummary {
   inPlay: boolean;
   spectators: number;
   createdAt: number;
+  ranked: boolean;
+  /** Average rating of the players sitting here, for the list. Null when nobody is seated. */
+  averageRating: number | null;
 }
 
 export interface CreateTablePayload {
@@ -485,6 +510,13 @@ export interface CreateTablePayload {
   seats: number;
   visibility: TableVisibility;
   seriesTarget: number;
+  /**
+   * Counts toward your rating.
+   *
+   * Opt-in, and only ever on a two-seat table — a rating is a statement about one player
+   * against one other, and there is no honest way to read a four-way frame as that.
+   */
+  ranked?: boolean;
 }
 
 export interface RoomStateDTO {

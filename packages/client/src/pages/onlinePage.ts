@@ -9,6 +9,7 @@ import {
   type TableVisibility,
 } from '@8ball/shared';
 import { getSocket } from '../net/socket';
+import { formatRating, identify, rankedIdentity, type RankedIdentity } from '../net/identity';
 import { getProfile } from '../profile/profile';
 import { icon } from '../render/icons';
 import { showToast } from '../render/dialogs';
@@ -42,7 +43,11 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   let newRules: RuleSetId = 'casual';
   let newSeats = 2;
   let newVisibility: TableVisibility = 'public';
+  let newRanked = false;
   let creating = false;
+  let me: RankedIdentity | null = rankedIdentity();
+  let board: { name: string; rating: number; frames: number; wins: number; losses: number }[] = [];
+  let showBoard = false;
 
   function toast(msg: string, kind = 'info'): void {
     const stack = root.querySelector<HTMLElement>('#onlineToasts');
@@ -62,7 +67,9 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     return `
       <div class="table-row${t.inPlay ? ' in-play' : ''}">
         <span class="table-mode">${modeDescriptor(t.mode).name}</span>
-        <span class="table-rules">${RULE_SETS[t.ruleSet].name}</span>
+        <span class="table-rules">${RULE_SETS[t.ruleSet].name}${
+          t.ranked ? ' · <b class="ranked-tag">RANKED</b>' : ''
+        }${t.averageRating !== null ? ` · ~${t.averageRating}` : ''}</span>
         <span class="table-seats">${t.seatsFilled}/${t.seatsTotal}</span>
         <span class="table-state">${
           t.inPlay
@@ -95,6 +102,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
         <header class="page-head">
           <button class="mini secondary" id="backBtn">${icon('home', { size: 14 })} Back</button>
           <h1>Play Online</h1>
+          <span class="rank-badge" title="Your ranked standing">${formatRating(me)}</span>
         </header>
 
         <section class="quick-play">
@@ -156,10 +164,46 @@ export function renderOnlinePage(root: HTMLElement): () => void {
               </select>
             </label>
           </div>
+          <label class="ranked-toggle${newSeats !== 2 || newMode === 'teams' ? ' disabled' : ''}">
+            <input type="checkbox" id="newRanked" ${newRanked ? 'checked' : ''}
+                   ${newSeats !== 2 || newMode === 'teams' ? 'disabled' : ''} />
+            <span>
+              <b>Ranked</b>
+              <small>${
+                newSeats !== 2 || newMode === 'teams'
+                  ? 'Two-seat games only — a rating is one player against one other'
+                  : 'Counts toward your rating'
+              }</small>
+            </span>
+          </label>
           <button id="createBtn"${creating ? ' disabled' : ''}>Create table</button>
           <p class="muted create-note">
             Settings are fixed once the table exists — an online table has no host to change them.
           </p>
+        </section>
+
+        <section class="leaderboard">
+          <div class="section-head">
+            <h2>Ladder</h2>
+            <button class="mini secondary" id="boardBtn">${showBoard ? 'Hide' : 'Show'}</button>
+          </div>
+          ${
+            showBoard
+              ? board.length === 0
+                ? '<p class="muted">Nobody has finished their placement frames yet.</p>'
+                : `<table class="board-table">
+                     <thead><tr><th>#</th><th>Who</th><th>Rating</th><th>W–L</th></tr></thead>
+                     <tbody>${board
+                       .map(
+                         (r, i) =>
+                           `<tr><td>${i + 1}</td><td>${r.name}</td><td>${r.rating}</td><td>${
+                             r.wins
+                           }–${r.losses}</td></tr>`
+                       )
+                       .join('')}</tbody>
+                   </table>`
+              : ''
+          }
         </section>
 
         <div class="toast-stack" id="onlineToasts"></div>
@@ -206,9 +250,27 @@ export function renderOnlinePage(root: HTMLElement): () => void {
     });
     root.querySelector<HTMLSelectElement>('#newSeats')!.addEventListener('change', (e) => {
       newSeats = Number((e.target as HTMLSelectElement).value);
+      // Ranked is only offered on a two-seat table, so the note has to be redrawn with it.
+      if (newSeats !== 2) newRanked = false;
+      draw();
     });
     root.querySelector<HTMLSelectElement>('#newVisibility')!.addEventListener('change', (e) => {
       newVisibility = (e.target as HTMLSelectElement).value as TableVisibility;
+    });
+    root.querySelector<HTMLInputElement>('#newRanked')?.addEventListener('change', (e) => {
+      newRanked = (e.target as HTMLInputElement).checked;
+    });
+
+    root.querySelector('#boardBtn')!.addEventListener('click', () => {
+      showBoard = !showBoard;
+      if (showBoard) {
+        socket.emit('leaderboard', (rows) => {
+          board = rows;
+          draw();
+        });
+      } else {
+        draw();
+      }
     });
 
     root.querySelector('#createBtn')!.addEventListener('click', () => {
@@ -216,7 +278,14 @@ export function renderOnlinePage(root: HTMLElement): () => void {
       creating = true;
       socket.emit(
         'createTable',
-        { mode: newMode, ruleSet: newRules, seats: newSeats, visibility: newVisibility, seriesTarget: 1 },
+        {
+          mode: newMode,
+          ruleSet: newRules,
+          seats: newSeats,
+          visibility: newVisibility,
+          seriesTarget: 1,
+          ranked: newRanked,
+        },
         (res) => {
           creating = false;
           if (!res.ok) {
@@ -230,6 +299,12 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   }
 
   draw();
+  // Tell the server who we are before anything ranked can happen. Harmless without a token —
+  // you can still play, it just does not count.
+  void identify().then((id) => {
+    me = id;
+    draw();
+  });
   refresh();
   refreshTimer = setInterval(refresh, REFRESH_MS);
 

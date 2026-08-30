@@ -10,9 +10,12 @@ import {
   type RuleSetId,
   type ServerToClientEvents,
   type TableSummary,
+  isProvisional,
+  tierFor,
 } from '@8ball/shared';
 import type { RoomManager } from './roomManager.js';
 import type { Room } from './room.js';
+import type { PlayerRepository } from './players/repository.js';
 
 type IoServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IoSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -76,6 +79,9 @@ export function createOpenTable(
   const room = rooms.createRoom(io);
   room.governance = 'open';
   room.visibility = payload.visibility === 'public' ? 'public' : 'private';
+  // Ranked only ever on a straight 1v1. A rating is a statement about one player against one
+  // other, and a four-way frame cannot honestly be read as that.
+  room.ranked = payload.ranked === true && payload.seats === 2 && mode !== 'teams';
 
   // Applied directly rather than through `updateLobby`, which refuses to run on an open table
   // by design — these are the settings being fixed, not a later change to them.
@@ -119,8 +125,90 @@ export function bestWaitingTable(
   return candidates[0] ?? null;
 }
 
-export function registerOnlineHandlers(io: IoServer, rooms: RoomManager): void {
+/**
+ * Attaches this socket's identity to the seat it just took, and keeps the table's average
+ * rating current for the public list.
+ *
+ * Also installs the hook that writes a ranked result. It goes on the Room rather than being
+ * called from the socket layer because the frame result exists in exactly one place — inside
+ * the loop that refereed it — and that is precisely what makes the rating worth having.
+ */
+function bindPlayer(room: Room, seat: string, socket: IoSocket, players: PlayerRepository): void {
+  const token = socket.data.playerToken as string | undefined;
+  if (token) room.playerTokens.set(seat, token);
+
+  const seated = room
+    .seats()
+    .map((s) => room.playerTokens.get(s))
+    .filter((t): t is string => Boolean(t))
+    .map((t) => players.get(t).rating);
+  room.averageRating =
+    seated.length > 0 ? Math.round(seated.reduce((a, b) => a + b, 0) / seated.length) : null;
+
+  if (!room.onRankedResult) {
+    room.onRankedResult = (winner, loser) => {
+      const before = { w: players.get(winner.token).rating, l: players.get(loser.token).rating };
+      const after = players.recordFrame(winner.token, loser.token, {
+        winner: winner.name,
+        loser: loser.name,
+      });
+
+      // Told to each player privately: your rating is yours, and a table-wide broadcast would
+      // put it in front of spectators who have no business with it.
+      const tell = (
+        seat: string,
+        record: { rating: number; frames: number; wins: number; losses: number },
+        was: number
+      ): void => {
+        const socketId = room.connections.get(seat)?.socketId;
+        if (!socketId) return;
+        room.io.to(socketId).emit('ratingChanged', {
+          rating: record.rating,
+          delta: record.rating - was,
+          frames: record.frames,
+          provisional: isProvisional(record),
+          tier: tierFor(record.rating),
+        });
+      };
+      tell(winner.seat, after.winner, before.w);
+      tell(loser.seat, after.loser, before.l);
+    };
+  }
+}
+
+export function registerOnlineHandlers(
+  io: IoServer,
+  rooms: RoomManager,
+  players: PlayerRepository
+): void {
   io.on('connection', (socket: IoSocket) => {
+    socket.on('identify', ({ token, name }, cb) => {
+      // The same opaque profile token the profile store uses, so there is one identity rather
+      // than two. Held on the socket only; nothing here trusts a rating the client sends.
+      const clean = (token ?? '').trim();
+      if (!clean) return;
+      socket.data.playerToken = clean;
+      socket.data.playerName = cleanName(name);
+      const record = players.get(clean);
+      cb({
+        rating: record.rating,
+        frames: record.frames,
+        provisional: isProvisional(record),
+        tier: tierFor(record.rating),
+      });
+    });
+
+    socket.on('leaderboard', (cb) => {
+      cb(
+        players.leaderboard(50).map((r) => ({
+          name: r.name,
+          rating: r.rating,
+          frames: r.frames,
+          wins: r.wins,
+          losses: r.losses,
+        }))
+      );
+    });
     socket.on('listTables', (cb) => {
       cb(publicTables(rooms));
     });
@@ -180,6 +268,7 @@ export function registerOnlineHandlers(io: IoServer, rooms: RoomManager): void {
           room.reconnectSeat(seat, socket.id);
           if (loadout) room.setLoadout(seat, loadout);
           socket.data.seat = seat;
+          bindPlayer(room, seat, socket, players);
           cb({ ok: true, seat, seatToken, spectating: false });
           room.broadcastRoomState();
           room.broadcastGameState();
@@ -197,6 +286,7 @@ export function registerOnlineHandlers(io: IoServer, rooms: RoomManager): void {
 
       const { token } = room.claimSeat(seat, cleanName(name), socket.id, false, loadout);
       socket.data.seat = seat;
+      bindPlayer(room, seat, socket, players);
       cb({ ok: true, seat, seatToken: token, spectating: false });
       room.broadcastRoomState();
       room.broadcastGameState();

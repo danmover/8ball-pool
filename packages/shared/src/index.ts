@@ -6,6 +6,7 @@ export * from './ball.js';
 export * from './cosmetics.js';
 export * from './collection.js';
 export * from './reel.js';
+export * from './rating.js';
 export * from './progression.js';
 export * from './dailyChallenge.js';
 export * from './challenges.js';
