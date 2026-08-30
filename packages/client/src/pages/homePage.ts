@@ -13,7 +13,7 @@ import { equippedLoadout, getProfile, setDisplayName } from '../profile/profile'
 import { achievementSummary, weeklyMissions } from '../profile/progression';
 import { openCase } from '../profile/caseReel';
 import { playerBannerHtml } from '../render/banner';
-import { modeArtSvg } from '../render/modeArt';
+import { modeAccent, modeArtSvg } from '../render/modeArt';
 import { TableRenderer } from '../render/TableRenderer';
 import { openSettingsPanel } from '../settings/settingsPanel';
 import { applyRenderSettings } from '../settings/applySettings';
@@ -93,8 +93,14 @@ export function renderHomePage(root: HTMLElement): () => void {
         -->
         <section class="home-actions">
           <button class="btn-play" id="playSolo">
-            <span class="btn-play-main">Play</span>
-            <span class="btn-play-sub" id="soloSub">vs the computer</span>
+            <span class="btn-play-text">
+              <span class="btn-play-main">Play</span>
+              <span class="btn-play-sub" id="soloSub">vs the computer</span>
+            </span>
+            <span class="btn-play-cue" aria-hidden="true">
+              <span class="cue-ball"></span>
+              <span class="cue-stick"></span>
+            </span>
           </button>
 
           <div class="action-pair">
@@ -122,33 +128,33 @@ export function renderHomePage(root: HTMLElement): () => void {
           same card shape made the page read as fourteen equal choices.
         -->
         <section class="home-shelf">
-          <button class="token" id="lockerBtn">
-            <span class="token-disc">${icon('locker', { size: 25 })}</span>
+          <button class="token" id="lockerBtn" style="--tok: #ffc531">
+            <span class="token-disc">${icon('locker', { size: 24 })}</span>
             <span class="token-label">Locker</span>
             <span class="token-sub" id="lockerSub"></span>
           </button>
-          <button class="token" id="careerBtn">
-            <span class="token-disc">${icon('trophy', { size: 25 })}</span>
+          <button class="token" id="careerBtn" style="--tok: #ff8a1f">
+            <span class="token-disc">${icon('trophy', { size: 24 })}</span>
             <span class="token-label">Career</span>
             <span class="token-sub" id="careerSub"></span>
           </button>
-          <button class="token" id="trickShotsBtn">
-            <span class="token-disc">${icon('target', { size: 25 })}</span>
+          <button class="token" id="trickShotsBtn" style="--tok: #ff3d8b">
+            <span class="token-disc">${icon('target', { size: 24 })}</span>
             <span class="token-label">Trick Shots</span>
             <span class="token-sub" id="trickSub"></span>
           </button>
-          <button class="token" id="progressBtn">
-            <span class="token-disc">${icon('star', { size: 25 })}</span>
+          <button class="token" id="progressBtn" style="--tok: #a855f7">
+            <span class="token-disc">${icon('star', { size: 24 })}</span>
             <span class="token-label">Progress</span>
             <span class="token-sub" id="progressSub"></span>
           </button>
-          <button class="token" id="statsBtn">
-            <span class="token-disc">${icon('chart', { size: 25 })}</span>
+          <button class="token" id="statsBtn" style="--tok: #34e2b0">
+            <span class="token-disc">${icon('chart', { size: 24 })}</span>
             <span class="token-label">Stats</span>
             <span class="token-sub" id="statsSub"></span>
           </button>
-          <button class="token" id="settingsBtn">
-            <span class="token-disc">${icon('settings', { size: 25 })}</span>
+          <button class="token" id="settingsBtn" style="--tok: #9ba7d8">
+            <span class="token-disc">${icon('settings', { size: 24 })}</span>
             <span class="token-label">Settings</span>
             <span class="token-sub">Aim, table, audio</span>
           </button>
@@ -279,7 +285,8 @@ export function renderHomePage(root: HTMLElement): () => void {
     railEl.innerHTML = modes
       .map(
         (mode) => `
-        <button class="mode-tile${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}">
+        <button class="mode-tile${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}"
+                style="--mode-accent: ${modeAccent(mode.id)}">
           <span class="mode-art">${modeArtSvg(mode.id)}</span>
           <span class="mode-title">${mode.name}</span>
           <span class="mode-blurb">${mode.blurb}</span>
@@ -346,11 +353,12 @@ export function renderHomePage(root: HTMLElement): () => void {
     const done = progress.completed;
     const tile = root.querySelector<HTMLElement>('#challengeTile')!;
     tile.classList.toggle('done', done);
+    // Compact: the label carries the "today" part, so the text under it does not repeat it.
     tile.innerHTML = `
-      <span class="ticket-stub">${icon(done ? 'check' : 'clock', { size: 20 })}</span>
+      <span class="ticket-stub">${icon(done ? 'check' : 'clock', { size: 15 })}</span>
       <span class="ticket-body">
-        <span class="ticket-label">Today's challenge</span>
-        <span class="ticket-text">${done ? 'Done — come back tomorrow' : challenge.text}</span>
+        <span class="ticket-label">Today</span>
+        <span class="ticket-text">${done ? 'Done — back tomorrow' : challenge.text}</span>
       </span>
       ${done ? '' : `<span class="ticket-reward">+${challenge.xp}</span>`}`;
   }

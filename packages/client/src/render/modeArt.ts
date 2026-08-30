@@ -149,3 +149,29 @@ const ART: Record<GameMode, string> = {
 export function modeArtSvg(mode: GameMode): string {
   return ART[mode] ?? ART.classic;
 }
+
+/**
+ * A colour per mode, taken from the ball that leads its own drawing.
+ *
+ * Ten cards in one violet made the rail a wall — you navigated it by reading, because there
+ * was nothing to recognise a mode *by*. A stripe of its own colour on each card gives every
+ * mode a mark you learn without meaning to, and it costs no extra art: these are the same
+ * hues the drawings above already use.
+ */
+const ACCENT: Record<GameMode, string> = {
+  classic: '#f03a2e',
+  nineball: '#ffcf2e',
+  teams: '#2a6ee0',
+  cutthroat: '#ff8a1f',
+  killer: '#e0405c',
+  rotation: '#17a85a',
+  challenge: '#22d3ee',
+  ghost: '#b9a5e8',
+  powerup: '#a855f7',
+  speed: '#ff5a3c',
+  sandbox: '#8a7050',
+};
+
+export function modeAccent(mode: GameMode): string {
+  return ACCENT[mode] ?? ACCENT.classic;
+}

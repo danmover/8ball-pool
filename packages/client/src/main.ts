@@ -18,11 +18,21 @@ import { startMusic } from './render/music';
 import { startAmbience } from './render/ambience';
 import { tableThemeFor } from './render/cosmetics/tableThemes';
 import { loadSettings } from './settings/settingsStore';
+import { applyMotionClasses } from './settings/applySettings';
 import { SyncedProfileStore } from './profile/syncedProfileStore';
 import { adoptProfile, useProfileStore } from './profile/profile';
 import { checkAchievements } from './profile/progression';
 
 const app = document.getElementById('app')!;
+
+/*
+ * Motion preferences, before anything draws.
+ *
+ * These were only ever applied from the settings panel's save callback, so somebody who had
+ * turned motion off and reopened the game got every animation back until they went and
+ * changed a setting. It did not show while the menus barely moved. They move now.
+ */
+applyMotionClasses(loadSettings());
 
 /**
  * Profiles live on the server now, but nothing waits for them.

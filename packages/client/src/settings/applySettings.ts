@@ -42,7 +42,22 @@ export function applyRenderSettings(
   }
   setAmbienceVolume(settings.ambienceEnabled ? settings.ambienceVolume : 0);
 
-  // Drives the CSS that stills banner effects and celebrations.
+  applyMotionClasses(settings, effects);
+}
+
+/**
+ * The two body classes the CSS keys motion off, applied without needing a renderer.
+ *
+ * These used to be set only inside `applyRenderSettings`, which the menus call *only* from the
+ * settings panel's save callback — so a player who had turned motion off and then opened the
+ * game got the full set of animations until they went into settings and changed something.
+ * Nobody noticed while the menus barely moved; they move now, so this is called at start-up
+ * as well.
+ */
+export function applyMotionClasses(
+  settings: PlayerSettings,
+  effects: PlayerSettings['effectsIntensity'] = settings.effectsIntensity
+): void {
   document.body.classList.toggle('fx-low', effects === 'low');
   document.body.classList.toggle('reduce-motion', settings.reduceMotion);
 }
