@@ -72,7 +72,7 @@
   z-index: 3;
   top: 6px;
   right: 8px;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-size: 0.62rem;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -810,7 +810,7 @@ body.reduce-motion .fx-thirdeye {
 }
 
 .item-name {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   font-size: 0.92rem;
 }
@@ -862,7 +862,7 @@ button.mini {
 .banner-preview-name {
   position: relative;
   z-index: 2;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   font-size: 0.75rem;
   letter-spacing: 0.1em;
@@ -1038,7 +1038,7 @@ button.mini {
 
 .reveal-new {
   margin: 0.2rem 0 0;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   letter-spacing: 0.18em;
   color: var(--accent);
@@ -1058,7 +1058,7 @@ button.mini {
   top: 34%;
   z-index: 30;
   transform: translate(-50%, -50%);
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   letter-spacing: 0.06em;
   color: #fff6d8;
@@ -1095,7 +1095,7 @@ button.mini {
 .xp-toast {
   position: fixed;
   z-index: 30;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 1.5rem;
   color: #fff6d8;
@@ -1151,7 +1151,7 @@ button.mini {
 }
 
 .level-up {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   letter-spacing: 0.14em;
   color: var(--gold);

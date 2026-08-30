@@ -1,33 +1,53 @@
 :root {
-  /* Cartoon pool hall: cream panels in maple frames, felt green and gold accents, and the
-     same crisp dark ink outline the balls and cue carry. The dark tones survive only as the
-     room behind the table. */
-  --ink: #21160f;
-  --ink-soft: rgba(33, 22, 15, 0.55);
+  /*
+   * Arcade cabinet: neon on deep violet, everything ink-outlined, everything sitting on a
+   * hard offset shadow it drops into when pressed.
+   *
+   * The names are the ones the whole stylesheet already speaks, so they are kept and retuned
+   * rather than replaced — but two of them changed *meaning*, and it matters:
+   *
+   *   --paper   is now the light TYPE colour only. Panels are dark here.
+   *   --panel*  is the panel face, which is what --paper used to be.
+   *   --wood*   is no longer maple; it is the lit edge running round a panel.
+   *
+   * The table itself is untouched by any of this: cloth, rails, pockets and balls come from
+   * the renderer's own theme, and nothing in here reaches them.
+   */
+  --ink: #120a1a;
+  --ink-soft: rgba(18, 10, 26, 0.55);
 
-  /* Warmer, creamier paper with a touch more separation between the three steps, so panels
-     read as lit rather than flat. */
-  --paper: #fff6e4;
-  --paper-2: #f6e5c4;
-  --paper-3: #e6cfa2;
+  /* Type, in three steps of emphasis. Light, because everything behind it is dark. */
+  --paper: #f7ecff;
+  --paper-2: #cbb2e4;
+  /* Was the pale lip under a cream panel; now the dark lip under a violet one. */
+  --paper-3: #1b0f28;
 
-  /* Richer maple with a redder heart — the old wood was close to grey-brown at small sizes. */
-  --wood: #d2a065;
-  --wood-dark: #8a5a33;
-  --wood-deep: #4d3018;
+  /* The panel face: violet, lit from the top edge. */
+  --panel: #3d2450;
+  --panel-2: #281539;
+  --panel-3: #1b0f28;
 
-  --felt: #2fa864;
-  --felt-dark: #157a41;
-  --felt-deep: #0d5730;
+  /* The edge round a panel, replacing the maple frame it used to draw. */
+  --wood: #6a3f8f;
+  --wood-dark: #3a1f56;
+  --wood-deep: #ffd76b;
 
-  --gold: #ffcb52;
-  --gold-light: #ffe9a3;
-  --gold-dark: #bf8a24;
-  --accent: #1f9d63;
-  --accent-2: #2f77e8;
-  --plum: #7a4aad;
-  --danger: #de4a3c;
-  --muted: #8a7050;
+  --felt: #2fd07a;
+  --felt-dark: #16a057;
+  --felt-deep: #0a6b3a;
+
+  --gold: #ffc531;
+  --gold-light: #ffe66d;
+  --gold-dark: #b57c07;
+  --accent: #34e2b0;
+  --accent-2: #22d3ee;
+  --plum: #a855f7;
+  --danger: #ff4d6d;
+  --muted: #a68bc4;
+
+  /* The two neon accents the cabinet is lit by. */
+  --hot: #ff3d8b;
+  --hot-dark: #b3195a;
 
   /* Set per table theme by applyTableThemeToPage; these are the Classic Green fallbacks. */
   --surround: radial-gradient(ellipse 90% 70% at 50% 40%, #2a3a2f 0%, #131a17 60%, #0a0d0c 100%);
@@ -37,29 +57,37 @@
   --theme-wood: #c99a63;
   --theme-wood-dark: #7d5533;
 
-  /* Back-compat aliases so older rules keep working while the restyle lands. */
-  --bg-0: #16110c;
-  --bg-1: #241a12;
-  --bg-2: #33251a;
-  --panel: var(--paper);
-  --stroke: rgba(26, 20, 16, 0.25);
+  /*
+   * Back-compat aliases so older rules keep working. `--panel` used to alias `--paper` here,
+   * which quietly won over the real definition above — the whole restyle rendered cream until
+   * this line went.
+   */
+  --bg-0: #150c1f;
+  --bg-1: #21112f;
+  --bg-2: #2f1a42;
+  --stroke: rgba(255, 236, 255, 0.14);
 
   --radius: 18px;
   --frame: 3px;
   color-scheme: dark;
 }
 
-/** The house panel treatment: cream face, maple frame, ink outline, soft drop shadow. */
+/**
+ * The house panel treatment: violet face, a lit edge round it, ink outline, hard drop shadow.
+ *
+ * The maple double-inset this used to draw was the frame of a cream panel; a single lit edge
+ * plus the ink outline is the cabinet equivalent and reads far better at small sizes.
+ */
 .panel-frame {
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
   border-radius: var(--radius);
   box-shadow:
-    inset 0 0 0 var(--frame) var(--wood),
-    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.22),
+    inset 0 0 0 1.5px var(--wood),
     0 0 0 2px var(--ink),
-    0 10px 0 rgba(26, 20, 16, 0.25),
-    0 18px 34px rgba(0, 0, 0, 0.45);
-  color: var(--ink);
+    0 8px 0 var(--panel-3),
+    0 18px 34px rgba(0, 0, 0, 0.5);
+  color: var(--paper);
 }
 
 * {
@@ -76,7 +104,7 @@ h2,
 .score-pill,
 .turn-banner,
 button {
-  font-family: 'Baloo 2', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Fredoka', 'Nunito', 'Segoe UI', system-ui, sans-serif;
 }
 
 html,
@@ -87,7 +115,7 @@ body,
 }
 
 body {
-  /* Nunito for UI copy; Baloo 2 (rounder, chunkier) for headings and numerals. */
+  /* Nunito for UI copy; Fredoka (rounder, chunkier) for headings and numerals. */
   font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
   /* The room behind the table, painted from the active table theme. */
   background: var(--surround);
@@ -164,8 +192,8 @@ button:active:not(:disabled) {
 }
 
 button.secondary {
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow:
     0 0 0 2px var(--ink),
     0 5px 0 var(--paper-3),
@@ -199,16 +227,16 @@ input {
   padding: 0.7em 0.9em;
   border-radius: 12px;
   border: none;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--panel);
+  color: var(--paper);
   width: 100%;
   box-shadow:
     0 0 0 2px var(--ink),
-    inset 0 2px 4px rgba(26, 20, 16, 0.2);
+    inset 0 3px 6px rgba(0, 0, 0, 0.55);
 }
 
 input::placeholder {
-  color: rgba(26, 20, 16, 0.4);
+  color: rgba(247, 236, 255, 0.38);
 }
 
 input:focus {
@@ -216,7 +244,7 @@ input:focus {
   box-shadow:
     0 0 0 2px var(--ink),
     0 0 0 5px var(--gold),
-    inset 0 2px 4px rgba(26, 20, 16, 0.2);
+    inset 0 3px 6px rgba(0, 0, 0, 0.55);
 }
 
 .landing {
@@ -241,8 +269,9 @@ input:focus {
 }
 
 .card {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  border: none;
+  box-shadow: inset 0 1.5px 0 rgba(255, 236, 255, 0.2), 0 0 0 2px var(--ink), 0 8px 0 var(--panel-3);
   border-radius: var(--radius);
   padding: 1.25rem;
   width: min(340px, 90vw);
@@ -596,7 +625,7 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Baloo 2', 'Nunito', sans-serif;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
   font-size: 11px;
   font-weight: 800;
   color: #14141a;

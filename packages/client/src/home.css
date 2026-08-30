@@ -45,8 +45,9 @@
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(10, 12, 17, 0.55), transparent 70%),
-    linear-gradient(180deg, rgba(10, 12, 17, 0.82) 0%, rgba(10, 12, 17, 0.6) 45%, rgba(10, 12, 17, 0.92) 100%);
+    radial-gradient(ellipse 70% 55% at 50% 0%, rgba(255, 61, 139, 0.16), transparent 62%),
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(20, 10, 32, 0.6), transparent 70%),
+    linear-gradient(180deg, rgba(20, 10, 32, 0.9) 0%, rgba(24, 12, 38, 0.82) 45%, rgba(12, 6, 20, 0.96) 100%);
 }
 
 .home-content {
@@ -330,7 +331,7 @@
   width: 122px;
   text-align: center;
   padding: 0.16rem 0;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-size: 0.58rem;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -357,7 +358,7 @@
 }
 
 .mode-title {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   font-size: 1.02rem;
 }
@@ -397,7 +398,7 @@
 }
 
 .mode-tile.active .mode-rules {
-  color: var(--ink);
+  color: var(--paper);
 }
 
 /* --- Actions --- */
@@ -420,7 +421,7 @@
 }
 
 .play-main {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-size: 1.15rem;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -452,7 +453,7 @@
   text-align: center;
   letter-spacing: 0.22em;
   font-weight: 800;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
 }
 
 .home-actions + .error {
@@ -504,7 +505,7 @@
 }
 
 .tile-label {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
 }
 
@@ -553,8 +554,8 @@
   gap: 0.7rem;
   padding: 0.55rem 1.1rem 0.55rem 0.7rem;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow:
     0 0 0 2px var(--ink),
     0 5px 0 var(--paper-3),
@@ -582,7 +583,7 @@
 }
 
 .callout-text b {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
@@ -623,7 +624,7 @@ body.reduce-motion .callout.actionable {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 1.9rem;
   color: var(--paper);
@@ -887,8 +888,8 @@ body.reduce-motion .shot-clock {
   gap: 0.5rem;
   padding: 0.35rem 0.95rem;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow:
     0 0 0 2px var(--ink),
     0 5px 0 var(--paper-3),
@@ -896,7 +897,7 @@ body.reduce-motion .shot-clock {
 }
 
 .speed-time {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   font-size: 1.55rem;
   /* Tabular figures, or the whole readout jitters as the tenths tick over. */
@@ -965,7 +966,7 @@ body.reduce-motion .shot-clock {
 }
 
 .king-name {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   flex: 1 1 auto;
   overflow: hidden;
@@ -1026,7 +1027,7 @@ body.reduce-motion .shot-clock {
   align-self: center;
   padding: 0.4rem 1.1rem;
   border-radius: 999px;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 1.15rem;
   letter-spacing: 0.04em;
@@ -1074,8 +1075,8 @@ body.reduce-motion .shot-callout {
   gap: 0.35rem;
   padding: 0.6rem 0.9rem;
   border-radius: 16px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow:
     0 0 0 2px var(--ink),
     0 6px 0 var(--paper-3),
@@ -1157,15 +1158,15 @@ body.reduce-motion .shot-callout {
   gap: 0.15rem;
   padding: 0.9rem 1rem;
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow:
     0 0 0 2px var(--ink),
     0 5px 0 var(--paper-3);
 }
 
 .stat-value {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 1.9rem;
   line-height: 1.1;
@@ -1276,7 +1277,7 @@ body.reduce-motion .shot-callout {
 }
 
 .book-title {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   font-size: 1rem;
 }
@@ -1371,8 +1372,8 @@ body.reduce-motion .shot-callout {
   width: min(760px, 96vw);
   padding: 1.2rem;
   border-radius: 20px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow:
     0 0 0 2px var(--ink),
     0 8px 0 var(--paper-3),
@@ -1538,7 +1539,7 @@ body.reduce-motion .shot-callout {
   padding: 1.2rem;
   border-radius: 20px;
   text-align: center;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
   animation: revealIn 260ms ease both;
 }
 
@@ -1711,7 +1712,7 @@ body.reduce-motion .case-reveal { animation: none; }
   height: 68px;
   border-radius: 50%;
   background: var(--bg-1, #1a1520);
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 1.1rem;
 }
@@ -2039,8 +2040,8 @@ body.reduce-motion .case-reveal { animation: none; }
 }
 
 .waiting-seat.filled {
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow: 0 0 0 2px var(--ink);
 }
 
@@ -2062,7 +2063,7 @@ body.reduce-motion .case-reveal { animation: none; }
 
 .waiting-status {
   margin: 0;
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 800;
   font-size: 1.1rem;
 }
@@ -2074,8 +2075,8 @@ body.reduce-motion .case-reveal { animation: none; }
   gap: 0.15rem;
   padding: 0.7rem 1.4rem;
   border-radius: 16px;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
-  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
   box-shadow: 0 0 0 2px var(--ink);
 }
 
@@ -2087,7 +2088,7 @@ body.reduce-motion .case-reveal { animation: none; }
 }
 
 .waiting-code-value {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 2rem;
   letter-spacing: 0.28em;
@@ -2242,7 +2243,7 @@ body.reduce-motion .case-reveal { animation: none; }
 }
 
 .rating-delta {
-  font-family: 'Baloo 2', sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-weight: 900;
   font-size: 1.5rem;
   font-variant-numeric: tabular-nums;
