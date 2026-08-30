@@ -15,6 +15,7 @@ export type IconName =
   | 'target'
   | 'trophy'
   | 'chart'
+  | 'globe'
   | 'heart'
   | 'bot'
   | 'phone'
@@ -68,6 +69,7 @@ const PATHS: Record<IconName, string> = {
   heart: `<path d="M12 20s-7-4.4-7-9.2A3.8 3.8 0 0 1 12 8.4 3.8 3.8 0 0 1 19 10.8c0 4.8-7 9.2-7 9.2z"/>`,
   /* Stats used to borrow the trophy, which meant Career and Stats were the same picture. */
   chart: `<path d="M4 20V10.5M10 20V4.5M16 20v-6.5M21.5 20h-19"/>`,
+  globe: `<circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8M12 3.4a13 13 0 0 1 0 17.2 13 13 0 0 1 0-17.2Z"/>`,
   bot: `
     <rect x="4.5" y="8" width="15" height="11" rx="2.5"/>
     <path d="M12 4.5V8M9 13h.01M15 13h.01"/>

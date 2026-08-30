@@ -650,15 +650,42 @@
   gap: 0.5rem;
 }
 
+/* Icon, then two lines of text. The icon is what makes these readable at a glance — as two
+   blocks of text alone they were the same shape as each other and as everything else. */
 .action-pair button {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0.05rem;
-  padding: 0.7rem 0.9rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding: 0.6rem 0.85rem;
   border-radius: 14px;
   text-align: left;
+}
+
+.action-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.22),
+    inset 0 2px 0 rgba(255, 255, 255, 0.16);
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.action-pair button:hover .action-icon {
+  transform: scale(1.08) rotate(-6deg);
+}
+
+.action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
 }
 
 .action-main {
@@ -673,6 +700,9 @@
   font-weight: 700;
   opacity: 0.72;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The one place the cabinet's pink is spent: going online is the outward-facing action. */
@@ -706,18 +736,20 @@
   box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3), 0 4px 8px rgba(0, 0, 0, 0.35);
 }
 
+/* Sized to what it holds — four characters — rather than stretching to a black slab twice the
+   width of the text in it, which is what made it the heaviest thing in the row. */
 .join-box {
-  flex: 0 1 230px;
+  flex: 0 0 auto;
   display: flex;
   gap: 0.4rem;
   align-items: stretch;
 }
 
 .join-box input {
-  flex: 1 1 auto;
-  width: auto;
+  flex: 0 0 116px;
+  width: 116px;
   text-align: center;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.2em;
   font-weight: 700;
   font-family: 'Fredoka', sans-serif;
 }
@@ -746,9 +778,8 @@
 
 .home-shelf {
   display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
   padding: 0.85rem 1rem;
   border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(255, 236, 255, 0.05), rgba(0, 0, 0, 0.3));
@@ -757,8 +788,20 @@
     inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
 }
 
+/* The six spread themselves across whatever room the Today card leaves, so the shelf is
+   never a huddle on the left with a gap after it. */
+.shelf-nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem 0.35rem;
+}
+
 .token {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   width: 88px;
   display: flex;
   flex-direction: column;
@@ -879,127 +922,181 @@
   text-align: center;
 }
 
+/* Two lines, always. Left to size themselves the subtitles ran to one line or three depending
+   on the words, and the row of discs came out at different heights — which read as a wonky
+   shelf rather than as six equal things. */
 .token-sub {
   font-size: 0.63rem;
   font-weight: 700;
   line-height: 1.15;
   text-align: center;
   color: var(--muted);
+  min-height: 2.3em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .token.has-reward .token-sub {
   color: var(--gold);
 }
+/* --- Today's challenge ---
+   Was a gold pill sitting among the token discs: the wrong shape in the wrong colour. A pill
+   among circles reads as something that fell out of another design, and gold is already spoken
+   for — it means "this is the button to press", which the daily is not.
 
-/* --- The daily ticket ---
-   Tilted and stub-ended so it reads as something that expires, which is the one property
-   separating it from everything else on this row. */
-.daily-ticket {
-  /* Sized to sit *with* the tokens rather than dominate them: it was taking a third of the
-     shelf for one line of copy. It shrinks to what it has to say, and the shelf pushes it
-     to the far end. */
-  flex: 0 1 auto;
-  max-width: 320px;
-  margin-left: auto;
-  align-self: center;
+   It is a card now, using the same shape the mode tiles use: violet face, ink outline, a lip
+   underneath and a coloured bar across the top. And it finally shows progress, which it always
+   knew and never said — so it reads as something you are part-way through rather than an
+   announcement. */
+
+.today-card {
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 268px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.75rem 0.85rem 0.7rem;
+  border-radius: 14px;
+  color: var(--paper);
+  background:
+    radial-gradient(ellipse 120% 60% at 50% 0%, rgba(255, 197, 49, 0.16), transparent 70%),
+    linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--panel-3),
+    0 11px 18px rgba(0, 0, 0, 0.4);
+}
+
+.today-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gold);
+  box-shadow: 0 0 12px rgba(255, 197, 49, 0.6);
+}
+
+.today-card.done::before {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(52, 226, 176, 0.5);
+}
+
+.today-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.35rem 0.5rem 0.35rem 0.4rem;
-  border-radius: 999px;
-  transform: rotate(-1.1deg);
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
-    0 0 0 2px var(--ink),
-    0 4px 0 var(--gold-dark),
-    0 9px 14px rgba(0, 0, 0, 0.4);
 }
 
-.daily-ticket.done {
-  color: var(--paper);
-  background: linear-gradient(180deg, #4d2f63 0%, var(--panel-2) 100%);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.16),
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--panel-3);
+.today-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.ticket-stub {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--gold-light);
-  background: var(--ink);
-}
-
-.daily-ticket.done .ticket-stub {
+.today-card.done .today-eyebrow {
   color: var(--accent);
 }
 
-/* One line, not two: "Today" and the task run side by side so the whole thing is a chip. */
-.ticket-body {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
-}
-
-.ticket-label {
-  flex: 0 0 auto;
+.today-reward {
   font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.6;
-}
-
-.ticket-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ticket-reward {
-  flex: 0 0 auto;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
-  padding: 0.1rem 0.5rem;
+  padding: 0.12rem 0.5rem;
   border-radius: 999px;
-  color: var(--gold-light);
-  background: var(--ink);
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  box-shadow: 0 0 0 1.5px var(--ink);
 }
 
-/* --- Narrow: the poster stacks above the rack --- */
+.today-card.done .today-reward {
+  color: var(--paper);
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.14);
+}
+
+.today-task {
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+
+.today-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.today-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-light), var(--gold));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 10px rgba(255, 197, 49, 0.45);
+  transition: width 0.4s ease;
+}
+
+.today-card.done .today-bar i {
+  background: linear-gradient(90deg, #7cf2d3, var(--accent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 10px rgba(52, 226, 176, 0.45);
+}
+
+.today-count {
+  font-size: 0.66rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* --- Narrow: the shelf stacks, the action pair goes single file --- */
 @media (max-width: 880px) {
-  .cabinet {
-    grid-template-columns: minmax(0, 1fr);
+  .home-shelf {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
   }
 
-  .mode-rack {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  .shelf-nav {
+    justify-content: center;
+    gap: 0.6rem 0.4rem;
   }
 
   .token {
     width: 72px;
   }
 
-  .daily-ticket {
-    flex-basis: 100%;
+  /* Full width once it is on its own row — a 268px card centred in a phone looks stranded. */
+  .today-card {
+    flex-basis: auto;
+  }
+
+  .action-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .join-box {
+    flex: 1 1 auto;
+  }
+
+  .join-box input {
+    flex: 1 1 auto;
+    width: auto;
   }
 }
 

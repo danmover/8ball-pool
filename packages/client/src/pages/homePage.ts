@@ -105,15 +105,23 @@ export function renderHomePage(root: HTMLElement): () => void {
 
           <div class="action-pair">
             <button class="btn-hot" id="onlineBtn">
-              <span class="action-main">Go Online</span>
-              <span class="action-sub">Join a table from anywhere</span>
+              <span class="action-icon">${icon('globe', { size: 20 })}</span>
+              <span class="action-text">
+                <span class="action-main">Go Online</span>
+                <span class="action-sub">Join a table from anywhere</span>
+              </span>
             </button>
             <button class="btn-quiet" id="hostBtn">
-              <span class="action-main">Host Table</span>
-              <span class="action-sub">Friends join from their phones</span>
+              <span class="action-icon">${icon('phone', { size: 20 })}</span>
+              <span class="action-text">
+                <span class="action-main">Host Table</span>
+                <span class="action-sub">Friends join from their phones</span>
+              </span>
             </button>
           </div>
 
+          <!-- The code box is last and smallest: typing a code is what you do when somebody
+               has already told you one, so it never needs to compete for attention. -->
           <form class="join-box" id="joinForm">
             <input id="codeInput" maxlength="4" placeholder="CODE" autocapitalize="characters"
                    autocomplete="off" aria-label="Table code" />
@@ -127,7 +135,16 @@ export function renderHomePage(root: HTMLElement): () => void {
           menu, not six more things to weigh up against the modes above, and giving them the
           same card shape made the page read as fourteen equal choices.
         -->
+        <!--
+          The shelf: navigation on the left, today's objective on the right.
+
+          The daily used to be a gold pill sitting among the discs, which was the wrong shape
+          in the wrong colour — a pill among circles, and gold when gold already means "this is
+          the button to press". It is a card now, in the same violet-with-an-accent-bar shape
+          the mode tiles use, and it shows how far along you are, which it never did.
+        -->
         <section class="home-shelf">
+          <div class="shelf-nav">
           <button class="token" id="lockerBtn" style="--tok: #ffc531">
             <span class="token-disc">${icon('locker', { size: 24 })}</span>
             <span class="token-label">Locker</span>
@@ -158,10 +175,10 @@ export function renderHomePage(root: HTMLElement): () => void {
             <span class="token-label">Settings</span>
             <span class="token-sub">Aim, table, audio</span>
           </button>
+          </div>
 
-          <!-- The daily is a ticket, not a seventh token: it expires, and the others don't.
-               It stays a readout rather than a button — there is nowhere for it to go. -->
-          <div class="daily-ticket" id="challengeTile"></div>
+          <!-- A readout rather than a button: there is nowhere for it to go. -->
+          <div class="today-card" id="challengeTile"></div>
         </section>
       </div>
     </div>`;
@@ -353,14 +370,20 @@ export function renderHomePage(root: HTMLElement): () => void {
     const done = progress.completed;
     const tile = root.querySelector<HTMLElement>('#challengeTile')!;
     tile.classList.toggle('done', done);
-    // Compact: the label carries the "today" part, so the text under it does not repeat it.
+
+    // The daily has always known how far along you were and never showed it, which made it
+    // read as an announcement rather than something you were part-way through.
+    const value = Math.min(progress.value, challenge.target);
+    const pct = done ? 100 : Math.round((value / challenge.target) * 100);
+
     tile.innerHTML = `
-      <span class="ticket-stub">${icon(done ? 'check' : 'clock', { size: 15 })}</span>
-      <span class="ticket-body">
-        <span class="ticket-label">Today</span>
-        <span class="ticket-text">${done ? 'Done — back tomorrow' : challenge.text}</span>
-      </span>
-      ${done ? '' : `<span class="ticket-reward">+${challenge.xp}</span>`}`;
+      <div class="today-head">
+        <span class="today-eyebrow">${icon(done ? 'check' : 'clock', { size: 13 })} Today</span>
+        <span class="today-reward">${done ? 'Claimed' : `+${challenge.xp} XP`}</span>
+      </div>
+      <div class="today-task">${done ? 'Done — a new one tomorrow' : challenge.text}</div>
+      <div class="today-bar"><i style="width:${pct}%"></i></div>
+      <div class="today-count">${done ? 'Complete' : `${value} / ${challenge.target}`}</div>`;
   }
 
   prevBtn.addEventListener('click', () => railEl.scrollBy({ left: -railStep(), behavior: 'smooth' }));
