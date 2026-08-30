@@ -17,6 +17,7 @@ import {
   computeTrajectoryPreview,
   legalTargetBallIds,
   seatId,
+  RULE_SETS,
   bestCallout,
   factsFromEvents,
   rivalKey,
@@ -59,7 +60,7 @@ import { recordChallengeEvent } from '../profile/dailyChallenge';
 import { addSeasonXp, recordFrameResult, recordShotFeats } from '../profile/progression';
 import { openCase } from '../profile/caseReel';
 import { getSocket } from '../net/socket';
-import { loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
+import { clearSeatToken, loadSeatToken, saveSeatToken, loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
 import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
@@ -78,9 +79,28 @@ const ZERO_SPIN = { x: 0, y: 0 };
 const SOLID_IDS = [1, 2, 3, 4, 5, 6, 7];
 const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
 
-export function renderHostPage(root: HTMLElement, code: string): () => void {
+export interface TablePageOptions {
+  /**
+   * An online table rather than a party one.
+   *
+   * The same page either way, deliberately. A third implementation of the game loop — after
+   * hostPage and controllerPage — is a third place for the same bug to live; the differences
+   * between hosting a room and sitting at an open table turn out to be entry, whose seat this
+   * screen plays, and what is shown before the game starts.
+   */
+  online?: boolean;
+}
+
+export function renderHostPage(
+  root: HTMLElement,
+  code: string,
+  options: TablePageOptions = {}
+): () => void {
   const socket = getSocket();
   const settings = loadSettings();
+  const online = options.online === true;
+  /** The seat this device holds at an online table. Null while spectating. */
+  let mySeat: Seat | null = null;
   let ownedSeat: Seat | null = null;
   let renderer: TableRenderer | null = null;
   /** In-flight renderer creation, so concurrent callers share one instance. */
@@ -262,10 +282,48 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     root.querySelector('#goHome')!.addEventListener('click', () => navigate('/'));
   }
 
-  const hostSession = loadSession(code, 'host');
-  if (!hostSession) {
-    showFatalError("This table wasn't created from this device, so it can't be hosted here.");
-    return () => {};
+  if (online) {
+    joinOnlineTable();
+  } else {
+    const hostSession = loadSession(code, 'host');
+    if (!hostSession) {
+      showFatalError("This table wasn't created from this device, so it can't be hosted here.");
+      return () => {};
+    }
+    socket.emit('hostRejoin', { code, token: hostSession.token }, (res) => {
+      if (!res.ok) showFatalError('This table has expired.');
+    });
+  }
+
+  /**
+   * Takes a seat at an open table, resuming the one we already held if there is one.
+   *
+   * The seat token lives in localStorage rather than sessionStorage: closing a tab is a normal
+   * thing to do mid-frame online, and coming back to find a stranger in your chair would be a
+   * strange reward for it.
+   */
+  function joinOnlineTable(): void {
+    socket.emit(
+      'joinTable',
+      {
+        code,
+        name: getProfile().displayName || 'Player',
+        loadout: equippedLoadout(),
+        seatToken: loadSeatToken(code) ?? undefined,
+      },
+      (res) => {
+        if (!res.ok) {
+          showFatalError(res.error);
+          return;
+        }
+        if (res.spectating) {
+          mySeat = null;
+          return;
+        }
+        mySeat = res.seat;
+        saveSeatToken(code, res.seatToken);
+      }
+    );
   }
 
   void QRCode.toDataURL(joinUrl, { margin: 1, width: 176, color: { dark: '#0a0c11' } }).then((url) => {
@@ -273,9 +331,63 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     if (lastRoom && !lastRoom.started) drawLobby(lastRoom);
   });
 
-  socket.emit('hostRejoin', { code, token: hostSession.token }, (res) => {
-    if (!res.ok) showFatalError('This table has expired.');
-  });
+  /**
+   * What an online table shows before it starts.
+   *
+   * Not the party lobby: there is nothing to configure and nobody to configure it. Just who is
+   * here, how many are still needed, and the code — because the most common reason to make an
+   * online table is to send the code to one specific person.
+   */
+  function drawWaitingRoom(room: RoomStateDTO): void {
+    const seats = Object.keys(room.players);
+    const here = seats.filter((s) => room.players[s]);
+    const needed = seats.length - here.length;
+
+    lobbyWrap.innerHTML = `
+      <div class="waiting-room">
+        <h1>${modeDescriptor(room.lobby.mode).name}</h1>
+        <p class="waiting-rules">${RULE_SETS[room.lobby.ruleSet].name} rules${
+          room.lobby.seriesTarget > 1 ? ` · first to ${room.lobby.seriesTarget}` : ''
+        }</p>
+
+        <div class="waiting-seats">
+          ${seats
+            .map((seat) => {
+              const p = room.players[seat];
+              const isMe = seat === mySeat;
+              return `<div class="waiting-seat${p ? ' filled' : ''}${isMe ? ' me' : ''}">
+                  ${p ? `<b>${p.name}</b>${isMe ? '<span class="you-tag">YOU</span>' : ''}` : '<i>waiting…</i>'}
+                </div>`;
+            })
+            .join('')}
+        </div>
+
+        <p class="waiting-status">
+          ${
+            needed === 0
+              ? 'Starting…'
+              : `Waiting for ${needed} more player${needed === 1 ? '' : 's'}`
+          }
+        </p>
+
+        ${
+          room.visibility === 'private'
+            ? `<div class="waiting-code">
+                 <span class="waiting-code-label">Share this code</span>
+                 <span class="waiting-code-value">${room.code}</span>
+               </div>`
+            : '<p class="muted">This table is public — anyone can join it.</p>'
+        }
+
+        <button class="secondary" id="leaveTableBtn">Leave</button>
+      </div>`;
+
+    lobbyWrap.querySelector('#leaveTableBtn')?.addEventListener('click', () => {
+      socket.emit('leaveTable');
+      clearSeatToken(code);
+      navigate('/online');
+    });
+  }
 
   function drawLobby(room: RoomStateDTO): void {
     renderLobby(
@@ -400,6 +512,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     // Hand the attract-mode table over to the real game.
     renderer.stopAttractMode();
     renderer.setChromeless(false);
+    // Online you are as likely to be on a phone as a television, and a pool table in a portrait
+    // window is a strip across the middle with the screen wasted above and below it. A party
+    // host screen never rotates — that one really is a television.
+    renderer.setAutoRotate(online);
+    // Drives the portrait HUD rules, which shrink the furniture so the rotated table stays
+    // visible underneath it.
+    root.classList.toggle('table-portrait', online);
     applyRenderSettings(renderer, settings);
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
@@ -1310,8 +1429,13 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   function applyState(state: GameState): void {
     // If the host has claimed several seats (hotseat on one screen), always control
     // whichever of them is actually up — not just the first claimed.
-    const hostSeats = state.seatOrder.filter((s) => state.players[s].isHost);
-    ownedSeat = hostSeats.find((s) => s === state.currentShooter) ?? hostSeats[0] ?? null;
+    if (online) {
+      // Exactly one seat, and never somebody else's — an open table has no host holding several.
+      ownedSeat = mySeat;
+    } else {
+      const hostSeats = state.seatOrder.filter((s) => state.players[s].isHost);
+      ownedSeat = hostSeats.find((s) => s === state.currentShooter) ?? hostSeats[0] ?? null;
+    }
 
     // Cue and trail belong to whoever is shooting, so they swap on every turn change.
     renderer?.setShooterLoadout(state.players[state.currentShooter]?.loadout);
@@ -1370,7 +1494,10 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
   socket.on('roomState', (rs) => {
     lastRoom = rs;
     if (rs.started) void boot();
-    else {
+    else if (online) {
+      drawWaitingRoom(rs);
+      void showLobbyBackdrop();
+    } else {
       drawLobby(rs);
       void showLobbyBackdrop();
       maybeAutostart(rs);
@@ -1622,6 +1749,27 @@ export function renderHostPage(root: HTMLElement, code: string): () => void {
     root.querySelector<HTMLElement>('#toastStack')!.appendChild(el);
     setTimeout(() => el.remove(), 2600);
   }
+
+  socket.on('seatDisconnected', ({ seat, name, forfeitsAt }) => {
+    // Said out loud to everyone. Sitting in front of a table that has silently stopped is the
+    // worst version of this; knowing why nothing is happening is most of the fix.
+    void seat;
+    const seconds = Math.max(0, Math.round((forfeitsAt - Date.now()) / 1000));
+    showToast(
+      root.querySelector<HTMLElement>('#toastStack')!,
+      `${name} lost connection — ${seconds}s to come back`,
+      'foul',
+      4000
+    );
+  });
+
+  socket.on('seatReconnected', ({ name }) => {
+    showToast(root.querySelector<HTMLElement>('#toastStack')!, `${name} is back`, 'info');
+  });
+
+  socket.on('seatForfeited', ({ name }) => {
+    showToast(root.querySelector<HTMLElement>('#toastStack')!, `${name} left the table`, 'foul', 4000);
+  });
 
   socket.on('errorMessage', (msg) => {
     showToast(root.querySelector<HTMLElement>('#toastStack')!, msg, 'foul');

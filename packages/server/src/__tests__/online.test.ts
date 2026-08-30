@@ -255,6 +255,35 @@ describe('abandonment', () => {
     expect(room.gameState.players.p3.eliminated).toBe(true);
   });
 
+  it('frees a seat held by somebody who left before the game started', () => {
+    // Found by running it for real: without this, somebody who joins a public table and closes
+    // the tab holds a chair for ever. The table fills with ghosts, never starts, and quick play
+    // keeps sending people into it.
+    vi.useFakeTimers();
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    room.claimSeat('p1', 'Ava', 'sock-a', false);
+    expect(room.filledSeats()).toBe(1);
+
+    room.disconnectSocket('sock-a');
+    vi.advanceTimersByTime(ABANDON_GRACE_MS + 100);
+
+    expect(room.filledSeats()).toBe(0);
+    expect(room.started).toBe(false);
+  });
+
+  it('keeps the seat for somebody who reloads before the game starts', () => {
+    vi.useFakeTimers();
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    room.claimSeat('p1', 'Ava', 'sock-a', false);
+    room.disconnectSocket('sock-a');
+    room.reconnectSeat('p1', 'sock-a2');
+
+    vi.advanceTimersByTime(ABANDON_GRACE_MS + 100);
+    expect(room.filledSeats()).toBe(1);
+  });
+
   it('never forfeits a party seat — a phone locking is normal there', () => {
     vi.useFakeTimers();
     const { rooms, io } = manager();

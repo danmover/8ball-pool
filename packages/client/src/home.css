@@ -1839,3 +1839,264 @@ body.reduce-motion .case-reveal { animation: none; }
   width: 46px;
   height: 46px;
 }
+
+/* ================= Online lobby ================= */
+.online-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.quick-play {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 1rem 0 1.6rem;
+}
+
+.table-browser .section-head,
+.create-table h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.6rem 0 1.6rem;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 3rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.85rem;
+}
+
+/* A game already running is joinable only as a spectator, and should read that way. */
+.table-row.in-play {
+  opacity: 0.7;
+}
+
+.table-mode {
+  font-weight: 800;
+}
+
+.table-rules,
+.table-state {
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.table-seats {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: center;
+}
+
+.empty-tables {
+  padding: 1.4rem 0;
+  text-align: center;
+}
+
+.create-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+  margin: 0.7rem 0;
+}
+
+.create-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.create-row select {
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-weight: 700;
+}
+
+.create-note {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* ================= Waiting at an online table ================= */
+.waiting-room {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 0.7rem;
+  padding: 1.4rem;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.waiting-room h1 {
+  margin: 0;
+}
+
+.waiting-rules {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.waiting-seats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+
+.waiting-seat {
+  min-width: 150px;
+  padding: 0.7rem 1rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.waiting-seat.filled {
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.waiting-seat.me {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 5px #ffd569;
+}
+
+.you-tag {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #14141a;
+  color: #ffd569;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.waiting-status {
+  margin: 0;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.waiting-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.waiting-code-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+
+.waiting-code-value {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 900;
+  font-size: 2rem;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+}
+
+/* ================= Portrait phone, online table =================
+   The table rotates a quarter turn to fill the screen (TableRenderer.setAutoRotate), which
+   leaves the HUD — laid out for a television in landscape — sitting on top of it. Everything
+   below shrinks the furniture and pins it to the edges so the cloth stays visible.
+
+   Scoped to the online table page via .table-portrait, so the party host screen is untouched. */
+@media (orientation: portrait) and (max-width: 720px) {
+  .table-portrait .top-bar {
+    gap: 0.3rem;
+    padding: 0.35rem;
+  }
+
+  /* Two compact name plates side by side instead of two big banners stacked. */
+  .table-portrait #playerPanels {
+    gap: 0.3rem !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .table-portrait #playerPanels > * {
+    flex: 1 1 0;
+    min-width: 0;
+    transform: scale(0.72);
+    /* Scaled from the top *centre* so the two plates shrink toward their own middles and stay
+       side by side, rather than each collapsing leftward into the other. */
+    transform-origin: top center;
+  }
+
+  /* The spin pad and cue dial become a strip along the bottom rather than a tall column. */
+  .table-portrait .host-spin-wrap {
+    top: auto !important;
+    bottom: 0.4rem;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) scale(0.8);
+    transform-origin: bottom center;
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  /* The keyboard hint is for a desktop; a phone has no arrow keys to nudge with. */
+  .table-portrait .spin-hint,
+  .table-portrait .spin-label {
+    display: none;
+  }
+
+  /* Above the spin strip rather than top-left, where it sat on top of a name plate. */
+  .table-portrait .host-power-wrap {
+    top: auto;
+    bottom: 8.5rem;
+    left: 0.5rem;
+    right: auto;
+    transform: scale(0.78);
+    transform-origin: bottom left;
+  }
+
+  /* Keep the centre column clear of both. */
+  .table-portrait .centre-hud {
+    top: 64px;
+  }
+
+  .table-portrait .bracket-wrap {
+    display: none;
+  }
+}

@@ -534,7 +534,7 @@ export class Room {
    * for ever waiting on someone who has closed the tab.
    */
   private beginForfeitCountdown(seat: Seat): void {
-    if (this.governance !== 'open' || !this.started) return;
+    if (this.governance !== 'open') return;
     if (this.gameState.phase === 'game_over') return;
     if (this.connections.get(seat)?.bot) return;
     if (this.forfeitTimers.has(seat)) return;
@@ -545,7 +545,18 @@ export class Room {
 
     const timer = setTimeout(() => {
       this.forfeitTimers.delete(seat);
-      this.forfeitSeat(seat);
+      if (this.started) {
+        this.forfeitSeat(seat);
+        return;
+      }
+      // Not started yet, so there is no frame to forfeit — the seat simply opens up again.
+      //
+      // Without this, somebody who joins a public table and closes the tab holds a chair for
+      // ever: the table fills with ghosts, never starts, and quick play keeps sending people
+      // into it. That is exactly what happened the first time this was run for real.
+      this.releaseSeat(seat);
+      this.broadcastRoomState();
+      this.broadcastGameState();
     }, ABANDON_GRACE_MS);
     timer.unref?.();
     this.forfeitTimers.set(seat, timer);

@@ -46,3 +46,40 @@ export function loadSession(code: string, role: 'host' | 'player'): StoredSessio
   const raw = sessionStorage.getItem(sessionKey(code, role));
   return raw ? (JSON.parse(raw) as StoredSession) : null;
 }
+
+
+/**
+ * Seat tokens for online tables.
+ *
+ * localStorage rather than the sessionStorage the party sessions use. Closing a tab mid-frame
+ * is a normal thing to do online — the phone rings, the laptop sleeps — and sessionStorage dies
+ * with the tab, so coming back would hand your chair to a stranger. Party hosting is the
+ * opposite case: that session genuinely belongs to the one window that opened it.
+ */
+const SEAT_KEY = (code: string): string => `8ball:seat:${code.toUpperCase()}`;
+
+/** Seat tokens older than this are assumed to belong to a table that no longer exists. */
+const SEAT_TTL_MS = 6 * 60 * 60 * 1000;
+
+export function saveSeatToken(code: string, token: string): void {
+  localStorage.setItem(SEAT_KEY(code), JSON.stringify({ token, at: Date.now() }));
+}
+
+export function loadSeatToken(code: string): string | null {
+  const raw = localStorage.getItem(SEAT_KEY(code));
+  if (!raw) return null;
+  try {
+    const { token, at } = JSON.parse(raw) as { token: string; at: number };
+    if (Date.now() - at > SEAT_TTL_MS) {
+      localStorage.removeItem(SEAT_KEY(code));
+      return null;
+    }
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSeatToken(code: string): void {
+  localStorage.removeItem(SEAT_KEY(code));
+}

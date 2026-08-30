@@ -12,6 +12,7 @@ import { renderChallengesPage } from './pages/challengesPage';
 import { renderCareerPage } from './pages/careerPage';
 import { renderProgressPage } from './pages/progressPage';
 import { renderStatsPage } from './pages/statsPage';
+import { renderOnlinePage } from './pages/onlinePage';
 import { unlockAudio } from './render/audio';
 import { startMusic } from './render/music';
 import { startAmbience } from './render/ambience';
@@ -85,11 +86,18 @@ window.addEventListener(
 startRouter(app, (path) => {
   const tableMatch = path.match(/^\/table\/([A-Za-z0-9]{4})$/);
   const playMatch = path.match(/^\/play\/([A-Za-z0-9]{4})$/);
+  // Online tables get their own short path. Same page as a host screen underneath — the
+  // difference is entry and which seat this device plays, not the game.
+  const onlineMatch = path.match(/^\/t\/([A-Za-z0-9]{4})$/);
 
   if (tableMatch) {
     setCleanup(renderHostPage(app, tableMatch[1].toUpperCase()));
   } else if (playMatch) {
     setCleanup(renderControllerPage(app, playMatch[1].toUpperCase()));
+  } else if (onlineMatch) {
+    setCleanup(renderHostPage(app, onlineMatch[1].toUpperCase(), { online: true }));
+  } else if (path === '/online') {
+    setCleanup(renderOnlinePage(app));
   } else if (path === '/progress') {
     setCleanup(renderProgressPage(app));
   } else if (path === '/stats') {

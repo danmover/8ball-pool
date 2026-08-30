@@ -58,7 +58,7 @@ export function renderHomePage(root: HTMLElement): () => void {
             <span class="home-logo">${eightBallLogo()}</span>
             <div>
               <h1>8-Ball Pool</h1>
-              <p class="tagline">Host on the big screen. Play from your phone.</p>
+              <p class="tagline">Play online from anywhere, or host on the big screen.</p>
             </div>
           </div>
           <div class="home-player" id="homePlayer"></div>
@@ -82,6 +82,10 @@ export function renderHomePage(root: HTMLElement): () => void {
           <button class="play-btn" id="playSolo">
             <span class="play-main">PLAY SOLO</span>
             <span class="play-sub" id="soloSub">vs the computer</span>
+          </button>
+          <button class="play-btn secondary-play" id="onlineBtn">
+            <span class="play-main">PLAY ONLINE</span>
+            <span class="play-sub">Join a table from anywhere</span>
           </button>
           <button class="play-btn secondary-play" id="hostBtn">
             <span class="play-main">HOST A TABLE</span>
@@ -418,6 +422,7 @@ export function renderHomePage(root: HTMLElement): () => void {
   root.querySelector('#careerBtn')!.addEventListener('click', () => navigate('/career'));
   root.querySelector('#progressBtn')!.addEventListener('click', () => navigate('/progress'));
   root.querySelector('#statsBtn')!.addEventListener('click', () => navigate('/stats'));
+  root.querySelector('#onlineBtn')!.addEventListener('click', () => navigate('/online'));
   root.querySelector('#trickShotsBtn')!.addEventListener('click', () => navigate('/challenges'));
 
   root.querySelector('#settingsBtn')!.addEventListener('click', () => {

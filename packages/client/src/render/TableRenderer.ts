@@ -698,6 +698,17 @@ export class TableRenderer {
   private camFocus: { x: number; y: number } | null = null;
   private camTarget = 0;
   private camNow = 0;
+  /**
+   * Turned on its side, for a portrait phone.
+   *
+   * A pool table is roughly twice as wide as it is deep, so in a portrait window it shrinks to
+   * a strip across the middle with most of the screen wasted above and below it. Rotating a
+   * quarter turn makes it fill the phone instead. Everything else — aiming, the guide, the
+   * chute — works through `screenToTable`, so it only has to be right in one place.
+   */
+  private rotated = false;
+  /** Rotate automatically when the window is taller than it is wide. */
+  private autoRotate = false;
   private elapsed = 0;
   private chromeless = false;
 
@@ -1039,11 +1050,24 @@ export class TableRenderer {
     // scoreboard sits on the rails, and — since themes became whole rooms — the room is
     // reduced to a sliver at the top and bottom.
     const FIT = this.chromeless ? 1 : 0.8;
-    this.scale = Math.min((w - pad * 2) / boardW, (h - pad * 2) / boardH) * FIT;
-    this.root.scale.set(this.scale);
 
-    let ox = (w - boardW * this.scale) / 2 - left * this.scale;
-    let oy = (h - boardH * this.scale) / 2 - BOARD_TOP * this.scale;
+    // A quarter turn swaps which screen dimension each side of the table has to fit inside.
+    this.rotated = this.autoRotate && h > w;
+    const fitW = this.rotated ? boardH : boardW;
+    const fitH = this.rotated ? boardW : boardH;
+    this.scale = Math.min((w - pad * 2) / fitW, (h - pad * 2) / fitH) * FIT;
+    this.root.scale.set(this.scale);
+    this.root.rotation = this.rotated ? Math.PI / 2 : 0;
+
+    // Rotated, a table point (lx, ly) lands at (−ly, lx) before the offset, so centring solves
+    // for a different pair of edges. Written out rather than folded together because getting it
+    // subtly wrong puts the cue ball somewhere the pointer isn't.
+    let ox = this.rotated
+      ? (w + boardH * this.scale) / 2 + BOARD_TOP * this.scale
+      : (w - boardW * this.scale) / 2 - left * this.scale;
+    let oy = this.rotated
+      ? (h - boardW * this.scale) / 2 - left * this.scale
+      : (h - boardH * this.scale) / 2 - BOARD_TOP * this.scale;
 
     // The unzoomed layout, kept aside. The room is painted against *this* rather than against
     // the camera, so pushing in doesn't invalidate its cache — see the transform below.
@@ -1058,8 +1082,12 @@ export class TableRenderer {
     // it is supposed to be off is worse than no camera.
     if (this.camNow > 0.001 && this.camFocus) {
       const zoomed = baseScale * (1 + (CAMERA_ZOOM - 1) * this.camNow);
-      const fx = w / 2 - this.camFocus.x * zoomed;
-      const fy = h / 2 - this.camFocus.y * zoomed;
+      const fx = this.rotated
+        ? w / 2 + this.camFocus.y * zoomed
+        : w / 2 - this.camFocus.x * zoomed;
+      const fy = this.rotated
+        ? h / 2 - this.camFocus.x * zoomed
+        : h / 2 - this.camFocus.y * zoomed;
       ox += (fx - ox) * this.camNow;
       oy += (fy - oy) * this.camNow;
       this.scale = zoomed;
@@ -1104,6 +1132,21 @@ export class TableRenderer {
       this.sceneKey = key;
       drawScene(this.sceneLayer, this.theme, w, h, table);
     }
+  }
+
+  /**
+   * Allow a quarter turn when the window is portrait.
+   *
+   * Opt-in per page rather than global: the party host screen is a television in landscape and
+   * should never rotate, while an online player on a phone almost always wants it.
+   */
+  setAutoRotate(enabled: boolean): void {
+    this.autoRotate = enabled;
+  }
+
+  /** True while the table is turned on its side. */
+  get isRotated(): boolean {
+    return this.rotated;
   }
 
   /** Hides the chute/power-bar furniture — used by the phone's small table preview. */
@@ -1636,12 +1679,13 @@ export class TableRenderer {
 
   screenToTable(clientX: number, clientY: number): { x: number; y: number } {
     const rect = this.app.canvas.getBoundingClientRect();
-    const localX = clientX - rect.left;
-    const localY = clientY - rect.top;
-    return {
-      x: (localX - this.root.position.x) / this.scale,
-      y: (localY - this.root.position.y) / this.scale,
-    };
+    const localX = clientX - rect.left - this.root.position.x;
+    const localY = clientY - rect.top - this.root.position.y;
+    if (this.rotated) {
+      // Inverse of the quarter turn: screen (dx, dy) came from table (dy, −dx).
+      return { x: localY / this.scale, y: -localX / this.scale };
+    }
+    return { x: localX / this.scale, y: localY / this.scale };
   }
 
   /**
@@ -1709,9 +1753,11 @@ export class TableRenderer {
   /** Inverse of screenToTable — used to fly DOM effects (XP toasts) off a table position. */
   tableToScreen(x: number, y: number): { x: number; y: number } {
     const rect = this.app.canvas.getBoundingClientRect();
+    const dx = this.rotated ? -y * this.scale : x * this.scale;
+    const dy = this.rotated ? x * this.scale : y * this.scale;
     return {
-      x: rect.left + this.root.position.x + x * this.scale,
-      y: rect.top + this.root.position.y + y * this.scale,
+      x: rect.left + this.root.position.x + dx,
+      y: rect.top + this.root.position.y + dy,
     };
   }
 
