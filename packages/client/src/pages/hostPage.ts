@@ -208,19 +208,29 @@ export function renderHostPage(
     -->
     <div class="shot-deck" id="shotDeck" style="display:none">
       <!--
-        The two things you set, side by side and equally weighted. Power is not among them:
-        power comes from the drag on the table, so giving it a control-sized circle in the row
-        made the deck's biggest object the one thing in it you cannot touch.
+        Three round controls standing on the floor under the table, rather than a panel bar
+        across the bottom of the screen. The bar read as a strip of UI bolted over the room;
+        these read as things sitting in it.
       -->
       <div class="deck-controls">
+        <section class="deck-bay bay-power">
+          <div class="power-hud" id="powerHud">
+            <span class="power-sweep"></span>
+            <span class="power-face">
+              <span class="power-value" id="powerValue">0%</span>
+            </span>
+          </div>
+          <div class="bay-label" id="powerTier">Drag to aim</div>
+        </section>
+
         <section class="deck-bay bay-spin">
-          <div class="bay-label">Where you hit it</div>
           <div id="hostSpin"></div>
+          <div class="bay-label">Where you hit it</div>
         </section>
 
         <section class="deck-bay bay-cue">
-          <div class="bay-label">How you hold the cue</div>
           <div id="hostElevation"></div>
+          <div class="bay-label">How you hold the cue</div>
         </section>
 
         <button class="deck-keys" id="deckKeys" type="button" aria-expanded="false"
@@ -231,14 +241,6 @@ export function renderHostPage(
           <div class="shortcut"><kbd>C</kbd><span>Back to centre ball</span></div>
           <div class="shortcut"><kbd>R</kbd><span>Review the last shot</span></div>
         </div>
-      </div>
-
-      <!-- Power reads out along the bottom edge: a continuous value from the drag, so a bar
-           is its natural shape, and it charges the whole deck rather than one corner of it. -->
-      <div class="power-hud" id="powerHud">
-        <span class="power-tier" id="powerTier">Drag the table to aim</span>
-        <span class="power-track"><i></i></span>
-        <span class="power-value" id="powerValue">0%</span>
       </div>
     </div>
     <div id="lobbyWrap"></div>
@@ -288,15 +290,15 @@ export function renderHostPage(
     // describing, and HARD HIT shouted louder than the value it was a word for.
     const tier = powerTierLabel(power);
     powerTier.textContent =
-      power > 0.02
-        ? tier.charAt(0) + tier.slice(1).toLowerCase()
-        : 'Drag the table to aim';
+      power > 0.02 ? tier.charAt(0) + tier.slice(1).toLowerCase() : 'Drag to aim';
     powerHud.classList.toggle('charged', power > 0.02);
-    // Near the top the bar pulses, because "as hard as it goes" is worth knowing before you
+    // Near the top the ring flashes, because "as hard as it goes" is worth knowing before you
     // let go rather than after.
     powerHud.classList.toggle('maxed', power > 0.95);
     powerHud.style.setProperty('--power-pct', `${pct}%`);
     powerHud.style.setProperty('--power-color', color);
+    // The number swells with the shot you are winding up.
+    powerHud.style.setProperty('--power-swell', String(power));
   }
 
   root.querySelector('#leaveBtn')!.addEventListener('click', () => {
