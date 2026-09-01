@@ -918,26 +918,6 @@ input:focus {
   box-shadow: 0 0 14px currentColor;
 }
 
-/* The host's power readout sits at the bottom-left, beside the in-canvas power bar. */
-.host-power-wrap {
-  position: fixed;
-  left: 18px;
-  bottom: 18px;
-  pointer-events: none;
-  z-index: 4;
-}
-
-.host-power-wrap .power-hud {
-  position: static;
-  transform: scale(var(--power-scale, 1));
-  transform-origin: bottom left;
-  align-items: flex-start;
-}
-
-.host-power-wrap .power-value {
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-}
-
 .power-hud {
   position: absolute;
   top: 50%;

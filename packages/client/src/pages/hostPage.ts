@@ -198,24 +198,41 @@ export function renderHostPage(
       <div class="challenge-hud" id="challengeHud" style="display:none"></div>
       <div id="bottomArea"></div>
     </div>
-    <div class="host-power-wrap" id="hostPowerWrap" style="display:none">
-      <div class="power-hud" id="powerHud">
-        <div class="power-value" id="powerValue">0%</div>
-        <div class="power-tier" id="powerTier">DRAG TO AIM</div>
+    <!--
+      One deck for the whole shot.
+
+      Power used to float in its own panel in the corner while spin and cue sat in another,
+      so the three things that make up a single shot were two unrelated objects on screen. The
+      keyboard hints were a paragraph of small grey text taking a column of the panel to say
+      something you need once. They are behind a key now.
+    -->
+    <div class="shot-deck" id="shotDeck" style="display:none">
+      <div class="deck-bay bay-power">
+        <div class="bay-label">Power</div>
+        <div class="power-hud" id="powerHud">
+          <div class="power-value" id="powerValue">0%</div>
+          <div class="power-tier" id="powerTier">Drag to aim</div>
+        </div>
       </div>
-    </div>
-    <!-- Two labelled groups side by side, rather than five loose children in a row: the label
-         belongs above its own control, and a flat row put "SPIN" beside the pad instead. -->
-    <div class="host-spin-wrap" id="hostSpinWrap" style="display:none">
-      <div class="ctrl-group">
-        <div class="spin-label">SPIN</div>
+
+      <div class="deck-bay bay-spin">
+        <div class="bay-label">Spin</div>
         <div id="hostSpin"></div>
       </div>
-      <div class="ctrl-group">
-        <div class="spin-label">CUE</div>
+
+      <div class="deck-bay bay-cue">
+        <div class="bay-label">Cue</div>
         <div id="hostElevation"></div>
       </div>
-      <div class="spin-hint">Arrows nudge spin · Shift+arrows fine-aim · C to centre · R to review</div>
+
+      <button class="deck-keys" id="deckKeys" type="button" aria-expanded="false"
+              title="Keyboard shortcuts">${icon('settings', { size: 15 })}</button>
+      <div class="deck-shortcuts" id="deckShortcuts" hidden>
+        <div class="shortcut"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd><span>Nudge the spin</span></div>
+        <div class="shortcut"><kbd>Shift</kbd><span>+ arrows to fine-aim</span></div>
+        <div class="shortcut"><kbd>C</kbd><span>Back to centre ball</span></div>
+        <div class="shortcut"><kbd>R</kbd><span>Review the last shot</span></div>
+      </div>
     </div>
     <div id="lobbyWrap"></div>
   `;
@@ -225,8 +242,7 @@ export function renderHostPage(
   const panelsEl = root.querySelector<HTMLElement>('#playerPanels')!;
   const bottomArea = root.querySelector<HTMLElement>('#bottomArea')!;
   const lobbyWrap = root.querySelector<HTMLElement>('#lobbyWrap')!;
-  const hostPowerWrap = root.querySelector<HTMLElement>('#hostPowerWrap')!;
-  const hostSpinWrap = root.querySelector<HTMLElement>('#hostSpinWrap')!;
+  const shotDeck = root.querySelector<HTMLElement>('#shotDeck')!;
   const challengeHud = root.querySelector<HTMLElement>('#challengeHud')!;
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
   const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
@@ -258,9 +274,14 @@ export function renderHostPage(
     const color = powerToCssColor(power);
     powerValue.textContent = `${pct}%`;
     powerValue.style.color = color;
+    // Sentence case: this sits under a number, not over a doorway. THE SHOUTING CAPS made the
+    // tier read as more important than the value it was describing.
     powerTier.textContent = powerTierLabel(power);
     powerHud.classList.toggle('charged', power > 0.02);
     powerHud.style.setProperty('--power-scale', String(1 + power * 0.18));
+    // Drives the ring round the number, so power has a shape in the deck and not only a digit.
+    powerHud.style.setProperty('--power-pct', `${pct}%`);
+    powerHud.style.setProperty('--power-color', color);
   }
 
   root.querySelector('#leaveBtn')!.addEventListener('click', () => {
@@ -549,6 +570,32 @@ export function renderHostPage(
     });
     root.querySelector<HTMLElement>('#hostElevation')!.appendChild(cueLift.el);
 
+    /*
+     * The shortcut list, behind a key rather than printed across the deck.
+     *
+     * It used to be a paragraph of small grey text occupying a third of the panel, permanently,
+     * to say four things you need to read once. A pointer press on the deck must not reach the
+     * aim surface behind it, hence stopping the pointer event as well as handling the click.
+     */
+    const keysBtn = root.querySelector<HTMLButtonElement>('#deckKeys')!;
+    const shortcuts = root.querySelector<HTMLElement>('#deckShortcuts')!;
+    const setShortcuts = (open: boolean): void => {
+      shortcuts.hidden = !open;
+      keysBtn.setAttribute('aria-expanded', String(open));
+      keysBtn.classList.toggle('open', open);
+    };
+    keysBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    keysBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setShortcuts(shortcuts.hidden);
+    });
+    // Anywhere else closes it, including the table — you opened it to read it, not to keep it.
+    const closeShortcuts = (e: PointerEvent): void => {
+      if (!shortcuts.hidden && !shortcuts.contains(e.target as Node)) setShortcuts(false);
+    };
+    window.addEventListener('pointerdown', closeShortcuts);
+    cleanups.push(() => window.removeEventListener('pointerdown', closeShortcuts));
+
     // Keyboard shortcuts, because setting spin on a desktop by dragging a small circle with the
     // mouse and *then* dragging the table to aim is two hands' worth of work for one shot.
     //
@@ -557,7 +604,7 @@ export function renderHostPage(
     // can't reliably resolve that.
     const AIM_NUDGE = 0.005; // radians — about a third of a degree
     const onShotKey = (e: KeyboardEvent): void => {
-      if (hostSpinWrap.style.display === 'none') return;
+      if (shotDeck.style.display === 'none') return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const step = 0.25;
       const aiming = e.shiftKey;
@@ -1513,8 +1560,11 @@ export function renderHostPage(
       state.currentShooter === ownedSeat &&
       (state.phase === 'aiming' || state.phase === 'break');
     aimController?.setEnabled(canAim);
-    hostPowerWrap.style.display = canAim ? '' : 'none';
-    hostSpinWrap.style.display = canAim ? '' : 'none';
+    shotDeck.style.display = canAim ? '' : 'none';
+    // Lift the table clear of the deck while it is up, so the deck never sits on the middle
+    // pocket of the bottom rail. Measured rather than hard-coded: the deck is a different
+    // height in portrait, and a stale number would put the table back under it.
+    renderer?.setBottomInset(canAim ? shotDeck.offsetHeight + 26 : 0);
     if (!canAim) setPowerHud(0);
 
     // The win only resolves after the shot settles, so the takeover fires here rather than

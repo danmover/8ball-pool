@@ -2700,38 +2700,20 @@ body.reduce-motion .case-reveal { animation: none; }
     transform-origin: top center;
   }
 
-  /* The spin pad and cue dial become a strip along the bottom rather than a tall column. */
-  .table-portrait .host-spin-wrap {
-    top: auto !important;
+  /* The deck is already one centred strip along the bottom; portrait only shrinks it. */
+  .table-portrait .shot-deck {
     bottom: 0.4rem;
-    left: 50% !important;
-    right: auto !important;
-    transform: translateX(-50%) scale(0.8);
+    transform: translateX(-50%) scale(0.82);
     transform-origin: bottom center;
-    display: flex !important;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.6rem;
   }
 
-  /* The keyboard hint is for a desktop; a phone has no arrow keys to nudge with. */
-  .table-portrait .spin-hint,
-  .table-portrait .spin-label {
+  /* A phone has no arrow keys to nudge with, so the shortcut key has nothing to offer. */
+  .table-portrait .deck-keys,
+  .table-portrait .deck-shortcuts {
     display: none;
   }
 
-  /* Above the spin strip rather than top-left, where it sat on top of a name plate. */
-  .table-portrait .host-power-wrap {
-    top: auto;
-    bottom: 8.5rem;
-    left: 0.5rem;
-    right: auto;
-    transform: scale(0.78);
-    transform-origin: bottom left;
-  }
-
-  /* Keep the centre column clear of both. */
+  /* Keep the centre column clear of the deck. */
   .table-portrait .centre-hud {
     top: 64px;
   }
@@ -2926,48 +2908,254 @@ body.reduce-motion .play-btn.searching {
   cursor: default;
 }
 
-/* ================= Table HUD: one bottom-left cluster =================
-   The spin pad was a tall column from 120px up to nearly half the screen, and the power
-   readout a separate card below it — two objects covering a third of the left of the table
-   between them. Laid out as a row they are one shorter cluster that reads as a single control
-   panel, which is what they are. */
-.host-spin-wrap {
-  flex-direction: row !important;
-  align-items: center;
-  gap: 0.75rem !important;
-  bottom: 16px !important;
-  /* Clear of the power readout, which keeps its own corner. */
-  left: 118px !important;
-  padding: 0.55rem 0.85rem !important;
+/* ================= The shot deck =================
+   Everything that makes up one shot, in one object at the bottom of the table.
+
+   It used to be two: a power card in the corner and a spin/cue panel above it, so the three
+   settings that decide a single shot were two unrelated things in different places. And a
+   third of the panel was a permanent paragraph of small grey keyboard hints — four facts you
+   read once, occupying screen for the whole game. Those are behind a key now.
+
+   Three bays, each labelled over its own control, divided by a hairline so the groups are
+   legible without needing boxes round them. */
+
+.shot-deck {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: stretch;
+  gap: 0.9rem;
+  padding: 0.6rem 0.9rem 0.7rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--panel-3),
+    0 16px 30px rgba(0, 0, 0, 0.5);
 }
 
-/* The two labelled halves — spin on the left, cue on the right — each stay a column. */
-.host-spin-wrap .spin-label {
-  font-size: 0.58rem;
-  letter-spacing: 0.1em;
-  opacity: 0.5;
-  margin-bottom: -0.15rem;
-}
+/* Centred rather than pinned to the left corner: the cue ball is as likely to be on one side
+   as the other, and a panel hugging one edge covered whichever half of the table it sat on. */
 
-/* Keyboard hints belong beside the controls, not stacked under them adding height. */
-.host-spin-wrap .spin-hint {
-  max-width: 8.5rem;
-  font-size: 0.6rem;
-  line-height: 1.25;
-  opacity: 0.55;
-}
-
-/* The power readout squares up with the cluster beside it. */
-.host-power-wrap .power-hud {
-  min-width: 86px;
-}
-
-/* Each control keeps its own label directly above it. */
-.host-spin-wrap .ctrl-group {
+.deck-bay {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  /* Each bay is as wide as its own control needs. `min-width: 0` let the spin bay shrink
+     under its preset row and clip DRAW off the front of it. */
+  flex: 0 0 auto;
+}
+
+/* The cue bay's hint is the only thing here that runs to a sentence, so it is the only thing
+   that needs a width holding it in — left free it stretched the whole deck across the table. */
+.bay-cue {
+  max-width: 220px;
+}
+
+/* A hairline between bays, drawn on the bay rather than as extra elements. */
+.deck-bay + .deck-bay {
+  padding-left: 0.9rem;
+  border-left: 1.5px solid rgba(255, 236, 255, 0.2);
+}
+
+.bay-label {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* --- Power ---
+   The number is the readout; the ring round it is the shape. Between them you can read the
+   power at a glance and to the percent, without a second meter competing with the one the
+   renderer already draws beside the cue. */
+.bay-power {
+  justify-content: flex-start;
+  flex: 0 0 auto;
+}
+
+/*
+ * `.power-hud` is centred over the canvas on the phone controller — `position: absolute` with
+ * `top: 50%; left: 50%` and a translate to pull it back. In the deck it is just a widget in a
+ * row, so all four of those have to be undone: switching to `relative` without clearing
+ * `top`/`left` offsets it by half the deck and hangs it out of the panel, which is exactly
+ * what it did.
+ */
+.shot-deck .power-hud {
+  position: relative;
+  inset: auto;
+  transform: none;
+  opacity: 1;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  gap: 0;
+  /* Conic ring: filled to --power-pct in the tier's own colour, dark for the rest. */
+  background:
+    conic-gradient(var(--power-color, var(--gold)) var(--power-pct, 0%), rgba(0, 0, 0, 0.45) 0);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.15s ease;
+}
+
+/* The dark face inside the ring, so the ring reads as a gauge rather than a pie. */
+.shot-deck .power-hud::before {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2a1739, #1b0f28);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--ink);
+}
+
+.shot-deck .power-hud.charged {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.5),
+    0 0 22px var(--power-color, var(--gold));
+}
+
+.shot-deck .power-value {
+  position: relative;
+  z-index: 1;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+}
+
+.shot-deck .power-tier {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.1rem;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  opacity: 1;
+  max-width: 66px;
+  text-align: center;
+  line-height: 1.15;
+}
+
+/* --- Keyboard shortcuts, behind a key --- */
+
+.deck-keys {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.14);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.deck-keys:hover:not(:disabled),
+.deck-keys.open {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+
+.deck-keys:active:not(:disabled) {
+  transform: none;
+}
+
+.deck-shortcuts {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 10px);
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--panel-3),
+    0 14px 24px rgba(0, 0, 0, 0.5);
+}
+
+.deck-shortcuts[hidden] {
+  display: none;
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--paper-2);
+}
+
+.shortcut span {
+  margin-left: 0.15rem;
+}
+
+.shortcut kbd {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  min-width: 1.35rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  text-align: center;
+  color: var(--paper);
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.18), 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* --- Narrow and portrait ---
+   The deck stays one object; it just gets tighter. Stacking the bays would put the controls
+   where a thumb cannot reach them on a phone held upright. */
+@media (max-width: 720px), (orientation: portrait) {
+  .shot-deck {
+    gap: 0.6rem;
+    padding: 0.5rem 0.7rem 0.6rem;
+    border-radius: 16px;
+  }
+
+  .deck-bay + .deck-bay {
+    padding-left: 0.6rem;
+  }
+
+  .shot-deck .power-hud {
+    width: 74px;
+    height: 74px;
+  }
+
+  .shot-deck .power-hud::before {
+    inset: 9px;
+  }
+
+  .shot-deck .power-value {
+    font-size: 1.1rem;
+  }
+
+  .shot-deck .power-tier {
+    font-size: 0.5rem;
+    max-width: 56px;
+  }
 }
 
 /* --- Kept for the online lobby and the locker ---

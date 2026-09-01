@@ -907,41 +907,6 @@
    Moved up beside the meter on the left rail and framed like everything else; floating
    ghost-grey numerals in the bottom corner were easy to miss and looked unfinished. */
 
-/* Bottom-left, clear of the meter it describes — centring it vertically put the card
-   straight on top of the meter. */
-.host-power-wrap {
-  left: 16px;
-  bottom: 16px;
-}
-
-.host-power-wrap .power-hud {
-  align-items: center;
-  gap: 0.1rem;
-  padding: 0.5rem 0.7rem;
-  border-radius: 14px;
-  opacity: 1;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3),
-    0 12px 22px rgba(0, 0, 0, 0.45);
-  transform-origin: center;
-}
-
-.host-power-wrap .power-value {
-  font-size: 1.7rem;
-  text-shadow: none;
-  color: var(--paper);
-}
-
-.host-power-wrap .power-tier {
-  color: var(--muted);
-  opacity: 1;
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-  white-space: nowrap;
-}
-
 .bot-mark {
   margin-left: 0.3em;
   opacity: 0.85;
@@ -1414,40 +1379,6 @@ button.mini.secondary {
   box-shadow:
     0 0 0 2px var(--ink),
     0 0 10px rgba(42, 110, 224, 0.6);
-}
-
-.host-spin-wrap {
-  position: fixed;
-  left: 16px;
-  bottom: 120px;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.6rem 0.7rem;
-  border-radius: 16px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3),
-    0 12px 22px rgba(0, 0, 0, 0.45);
-}
-
-.spin-label {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 0.66rem;
-  letter-spacing: 0.16em;
-  color: var(--muted);
-}
-
-.spin-hint {
-  font-size: 0.58rem;
-  color: var(--muted);
-  max-width: 120px;
-  text-align: center;
-  line-height: 1.3;
 }
 
 /* --- Spin control ---
