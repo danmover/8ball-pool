@@ -3028,8 +3028,10 @@ body.reduce-motion .play-btn.searching {
 /* The dark face inside the ring, so the ring reads as a gauge and not a pie chart. */
 .power-face {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   width: 78px;
   height: 78px;
   border-radius: 50%;
@@ -3047,6 +3049,25 @@ body.reduce-motion .play-btn.searching {
   /* Swells a little as the shot charges — the number grows into the shot you are winding up. */
   transform: scale(calc(1 + var(--power-swell, 0) * 0.14));
   transition: transform 0.09s ease-out;
+}
+
+/* The tier lives inside the ring, under the number it describes. Outside, as the bay's label,
+   it was competing with the other two labels while saying something quite different from
+   them — they name the control, it names the state. */
+.shot-deck .power-tier {
+  position: static;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 1;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+}
+
+.power-hud.charged .power-tier {
+  color: var(--power-color, var(--gold));
 }
 
 .power-hud.charged {
@@ -3077,13 +3098,83 @@ body.reduce-motion .play-btn.searching {
   gap: 0.4rem;
 }
 
+/*
+ * The cue ball you strike, drawn like the balls on the cloth: a broad sheen upper-left, a
+ * crescent of shade low-right, and one hard catchlight. It was a flat white circle with a
+ * dashed cross on it, which read as a diagram of a cue ball rather than as one.
+ */
 .bay-spin .spin-pad {
   width: 106px;
   height: 106px;
+  background:
+    radial-gradient(circle at 68% 72%, rgba(20, 10, 30, 0.36) 0%, rgba(20, 10, 30, 0.08) 44%, transparent 68%),
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 34%, transparent 60%),
+    radial-gradient(circle at 50% 50%, #f8f5ec 0 58%, #d8d1c0 100%);
   box-shadow:
     0 0 0 2px var(--ink),
-    inset -6px -8px 14px rgba(26, 20, 16, 0.25),
     0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* The catchlight, in the same place the renderer paints it on every other ball. */
+.bay-spin .spin-pad::before,
+.bay-spin .spin-pad::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.bay-spin .spin-pad::before {
+  left: 20%;
+  top: 15%;
+  width: 27%;
+  height: 20%;
+  transform: rotate(-40deg);
+}
+
+.bay-spin .spin-pad::after {
+  right: 15%;
+  bottom: 17%;
+  width: 15%;
+  height: 9%;
+  transform: rotate(-40deg);
+}
+
+/* The safe grip: inside this ring the tip will not slip. Drawn as a real edge rather than
+   left to be discovered by miscuing. */
+.bay-spin .spin-safe {
+  position: absolute;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(26, 20, 16, 0.18);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.spin-control.risky .spin-safe {
+  box-shadow: inset 0 0 0 2px rgba(217, 75, 58, 0.55);
+}
+
+/* Crosshair through the middle, so centre-ball is findable without hunting. */
+.bay-spin .spin-pad .spin-axis {
+  z-index: 3;
+  font-weight: 800;
+  font-size: 0.42rem;
+  color: rgba(26, 20, 16, 0.34);
+}
+
+.bay-spin .spin-pad .dot {
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 34% 30%, #7fe6ff, var(--accent-2) 68%);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 12px rgba(34, 211, 238, 0.8);
+  transition: left 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4), top 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.spin-control.risky .dot {
+  background: radial-gradient(circle at 34% 30%, #ffb0b8, var(--danger) 68%);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 14px rgba(255, 77, 109, 0.85);
 }
 
 .spin-readout {
@@ -3115,16 +3206,20 @@ body.reduce-motion .play-btn.searching {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
-  width: 58px;
-  padding: 0.28rem 0.2rem 0.3rem;
+  gap: 0.16rem;
+  width: 66px;
+  padding: 0.38rem 0.24rem 0.4rem;
   border: none;
-  border-radius: 11px;
+  border-radius: 13px;
   cursor: pointer;
   font-family: inherit;
   color: var(--paper);
-  background: linear-gradient(180deg, rgba(60, 38, 78, 0.9), rgba(28, 16, 40, 0.9));
-  box-shadow: 0 0 0 2px var(--ink), 0 4px 10px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, rgba(66, 42, 86, 0.92), rgba(28, 16, 40, 0.92));
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.16),
+    0 0 0 2px var(--ink),
+    0 4px 0 rgba(0, 0, 0, 0.45),
+    0 8px 14px rgba(0, 0, 0, 0.45);
   transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.15s ease,
     box-shadow 0.15s ease, color 0.15s ease;
 }
@@ -3144,39 +3239,47 @@ body.reduce-motion .play-btn.searching {
   box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--gold-dark), 0 0 18px rgba(255, 197, 49, 0.45);
 }
 
+/* Bigger, and painted like an actual ball rather than a plain white pip — it is a picture of
+   the cue ball, and at 20px flat it read as a bullet point. */
 .preset-ball {
   position: relative;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #fff 0 18%, #f6f2e6 46%, #cfc7b4 100%);
-  box-shadow: 0 0 0 1.5px var(--ink), inset -2px -3px 3px rgba(0, 0, 0, 0.16);
+  background:
+    radial-gradient(circle at 68% 72%, rgba(20, 10, 30, 0.32) 0%, transparent 62%),
+    radial-gradient(circle at 32% 26%, #fff 0 20%, #f6f2e6 48%, #d5cebd 100%);
+  box-shadow: 0 0 0 2px var(--ink);
 }
 
 .preset-ball i {
   position: absolute;
   left: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
   border-radius: 50%;
-  background: var(--danger);
-  box-shadow: 0 0 0 1.2px var(--ink);
+  background: radial-gradient(circle at 34% 30%, #7fe6ff, var(--accent-2) 70%);
+  box-shadow: 0 0 0 1.5px var(--ink);
   transition: top 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.spin-preset.active .preset-ball i {
+  background: radial-gradient(circle at 34% 30%, #ffd8de, var(--danger) 70%);
 }
 
 .preset-name {
   font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   line-height: 1.05;
 }
 
 .preset-after {
-  font-size: 0.54rem;
+  font-size: 0.56rem;
   font-weight: 700;
   line-height: 1.05;
-  opacity: 0.62;
+  opacity: 0.6;
   white-space: nowrap;
 }
 
@@ -3199,20 +3302,10 @@ body.reduce-motion .play-btn.searching {
   outline: none;
 }
 
-/* A soft disc behind the arc. Without it the dial was a few thin strokes floating on the
-   floor while the other two controls were solid objects, and it read as unfinished rather
-   than as the third of a set. */
-.cue-dial::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  right: -8px;
-  top: -14px;
-  bottom: -8px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 74%, rgba(46, 28, 66, 0.85), rgba(20, 11, 32, 0.55) 72%, transparent 88%);
-  pointer-events: none;
-}
+/* No disc behind the arc. One was added to give the dial the weight the other two controls
+   have, and it just put a panel back — a dark blob under the cue, which is the thing the deck
+   had its panel removed to avoid. The arc carries its own weight instead: a thick light track,
+   which is what the other two are as well, a ring and a ball. */
 
 .cue-dial.dragging {
   cursor: grabbing;

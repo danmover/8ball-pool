@@ -715,6 +715,8 @@ export class TableRenderer {
   private elapsed = 0;
   private chromeless = false;
   private bottomInset = 0;
+  /** Cue elevation in radians, so the drawn cue matches the shot being set up. */
+  private cueElevation = 0;
 
   private constructor(container: HTMLElement, app: Application) {
     this.container = container;
@@ -1542,6 +1544,11 @@ export class TableRenderer {
 
   setAimVisual(angle: number, power: number, visible: boolean): void {
     this.aim = { angle, power, visible };
+  }
+
+  /** How far the butt is raised, so the drawn cue shows the shot you are actually setting up. */
+  setCueElevation(radians: number): void {
+    this.cueElevation = Math.max(0, radians);
   }
 
   setAimPreview(cueBallId: number, preview: TrajectoryPreview | null): void {
@@ -2386,9 +2393,10 @@ export class TableRenderer {
 
     // Cue-skin aura sits under the power glow, so a legendary cue reads as lit even at rest.
     const skin = this.cueSkin;
+    const shaft = CUE_LENGTH * Math.cos(this.cueElevation);
     if (skin.aura) {
-      const tailX = tipX - dirX * CUE_LENGTH;
-      const tailY = tipY - dirY * CUE_LENGTH;
+      const tailX = tipX - dirX * shaft;
+      const tailY = tipY - dirY * shaft;
       glow.moveTo(tailX, tailY).lineTo(tipX, tipY);
       glow.stroke({ width: 30, color: skin.aura, alpha: 0.22, cap: 'round' });
     }
@@ -2396,13 +2404,20 @@ export class TableRenderer {
     // Inferno's embers drift off the shaft while you're lining up.
     if (skin.embers && Math.random() < 0.35) {
       const f = 0.15 + Math.random() * 0.7;
-      this.particles.embers(
-        tipX - dirX * CUE_LENGTH * f,
-        tipY - dirY * CUE_LENGTH * f
-      );
+      this.particles.embers(tipX - dirX * shaft * f, tipY - dirY * shaft * f);
     }
 
-    this.drawCueStick(g, tipX, tipY, dirX, dirY);
+    /*
+     * A raised cue, from above.
+     *
+     * The cue was drawn flat whatever the elevation, so setting up a jump looked exactly like
+     * setting up a normal shot right up until the ball left the cloth. Foreshortening it by
+     * the cosine is what a raised cue actually looks like from overhead, and the shadow
+     * swinging out from under it is what says which way it is raised rather than shortened.
+     */
+    const lift = this.cueElevation;
+    const height = CUE_LENGTH * Math.sin(lift);
+    this.drawCueStick(g, tipX, tipY, dirX, dirY, shaft, height);
   }
 
   /**
@@ -2412,8 +2427,22 @@ export class TableRenderer {
    *
    * Built from quads because Pixi strokes are constant-width — the taper is the whole point.
    */
-  private drawCueStick(g: Graphics, tipX: number, tipY: number, dirX: number, dirY: number): void {
-    const LEN = CUE_LENGTH;
+  private drawCueStick(
+    g: Graphics,
+    tipX: number,
+    tipY: number,
+    dirX: number,
+    dirY: number,
+    /**
+     * How far the cue reaches across the cloth, which is its real length foreshortened by the
+     * elevation. Seen from above a raised cue is a *shorter* cue — that shortening is the only
+     * way a top-down view can show the angle at all.
+     */
+    length = CUE_LENGTH,
+    /** How high the butt is off the cloth, in table units, for the shadow to lengthen with. */
+    lift = 0
+  ): void {
+    const LEN = length;
     const R_TIP = 4.6;
     const R_BUTT = 13.5;
     // Perpendicular to the cue, used to fan each segment out to its half-width.
@@ -2442,18 +2471,30 @@ export class TableRenderer {
       ]).fill({ color, alpha });
     };
 
-    // Soft drop shadow, offset down-right like the ball shadows.
+    /*
+     * Soft drop shadow, offset down-right like the ball shadows — and pulling further away
+     * the higher the butt is. A cue lying on the cloth has its shadow tight underneath it; a
+     * cue raised for a jump throws it well clear, and that gap is what makes the elevation
+     * read from directly above.
+     */
     const s0 = at(0);
     const s1 = at(1);
+    // Enough to read as a gap, not so much that the shadow stops looking like it belongs to
+    // the cue: at the full lift a third of the length swung the butt's shadow clean away and
+    // it read as a second object lying on the cloth.
+    const shx0 = 5;
+    const shy0 = 7;
+    const shx1 = 5 + lift * 0.15;
+    const shy1 = 7 + lift * 0.19;
     g.poly([
-      s0.x + nx * s0.r + 5,
-      s0.y + ny * s0.r + 7,
-      s1.x + nx * s1.r + 5,
-      s1.y + ny * s1.r + 7,
-      s1.x - nx * s1.r + 5,
-      s1.y - ny * s1.r + 7,
-      s0.x - nx * s0.r + 5,
-      s0.y - ny * s0.r + 7,
+      s0.x + nx * s0.r + shx0,
+      s0.y + ny * s0.r + shy0,
+      s1.x + nx * s1.r + shx1,
+      s1.y + ny * s1.r + shy1,
+      s1.x - nx * s1.r + shx1,
+      s1.y - ny * s1.r + shy1,
+      s0.x - nx * s0.r + shx0,
+      s0.y - ny * s0.r + shy0,
     ]).fill({ color: 0x000000, alpha: 0.28 });
 
     // Palette ties the cue to the rest of the game: the table's tan rail wood for the

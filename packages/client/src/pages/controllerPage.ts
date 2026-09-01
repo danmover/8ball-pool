@@ -407,7 +407,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     Object.assign(spinPad.el.style, { position: 'absolute', bottom: '54px', right: '18px' });
     controlArea.appendChild(spinPad.el);
 
-    cueLift = createShotTypeControl(spinPad, () => renderPreview(lastAimAngle));
+    cueLift = createShotTypeControl(spinPad, (radians) => {
+      renderer?.setCueElevation(radians);
+      renderPreview(lastAimAngle);
+    });
     Object.assign(cueLift.el.style, { position: 'absolute', bottom: '54px', left: '18px' });
     controlArea.appendChild(cueLift.el);
 

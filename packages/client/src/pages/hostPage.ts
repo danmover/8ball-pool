@@ -213,14 +213,17 @@ export function renderHostPage(
         these read as things sitting in it.
       -->
       <div class="deck-controls">
+        <!-- The three labels are deliberately parallel — how hard, where, how — so the row
+             reads as one sentence about the shot rather than three unrelated widgets. -->
         <section class="deck-bay bay-power">
           <div class="power-hud" id="powerHud">
             <span class="power-sweep"></span>
             <span class="power-face">
               <span class="power-value" id="powerValue">0%</span>
+              <span class="power-tier" id="powerTier">drag back</span>
             </span>
           </div>
-          <div class="bay-label" id="powerTier">Drag to aim</div>
+          <div class="bay-label">How hard you hit it</div>
         </section>
 
         <section class="deck-bay bay-spin">
@@ -288,9 +291,11 @@ export function renderHostPage(
     //
     // Sentence case rather than the label's own capitals: it sits beside the number it is
     // describing, and HARD HIT shouted louder than the value it was a word for.
+    // Inside the ring, under the number: at rest it says what to do, and once you are pulling
+    // back it names the shot. Sentence case, because it sits beneath the value it describes.
     const tier = powerTierLabel(power);
     powerTier.textContent =
-      power > 0.02 ? tier.charAt(0) + tier.slice(1).toLowerCase() : 'Drag to aim';
+      power > 0.02 ? tier.charAt(0) + tier.slice(1).toLowerCase() : 'drag back';
     powerHud.classList.toggle('charged', power > 0.02);
     // Near the top the ring flashes, because "as hard as it goes" is worth knowing before you
     // let go rather than after.
@@ -582,7 +587,9 @@ export function renderHostPage(
     // Raising the cue changes where the ball goes, so the guide has to be recomputed for it
     // exactly as it is for spin. It is handed the pad because choosing a curve has to put side
     // on the ball — a swerve with a centred tip is a shot that quietly does nothing.
-    cueLift = createShotTypeControl(spinPad, () => {
+    cueLift = createShotTypeControl(spinPad, (radians) => {
+      // The drawn cue foreshortens with the lift, so raising it looks like raising it.
+      renderer?.setCueElevation(radians);
       if (lastAimAngle !== null) renderPreview(lastAimAngle);
     });
     root.querySelector<HTMLElement>('#hostElevation')!.appendChild(cueLift.el);
