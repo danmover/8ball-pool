@@ -212,9 +212,14 @@ export function renderHostPage(
         across the bottom of the screen. The bar read as a strip of UI bolted over the room;
         these read as things sitting in it.
       -->
+      <!--
+        One row, floating on the floor below the table. Nothing is painted behind it and
+        nothing is reserved for it: it is sized to fit the strip of room the table already
+        leaves, rather than pushing the table up to make a band of its own.
+      -->
       <div class="deck-controls">
-        <!-- The three labels are deliberately parallel — how hard, where, how — so the row
-             reads as one sentence about the shot rather than three unrelated widgets. -->
+        <!-- The three labels are deliberately parallel — how hard, where, how — so they read
+             as one sentence about the shot rather than three unrelated widgets. -->
         <section class="deck-bay bay-power">
           <div class="power-hud" id="powerHud">
             <span class="power-sweep"></span>
@@ -279,6 +284,26 @@ export function renderHostPage(
       elevation: cueLift?.getValue() ?? 0,
     });
     renderPreview(lastAimAngle);
+  }
+
+  /**
+   * Scales the deck to the strip of floor under the table.
+   *
+   * The table is fitted proportionally, so how much room there is below it depends on the
+   * window: a tall one leaves a deep band and a short one leaves almost none. A deck sized in
+   * fixed pixels fits the first and sits on the bottom rail — and the middle pocket — in the
+   * second. Rather than reserving space and pushing the table up, which leaves a strip that
+   * reads as a panel even when nothing is drawn in it, the deck gives way instead.
+   */
+  let deckNaturalHeight = 0;
+  function fitDeck(): void {
+    if (!renderer || shotDeck.style.display === 'none') return;
+    shotDeck.style.setProperty('--deck-scale', '1');
+    deckNaturalHeight = shotDeck.offsetHeight || deckNaturalHeight;
+    if (!deckNaturalHeight) return;
+    const floor = window.innerHeight - renderer.tableBottomOnScreen() - 14;
+    const scale = Math.max(0.62, Math.min(1, floor / deckNaturalHeight));
+    shotDeck.style.setProperty('--deck-scale', scale.toFixed(3));
   }
 
   function setPowerHud(power: number): void {
@@ -687,6 +712,11 @@ export function renderHostPage(
       window.removeEventListener('keydown', onShift);
       window.removeEventListener('keyup', onShift);
     });
+
+    // The floor under the table changes size with the window, so the deck refits with it.
+    const onResize = (): void => fitDeck();
+    window.addEventListener('resize', onResize);
+    cleanups.push(() => window.removeEventListener('resize', onResize));
 
     aimController = new AimController(canvasEl, {
       onAimChange: (angle, rawPower) => {
@@ -1585,10 +1615,7 @@ export function renderHostPage(
       (state.phase === 'aiming' || state.phase === 'break');
     aimController?.setEnabled(canAim);
     shotDeck.style.display = canAim ? '' : 'none';
-    // Lift the table clear of the deck while it is up, so the deck never sits on the middle
-    // pocket of the bottom rail. Measured rather than hard-coded: the deck is a different
-    // height in portrait, and a stale number would put the table back under it.
-    renderer?.setBottomInset(canAim ? shotDeck.offsetHeight + 26 : 0);
+    if (canAim) fitDeck();
     if (!canAim) setPowerHud(0);
 
     // The win only resolves after the shot settles, so the takeover fires here rather than

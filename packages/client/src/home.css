@@ -2921,11 +2921,18 @@ body.reduce-motion .play-btn.searching {
    because it is a gauge, spin because it is a ball, and the cue because it swings on a pivot.
    ========================================================================== */
 
+/*
+ * One centred row, floating on the floor below the table. It paints nothing behind itself and
+ * nothing is reserved for it: the controls are sized so the whole row fits in the strip of
+ * room the table already leaves, rather than the table being pushed up to make a band.
+ */
 .shot-deck {
   position: fixed;
   left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
+  bottom: 8px;
+  /* Scaled by the page to whatever floor the table leaves — see fitDeck() in hostPage. */
+  transform: translateX(-50%) scale(var(--deck-scale, 1));
+  transform-origin: bottom center;
   z-index: 4;
   display: flex;
   flex-direction: column;
@@ -2934,19 +2941,30 @@ body.reduce-motion .play-btn.searching {
 }
 
 @keyframes deckIn {
-  from { transform: translate(-50%, 24px); opacity: 0; }
-  to { transform: translate(-50%, 0); opacity: 1; }
+  from { transform: translateX(-50%) scale(var(--deck-scale, 1)) translateY(24px); opacity: 0; }
+  to { transform: translateX(-50%) scale(var(--deck-scale, 1)) translateY(0); opacity: 1; }
 }
 
 .deck-controls {
   position: relative;
   display: flex;
-  /* Stretch, so every bay is as tall as the tallest and the three labels can share a
-     baseline. Top-aligned they landed at three different heights, which with no panel to
-     square them up read as three controls that had been dropped rather than placed. */
+  /* Stretch, so every bay is as tall as the tallest and the labels share a baseline. Top
+     aligned they landed at different heights, which with no panel to square them up read as
+     controls that had been dropped rather than placed. */
   align-items: stretch;
-  gap: 2.1rem;
+  gap: 1.9rem;
   padding: 0.2rem 0.6rem 0.1rem;
+}
+
+/*
+ * Sized to the band of floor under the table rather than to itself.
+ *
+ * At full size a cluster was taller than the gap between the bottom rail and the foot of the
+ * screen, so it climbed back over the table — onto the corner pockets, which are no more
+ * expendable than the middle one. Everything here is a little smaller for that reason.
+ */
+.deck-bay {
+  gap: 0.25rem;
 }
 
 .deck-bay {
@@ -2981,8 +2999,8 @@ body.reduce-motion .play-btn.searching {
   opacity: 1;
   display: grid;
   place-items: center;
-  width: 106px;
-  height: 106px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   gap: 0;
   /* The unfilled part is light, not black. Against the near-black floor a dark track made an
@@ -3032,8 +3050,8 @@ body.reduce-motion .play-btn.searching {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 78px;
-  height: 78px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 34%, #33204a, #180d26 78%);
   box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.7), 0 0 0 2px var(--ink);
@@ -3042,7 +3060,7 @@ body.reduce-motion .play-btn.searching {
 .shot-deck .power-value {
   font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 1.5rem;
+  font-size: 1.22rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   text-shadow: none;
@@ -3095,7 +3113,7 @@ body.reduce-motion .play-btn.searching {
 /* --- Spin: the cue ball --- */
 
 .bay-spin .spin-control {
-  gap: 0.4rem;
+  gap: 0.24rem;
 }
 
 /*
@@ -3104,8 +3122,8 @@ body.reduce-motion .play-btn.searching {
  * dashed cross on it, which read as a diagram of a cue ball rather than as one.
  */
 .bay-spin .spin-pad {
-  width: 106px;
-  height: 106px;
+  width: 88px;
+  height: 88px;
   background:
     radial-gradient(circle at 68% 72%, rgba(20, 10, 30, 0.36) 0%, rgba(20, 10, 30, 0.08) 44%, transparent 68%),
     radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 34%, transparent 60%),
@@ -3207,8 +3225,8 @@ body.reduce-motion .play-btn.searching {
   flex-direction: column;
   align-items: center;
   gap: 0.16rem;
-  width: 66px;
-  padding: 0.38rem 0.24rem 0.4rem;
+  width: 58px;
+  padding: 0.24rem 0.18rem 0.26rem;
   border: none;
   border-radius: 13px;
   cursor: pointer;
@@ -3243,8 +3261,8 @@ body.reduce-motion .play-btn.searching {
    the cue ball, and at 20px flat it read as a bullet point. */
 .preset-ball {
   position: relative;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background:
     radial-gradient(circle at 68% 72%, rgba(20, 10, 30, 0.32) 0%, transparent 62%),
@@ -3289,14 +3307,14 @@ body.reduce-motion .play-btn.searching {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  width: 148px;
+  gap: 0.18rem;
+  width: 132px;
 }
 
 .cue-dial {
   position: relative;
-  width: 132px;
-  height: 106px;
+  width: 112px;
+  height: 90px;
   cursor: grab;
   touch-action: none;
   outline: none;
@@ -3314,8 +3332,8 @@ body.reduce-motion .play-btn.searching {
 .dial-svg {
   position: absolute;
   inset: 0;
-  width: 132px;
-  height: 132px;
+  width: 112px;
+  height: 112px;
   overflow: visible;
 }
 
@@ -3378,9 +3396,9 @@ body.reduce-motion .play-btn.searching {
   position: absolute;
   left: 16.7%;
   top: 78.8%;
-  width: 88px;
-  height: 7px;
-  margin-top: -3.5px;
+  width: 75px;
+  height: 6px;
+  margin-top: -3px;
   border-radius: 4px;
   transform-origin: 0 50%;
   rotate: calc(var(--lift, 0deg) * -1);
@@ -3465,12 +3483,12 @@ body.reduce-motion .play-btn.searching {
 
 /* --- Keyboard shortcuts, behind a key --- */
 
-/* Tucked to the deck's bottom-right corner rather than floating off the top of it, where with
-   no panel behind it there was nothing for it to be attached to. */
+/* Tucked to the right cluster's bottom corner rather than floating off the top of it, where
+   with no panel behind it there was nothing for it to be attached to. */
 .deck-keys {
   position: absolute;
   bottom: 2px;
-  right: -14px;
+  right: -8px;
   width: 26px;
   height: 26px;
   padding: 0;

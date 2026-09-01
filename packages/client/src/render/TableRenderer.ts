@@ -45,16 +45,13 @@ const CUE_LENGTH = BALL_RADIUS * 27;
 /** Board furniture around the playing surface, in table units. */
 const RAIL = 62;
 const SIDE_GAP = 26;
+const BAR_W = 52; // power bar down the left
 /** Sized so a ball sitting in the return track is exactly its on-table size. */
 const CHUTE_BALL = BALL_RADIUS * 2;
 const CHUTE_W = CHUTE_BALL + 26;
 
-/*
- * The left edge of the board. It used to reserve 52px for a vertical power meter drawn down
- * the side of the table; power lives in the shot deck now, and having it in both places meant
- * two meters for one number. Dropping it gives the width back to the table.
- */
-const BOARD_LEFT = -(RAIL + SIDE_GAP);
+/** The left edge of the board, with room for the power meter that runs down that side. */
+const BOARD_LEFT = -(RAIL + SIDE_GAP + BAR_W);
 const BOARD_RIGHT = TABLE_LENGTH + RAIL + SIDE_GAP + CHUTE_W;
 const BOARD_TOP = -RAIL;
 const BOARD_BOTTOM = TABLE_WIDTH + RAIL;
@@ -649,6 +646,7 @@ export class TableRenderer {
   private guideLayer = new Graphics();
   private fxLayer = new Container();
   private cueGlowLayer = new Graphics();
+  private powerBarLayer = new Graphics();
   private cueLayer = new Graphics();
   private chuteLayer = new Graphics();
   private chuteBallLayer = new Container();
@@ -714,7 +712,6 @@ export class TableRenderer {
   private autoRotate = false;
   private elapsed = 0;
   private chromeless = false;
-  private bottomInset = 0;
   /** Cue elevation in radians, so the drawn cue matches the shot being set up. */
   private cueElevation = 0;
 
@@ -794,6 +791,7 @@ export class TableRenderer {
       this.guideLayer,
       this.fxLayer,
       this.cueGlowLayer,
+      this.powerBarLayer,
       this.cueLayer,
       this.chuteLayer,
       this.chuteBallLayer,
@@ -1059,20 +1057,25 @@ export class TableRenderer {
    */
   private layout(): void {
     const w = this.app.renderer.width;
-    // The shot deck sits along the bottom of the screen. Fitting the table to the full canvas
-    // height and then covering the bottom of it with a panel hid the middle pocket on that
-    // rail, which is the one place you cannot afford not to see.
-    const h = this.app.renderer.height - this.bottomInset;
+    const h = this.app.renderer.height;
     const pad = 18;
     const left = this.chromeless ? -RAIL : BOARD_LEFT;
     const right = this.chromeless ? TABLE_LENGTH + RAIL : BOARD_RIGHT;
     const boardW = right - left;
     const boardH = this.chromeless ? TABLE_WIDTH + RAIL * 2 : BOARD_H;
 
-    // Deliberately short of a perfect fit. At 100% the table crowds the screen edges, the
-    // scoreboard sits on the rails, and — since themes became whole rooms — the room is
-    // reduced to a sliver at the top and bottom.
-    const FIT = this.chromeless ? 1 : 0.8;
+    /*
+     * Deliberately short of a perfect fit. At 100% the table crowds the screen edges, the
+     * scoreboard sits on the rails, and — since themes became whole rooms — the room is
+     * reduced to a sliver at the top and bottom.
+     *
+     * A little shorter again than it was, so the shot deck has floor to stand on. Done by
+     * shrinking the table rather than by offsetting it: an offset reserves a band along one
+     * edge, and a reserved band is exactly what reads as a panel even when nothing is drawn
+     * in it. Smaller and still centred leaves room at both ends, and the scoreboard uses the
+     * other one.
+     */
+    const FIT = this.chromeless ? 1 : 0.76;
 
     // A quarter turn swaps which screen dimension each side of the table has to fit inside.
     this.rotated = this.autoRotate && h > w;
@@ -1173,13 +1176,6 @@ export class TableRenderer {
   }
 
 /** Hides the pocketed-ball chute — used by the phone's small table preview and the menu. */
-  /** Screen height taken by furniture along the bottom, so the table can sit clear of it. */
-  setBottomInset(px: number): void {
-    if (this.bottomInset === px) return;
-    this.bottomInset = px;
-    this.layout();
-  }
-
   setChromeless(enabled: boolean): void {
     this.chromeless = enabled;
     this.chuteLayer.visible = !enabled;
@@ -1541,6 +1537,106 @@ export class TableRenderer {
     }
   }
 
+
+  /** Vertical power gauge down the left of the table, chevroned like an arcade meter. */
+  private drawPowerBar(): void {
+    const g = this.powerBarLayer;
+    g.clear();
+    if (this.chromeless) return;
+
+    const x = -(RAIL + SIDE_GAP + BAR_W);
+    const y = -RAIL + 10;
+    const h = TABLE_WIDTH + RAIL * 2 - 20;
+    const r = BAR_W / 2;
+
+    // Housing: maple casing with the same ink outline as the rest of the game.
+    g.roundRect(x + 4, y + 10, BAR_W, h, r).fill({ color: 0x000000, alpha: 0.45 });
+    g.roundRect(x, y, BAR_W, h, r).fill({ color: cssToHex(this.theme.railDark) });
+    g.roundRect(x + 3, y + 3, BAR_W - 6, h - 6, r - 3).fill({ color: cssToHex(this.theme.rail) });
+    g.roundRect(x, y, BAR_W, h, r).stroke({ width: 3, color: 0x1a1410, alpha: 0.9 });
+
+    const innerX = x + 12;
+    const innerY = y + 12;
+    const innerW = BAR_W - 24;
+    const innerH = h - 24;
+    g.roundRect(innerX, innerY, innerW, innerH, innerW / 2).fill({ color: 0x241a12 });
+    g.roundRect(innerX, innerY, innerW, innerH, innerW / 2).stroke({
+      width: 2,
+      color: 0x1a1410,
+      alpha: 0.9,
+    });
+
+    const p = this.aim.visible ? this.aim.power : 0;
+    const maxed = p > 0.965;
+
+    // The meter is built from discrete segments rather than one smooth bar — it reads as a
+    // charge level at a glance, and the top segments flashing is what sells "max power".
+    const SEGMENTS = 14;
+    const gap = 3;
+    const segH = (innerH - gap * (SEGMENTS - 1)) / SEGMENTS;
+    const lit = p * SEGMENTS;
+
+    for (let i = 0; i < SEGMENTS; i++) {
+      const frac = (i + 0.5) / SEGMENTS;
+      const segY = innerY + innerH - (i + 1) * segH - i * gap;
+      const on = i < lit;
+      const partial = !on && i < lit + 1 ? lit - i : 0;
+
+      const color =
+        frac < 0.5
+          ? lerpColor(0x4ac26b, 0xffe27a, frac / 0.5)
+          : lerpColor(0xffe27a, 0xff4d4d, (frac - 0.5) / 0.5);
+
+      if (!on && partial <= 0) {
+        // Unlit segments stay clearly visible so the meter reads as a meter at rest, not as
+        // an empty slot in the woodwork.
+        g.roundRect(innerX + 2, segY, innerW - 4, segH, 3).fill({ color, alpha: 0.26 });
+        continue;
+      }
+
+      const alpha = on ? 1 : 0.35 + partial * 0.5;
+      // Flash the whole stack at full power.
+      const flash = maxed ? 0.72 + 0.28 * Math.sin(this.elapsed * 22) : 1;
+      g.roundRect(innerX + 2, segY, innerW - 4, segH, 3).fill({ color, alpha: alpha * flash });
+      g.roundRect(innerX + 2, segY, innerW - 4, segH * 0.4, 3).fill({
+        color: 0xffffff,
+        alpha: 0.22 * alpha,
+      });
+    }
+
+    // A highlight sweeping up the charged section, so the meter feels alive while held.
+    if (p > 0.04) {
+      const sweep = ((this.elapsed * 0.6) % 1) * p;
+      const sweepY = innerY + innerH - sweep * innerH;
+      g.roundRect(innerX + 1, sweepY - 7, innerW - 2, 14, 6).fill({ color: 0xffffff, alpha: 0.16 });
+    }
+
+    // Notch marks at the quarter points, cut into the wood beside the tube.
+    for (let i = 1; i < 4; i++) {
+      const ty = innerY + (innerH * i) / 4;
+      g.roundRect(x + 4, ty - 1.5, 6, 3, 1.5).fill({ color: 0x1a1410, alpha: 0.6 });
+      g.roundRect(x + BAR_W - 10, ty - 1.5, 6, 3, 1.5).fill({ color: 0x1a1410, alpha: 0.6 });
+    }
+
+    // Max-power crown at the top of the housing.
+    if (maxed) {
+      const glow = 0.55 + 0.45 * Math.sin(this.elapsed * 22);
+      g.circle(x + BAR_W / 2, y + 6, 7).fill({ color: 0xff4d4d, alpha: glow });
+    }
+  }
+
+  /**
+   * Where the bottom edge of the table lands on screen, in CSS pixels.
+   *
+   * The shot deck stands on the floor below the table, and how much floor there is depends on
+   * the viewport: the table is fitted proportionally, so a short window leaves a thin strip and
+   * a tall one leaves a deep one. A deck sized in fixed pixels fits the first and lands on the
+   * bottom rail — and the middle pocket — in the second. It asks for this and scales itself.
+   */
+  tableBottomOnScreen(): number {
+    const edge = this.tableToScreen(TABLE_LENGTH / 2, TABLE_WIDTH + RAIL);
+    return edge.y;
+  }
 
   setAimVisual(angle: number, power: number, visible: boolean): void {
     this.aim = { angle, power, visible };
@@ -2186,6 +2282,7 @@ export class TableRenderer {
 
     this.particles.update(deltaSeconds);
     this.animateChute(deltaSeconds);
+    this.drawPowerBar();
     this.drawCue();
   }
 
