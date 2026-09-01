@@ -207,31 +207,38 @@ export function renderHostPage(
       something you need once. They are behind a key now.
     -->
     <div class="shot-deck" id="shotDeck" style="display:none">
-      <div class="deck-bay bay-power">
-        <div class="bay-label">Power</div>
-        <div class="power-hud" id="powerHud">
-          <div class="power-value" id="powerValue">0%</div>
-          <div class="power-tier" id="powerTier">Drag to aim</div>
+      <!--
+        The two things you set, side by side and equally weighted. Power is not among them:
+        power comes from the drag on the table, so giving it a control-sized circle in the row
+        made the deck's biggest object the one thing in it you cannot touch.
+      -->
+      <div class="deck-controls">
+        <section class="deck-bay bay-spin">
+          <div class="bay-label">Where you hit it</div>
+          <div id="hostSpin"></div>
+        </section>
+
+        <section class="deck-bay bay-cue">
+          <div class="bay-label">How you hold the cue</div>
+          <div id="hostElevation"></div>
+        </section>
+
+        <button class="deck-keys" id="deckKeys" type="button" aria-expanded="false"
+                title="Keyboard shortcuts">${icon('settings', { size: 15 })}</button>
+        <div class="deck-shortcuts" id="deckShortcuts" hidden>
+          <div class="shortcut"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd><span>Nudge the spin</span></div>
+          <div class="shortcut"><kbd>Shift</kbd><span>+ arrows to fine-aim</span></div>
+          <div class="shortcut"><kbd>C</kbd><span>Back to centre ball</span></div>
+          <div class="shortcut"><kbd>R</kbd><span>Review the last shot</span></div>
         </div>
       </div>
 
-      <div class="deck-bay bay-spin">
-        <div class="bay-label">Spin</div>
-        <div id="hostSpin"></div>
-      </div>
-
-      <div class="deck-bay bay-cue">
-        <div class="bay-label">Cue</div>
-        <div id="hostElevation"></div>
-      </div>
-
-      <button class="deck-keys" id="deckKeys" type="button" aria-expanded="false"
-              title="Keyboard shortcuts">${icon('settings', { size: 15 })}</button>
-      <div class="deck-shortcuts" id="deckShortcuts" hidden>
-        <div class="shortcut"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd><span>Nudge the spin</span></div>
-        <div class="shortcut"><kbd>Shift</kbd><span>+ arrows to fine-aim</span></div>
-        <div class="shortcut"><kbd>C</kbd><span>Back to centre ball</span></div>
-        <div class="shortcut"><kbd>R</kbd><span>Review the last shot</span></div>
+      <!-- Power reads out along the bottom edge: a continuous value from the drag, so a bar
+           is its natural shape, and it charges the whole deck rather than one corner of it. -->
+      <div class="power-hud" id="powerHud">
+        <span class="power-tier" id="powerTier">Drag the table to aim</span>
+        <span class="power-track"><i></i></span>
+        <span class="power-value" id="powerValue">0%</span>
       </div>
     </div>
     <div id="lobbyWrap"></div>
@@ -274,12 +281,20 @@ export function renderHostPage(
     const color = powerToCssColor(power);
     powerValue.textContent = `${pct}%`;
     powerValue.style.color = color;
-    // Sentence case: this sits under a number, not over a doorway. THE SHOUTING CAPS made the
-    // tier read as more important than the value it was describing.
-    powerTier.textContent = powerTierLabel(power);
+    // At rest this says what to do rather than naming a tier of nothing: "Drag the table to
+    // aim" is the one instruction a new player needs, and it is free to put it here.
+    //
+    // Sentence case rather than the label's own capitals: it sits beside the number it is
+    // describing, and HARD HIT shouted louder than the value it was a word for.
+    const tier = powerTierLabel(power);
+    powerTier.textContent =
+      power > 0.02
+        ? tier.charAt(0) + tier.slice(1).toLowerCase()
+        : 'Drag the table to aim';
     powerHud.classList.toggle('charged', power > 0.02);
-    powerHud.style.setProperty('--power-scale', String(1 + power * 0.18));
-    // Drives the ring round the number, so power has a shape in the deck and not only a digit.
+    // Near the top the bar pulses, because "as hard as it goes" is worth knowing before you
+    // let go rather than after.
+    powerHud.classList.toggle('maxed', power > 0.95);
     powerHud.style.setProperty('--power-pct', `${pct}%`);
     powerHud.style.setProperty('--power-color', color);
   }

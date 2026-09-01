@@ -2909,151 +2909,448 @@ body.reduce-motion .play-btn.searching {
 }
 
 /* ================= The shot deck =================
-   Everything that makes up one shot, in one object at the bottom of the table.
+   Everything that makes up one shot, in one object along the bottom of the table.
 
-   It used to be two: a power card in the corner and a spin/cue panel above it, so the three
-   settings that decide a single shot were two unrelated things in different places. And a
-   third of the panel was a permanent paragraph of small grey keyboard hints — four facts you
-   read once, occupying screen for the whole game. Those are behind a key now.
+   The arrangement follows what you can actually touch. Spin and cue are the two things you
+   set, so they get equal weight side by side; power comes from the drag on the table, so it
+   is a bar along the bottom edge rather than a third circle competing with the pad — as a
+   control-sized ring it made the deck's biggest object the one thing in it you cannot press.
 
-   Three bays, each labelled over its own control, divided by a hairline so the groups are
-   legible without needing boxes round them. */
+   The labels say what each does in words rather than naming the mechanic: "Where you hit it"
+   teaches somebody who has never heard of english, and "Spin" does not. */
 
 .shot-deck {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: 14px;
   transform: translateX(-50%);
   z-index: 4;
   display: flex;
-  align-items: stretch;
-  gap: 0.9rem;
-  padding: 0.6rem 0.9rem 0.7rem;
-  border-radius: 20px;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.7rem 0.9rem 0.65rem;
+  border-radius: 22px;
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.22),
     0 0 0 2px var(--ink),
     0 6px 0 var(--panel-3),
-    0 16px 30px rgba(0, 0, 0, 0.5);
+    0 18px 34px rgba(0, 0, 0, 0.55);
+  /* It appears the moment the table becomes yours, so it arrives rather than blinking on. */
+  animation: deckIn 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
-/* Centred rather than pinned to the left corner: the cue ball is as likely to be on one side
-   as the other, and a panel hugging one edge covered whichever half of the table it sat on. */
+@keyframes deckIn {
+  from { transform: translate(-50%, 22px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.deck-controls {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0.85rem;
+}
 
 .deck-bay {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
-  /* Each bay is as wide as its own control needs. `min-width: 0` let the spin bay shrink
-     under its preset row and clip DRAW off the front of it. */
+  gap: 0.4rem;
   flex: 0 0 auto;
 }
 
-/* The cue bay's hint is the only thing here that runs to a sentence, so it is the only thing
-   that needs a width holding it in — left free it stretched the whole deck across the table. */
-.bay-cue {
-  max-width: 220px;
-}
-
-/* A hairline between bays, drawn on the bay rather than as extra elements. */
 .deck-bay + .deck-bay {
-  padding-left: 0.9rem;
-  border-left: 1.5px solid rgba(255, 236, 255, 0.2);
+  padding-left: 0.85rem;
+  border-left: 1.5px solid rgba(255, 236, 255, 0.16);
 }
 
 .bay-label {
   font-family: 'Fredoka', sans-serif;
   font-weight: 600;
-  font-size: 0.6rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--gold);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-/* --- Power ---
-   The number is the readout; the ring round it is the shape. Between them you can read the
-   power at a glance and to the percent, without a second meter competing with the one the
-   renderer already draws beside the cue. */
-.bay-power {
-  justify-content: flex-start;
-  flex: 0 0 auto;
+.bay-cue {
+  /* Wide enough for three buttons and a line of copy, and no wider — the hint used to stretch
+     the whole deck across the table. */
+  width: 250px;
+  /* The cue bay is shorter than the spin bay, and the angle slider only appears for two of the
+     three shots. Centred, the gap sits either side of the buttons instead of pooling into one
+     slab of empty panel underneath them. */
+  justify-content: center;
+}
+
+/* --- Spin: the cue ball, and three shots with pictures of themselves --- */
+
+.bay-spin .spin-control {
+  gap: 0.35rem;
+}
+
+/* A touch smaller than the phone's, which is sized for a thumb. Every pixel of deck height is
+   a pixel of table, and this is the tallest thing in it. */
+.bay-spin .spin-pad {
+  width: 96px;
+  height: 96px;
+}
+
+.spin-readout {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+  min-height: 1.1em;
+}
+
+/* Once there is spin on, say so loudly — it changes the shot and must never be a surprise. */
+.spin-control.spun .spin-readout {
+  color: var(--accent-2);
+}
+
+.spin-control.risky .spin-readout {
+  color: var(--danger);
+}
+
+.spin-presets {
+  display: flex;
+  gap: 0.3rem;
 }
 
 /*
- * `.power-hud` is centred over the canvas on the phone controller — `position: absolute` with
- * `top: 50%; left: 50%` and a translate to pull it back. In the deck it is just a widget in a
- * row, so all four of those have to be undone: switching to `relative` without clearing
- * `top`/`left` offsets it by half the deck and hangs it out of the panel, which is exactly
- * what it did.
+ * Each preset shows where it strikes the ball and says what the ball does afterwards. As
+ * three bare words — DRAW, STUN, FOLLOW — they are jargon, and pressing one taught you
+ * nothing you did not already know.
  */
+.spin-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  width: 60px;
+  padding: 0.3rem 0.2rem 0.32rem;
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.08), rgba(0, 0, 0, 0.3));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 255, 0.14),
+    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
+  transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.15s ease,
+    box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.spin-preset:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.15), rgba(0, 0, 0, 0.24));
+}
+
+.spin-preset:active {
+  transform: translateY(2px);
+}
+
+.spin-preset.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 3px 0 var(--gold-dark), 0 0 18px rgba(255, 197, 49, 0.4);
+}
+
+/* A little cue ball with the tip marked on it. */
+.preset-ball {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff 0 18%, #f6f2e6 46%, #cfc7b4 100%);
+  box-shadow: 0 0 0 1.5px var(--ink), inset -2px -3px 3px rgba(0, 0, 0, 0.16);
+}
+
+.preset-ball i {
+  position: absolute;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 1.2px var(--ink);
+  transition: top 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.preset-name {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.68rem;
+  line-height: 1.05;
+}
+
+.preset-after {
+  font-size: 0.54rem;
+  font-weight: 700;
+  line-height: 1.05;
+  opacity: 0.62;
+  white-space: nowrap;
+}
+
+/* --- Cue: three shots, big enough to read and to hit --- */
+
+.shot-type {
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.shot-type-row {
+  display: flex;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.shot-type-btn {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.2rem 0.42rem;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.68rem;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.08), rgba(0, 0, 0, 0.3));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 255, 0.14),
+    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
+  transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.15s ease,
+    box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.shot-type-btn span {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.shot-type-btn svg {
+  display: block;
+  transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.shot-type-btn:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.15), rgba(0, 0, 0, 0.24));
+}
+
+.shot-type-btn:hover svg {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.shot-type-btn:active {
+  transform: translateY(2px);
+}
+
+.shot-type-btn.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 3px 0 var(--gold-dark), 0 0 20px rgba(255, 197, 49, 0.42);
+}
+
+/* The chosen cue tips itself once, so picking a shot shows you the shot. */
+.shot-type-btn.active svg {
+  animation: cueTip 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+@keyframes cueTip {
+  0% { transform: rotate(0deg) scale(1); }
+  45% { transform: rotate(-8deg) scale(1.12); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+/* The game noticing you are snookered and pointing at the way out. Without it, curve and jump
+   are two buttons most people never press once. */
+.shot-type.offered .shot-type-btn[data-kind='curve'],
+.shot-type.offered .shot-type-btn[data-kind='jump'] {
+  animation: shotOffer 1.2s ease-in-out infinite;
+}
+
+@keyframes shotOffer {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 236, 255, 0.14), inset 0 0 0 1.5px rgba(0, 0, 0, 0.45); }
+  50% { box-shadow: inset 0 0 0 1.5px var(--gold), 0 0 16px 2px rgba(255, 197, 49, 0.55); }
+}
+
+.shot-type-hint {
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--paper-2);
+  min-height: 1.2em;
+}
+
+.shot-type.raised .shot-type-hint {
+  color: var(--gold);
+}
+
+/* The angle only appears once a shot that uses it is chosen: a slider that does nothing in the
+   default state is clutter with a tooltip. */
+.shot-fine {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.shot-type.raised .shot-fine {
+  display: flex;
+  animation: fineIn 0.24s ease;
+}
+
+@keyframes fineIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.shot-fine-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.shot-fine-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--gold);
+  touch-action: none;
+}
+
+.shot-fine-deg {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+  min-width: 2.3em;
+  text-align: right;
+}
+
+/* --- Power: a charge bar along the bottom edge of the deck --- */
+
 .shot-deck .power-hud {
   position: relative;
   inset: auto;
   transform: none;
   opacity: 1;
-  display: grid;
-  place-items: center;
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  gap: 0;
-  /* Conic ring: filled to --power-pct in the tier's own colour, dark for the rest. */
-  background:
-    conic-gradient(var(--power-color, var(--gold)) var(--power-pct, 0%), rgba(0, 0, 0, 0.45) 0);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px rgba(0, 0, 0, 0.5);
-  transition: box-shadow 0.15s ease;
-}
-
-/* The dark face inside the ring, so the ring reads as a gauge rather than a pie. */
-.shot-deck .power-hud::before {
-  content: '';
-  position: absolute;
-  inset: 11px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #2a1739, #1b0f28);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--ink);
-}
-
-.shot-deck .power-hud.charged {
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 2px rgba(0, 0, 0, 0.5),
-    0 0 22px var(--power-color, var(--gold));
-}
-
-.shot-deck .power-value {
-  position: relative;
-  z-index: 1;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 1.35rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  text-shadow: none;
+  display: flex;
+  /*
+   * Explicit, and load-bearing. The base `.power-hud` is a *column* — it stacks a number over
+   * a tier in the middle of the phone's canvas. Inherit that here and the track's `flex: 1 1
+   * auto` sizes its height instead of its width, so the bar collapses to nothing and the
+   * whole meter silently disappears.
+   */
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.12);
 }
 
 .shot-deck .power-tier {
-  position: relative;
-  z-index: 1;
-  margin-top: 0.1rem;
-  font-size: 0.56rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  flex: 0 0 auto;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
   color: var(--muted);
   opacity: 1;
-  max-width: 66px;
-  text-align: center;
-  line-height: 1.15;
+  white-space: nowrap;
+  min-width: 8.6em;
+}
+
+.shot-deck .power-hud.charged .power-tier {
+  color: var(--power-color, var(--gold));
+}
+
+.power-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7), inset 0 0 0 1.5px rgba(0, 0, 0, 0.5);
+}
+
+.power-track i {
+  display: block;
+  height: 100%;
+  width: var(--power-pct, 0%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3fbf6a 0%, var(--gold) 55%, var(--danger) 100%);
+  background-size: 260px 100%;
+  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.45);
+  /* No transition: this tracks a live drag, and easing it would show you a power you are not
+     actually on. */
+}
+
+/* A sheen running up the charged part, so the bar is alive while you hold the drag. */
+.power-track::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34px;
+  left: -40px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  opacity: 0;
+}
+
+.power-hud.charged .power-track::after {
+  opacity: 1;
+  animation: powerSweep 1.1s linear infinite;
+}
+
+@keyframes powerSweep {
+  from { left: -40px; }
+  to { left: calc(var(--power-pct, 0%) + 6px); }
+}
+
+.shot-deck .power-value {
+  flex: 0 0 auto;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.9em;
+  text-align: right;
+  text-shadow: none;
+}
+
+/* Right at the top, the whole bar flashes — worth knowing before you let go, not after. */
+.power-hud.maxed {
+  animation: powerMax 0.5s ease-in-out infinite;
+}
+
+@keyframes powerMax {
+  0%, 100% { box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.12); }
+  50% { box-shadow: inset 0 0 0 1.5px var(--danger), 0 0 18px rgba(255, 77, 109, 0.55); }
 }
 
 /* --- Keyboard shortcuts, behind a key --- */
 
 .deck-keys {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: -2px;
+  right: -2px;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -3079,9 +3376,9 @@ body.reduce-motion .play-btn.searching {
 
 .deck-shortcuts {
   position: absolute;
-  right: 8px;
-  bottom: calc(100% + 10px);
-  width: 230px;
+  right: 0;
+  bottom: calc(100% + 12px);
+  width: 232px;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -3093,6 +3390,7 @@ body.reduce-motion .play-btn.searching {
     0 0 0 2px var(--ink),
     0 6px 0 var(--panel-3),
     0 14px 24px rgba(0, 0, 0, 0.5);
+  animation: fineIn 0.18s ease;
 }
 
 .deck-shortcuts[hidden] {
@@ -3126,36 +3424,68 @@ body.reduce-motion .play-btn.searching {
 }
 
 /* --- Narrow and portrait ---
-   The deck stays one object; it just gets tighter. Stacking the bays would put the controls
-   where a thumb cannot reach them on a phone held upright. */
-@media (max-width: 720px), (orientation: portrait) {
+   The deck stays one object and keeps both controls in reach of a thumb; it only tightens.
+   Stacking the bays would push the cue buttons off the bottom of a phone held upright. */
+@media (max-width: 760px), (orientation: portrait) {
   .shot-deck {
-    gap: 0.6rem;
-    padding: 0.5rem 0.7rem 0.6rem;
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem 0.5rem;
     border-radius: 16px;
   }
 
+  .deck-controls {
+    gap: 0.55rem;
+  }
+
   .deck-bay + .deck-bay {
-    padding-left: 0.6rem;
+    padding-left: 0.55rem;
   }
 
-  .shot-deck .power-hud {
-    width: 74px;
-    height: 74px;
+  .bay-label {
+    font-size: 0.58rem;
   }
 
-  .shot-deck .power-hud::before {
-    inset: 9px;
+  .bay-cue {
+    width: 196px;
   }
 
-  .shot-deck .power-value {
-    font-size: 1.1rem;
+  .spin-preset {
+    width: 50px;
+  }
+
+  .preset-after {
+    display: none;
   }
 
   .shot-deck .power-tier {
-    font-size: 0.5rem;
-    max-width: 56px;
+    min-width: 0;
+    /* On a phone the instruction has nowhere to go, and the number says enough. */
+    display: none;
   }
+}
+
+/* --- Reduce motion ---
+   The deck's entrance, the power sweep, the max-power flash, the cue tip and the snookered
+   nudge all stop. Every state they were carrying stays readable without them. */
+body.reduce-motion .shot-deck,
+body.reduce-motion .deck-shortcuts,
+body.reduce-motion .shot-type.raised .shot-fine,
+body.reduce-motion .shot-type-btn.active svg,
+body.reduce-motion .power-hud.charged .power-track::after,
+body.reduce-motion .power-hud.maxed,
+body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='curve'],
+body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='jump'] {
+  animation: none;
+}
+
+body.reduce-motion .power-hud.charged .power-track::after {
+  display: none;
+}
+
+/* The offer still has to be visible, it just holds still. */
+body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='curve'],
+body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='jump'] {
+  box-shadow: inset 0 0 0 1.5px var(--gold), 0 0 14px 2px rgba(255, 197, 49, 0.45);
 }
 
 /* --- Kept for the online lobby and the locker ---

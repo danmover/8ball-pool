@@ -33,19 +33,26 @@ interface Preset {
   hint: string;
 }
 
+/*
+ * One short line each, in the second person and about the ball rather than the cue.
+ *
+ * The hints used to run to two lines apiece and explain the mechanism — "needs side spin, the
+ * pad moves with it" — which is the sort of thing you write when you are proud of the
+ * implementation. What a player needs is what the shot does and what it costs.
+ */
 const PRESETS: Preset[] = [
-  { kind: 'level', label: 'Level', elevation: 0, hint: 'Cue flat on the table.' },
+  { kind: 'level', label: 'Level', elevation: 0, hint: 'The normal shot.' },
   {
     kind: 'curve',
     label: 'Curve',
     elevation: CURVE_ELEVATION,
-    hint: 'Bends around a blocker. Needs side spin — the pad moves with it.',
+    hint: 'Bend around a blocker.',
   },
   {
     kind: 'jump',
     label: 'Jump',
     elevation: JUMP_ELEVATION,
-    hint: 'Hops the ball over. Needs pace, so the power meter starts higher.',
+    hint: 'Hop over a blocker. Costs power.',
   },
 ];
 
@@ -91,15 +98,19 @@ export function createShotTypeControl(
   // in the default state is just clutter with a tooltip.
   const fine = document.createElement('div');
   fine.className = 'shot-fine';
+  const fineLabel = document.createElement('span');
+  fineLabel.className = 'shot-fine-label';
+  fineLabel.textContent = 'Cue angle';
   const slider = document.createElement('input');
   slider.type = 'range';
   slider.min = '0';
   slider.max = String(Math.round((MAX_ELEVATION * 180) / Math.PI));
   slider.step = '1';
   slider.className = 'shot-fine-range';
+  slider.setAttribute('aria-label', 'Cue angle in degrees');
   const degrees = document.createElement('span');
   degrees.className = 'shot-fine-deg';
-  fine.append(slider, degrees);
+  fine.append(fineLabel, slider, degrees);
 
   el.append(row, readout, fine);
 

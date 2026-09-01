@@ -106,20 +106,32 @@ export function createSpinPad(onChange?: (value: { x: number; y: number }) => vo
     if (notify) onChange?.(value);
   }
 
-  // The three shots that matter, one tap each. Fine dragging is for everything else.
-  //
-  // These stop exactly at the edge of the tip's safe grip rather than at the edge of the pad:
-  // a one-tap preset that carried a 75% chance of miscuing would be a trap, not a shortcut.
+  /*
+   * The three shots that matter, one tap each. Fine dragging is for everything else.
+   *
+   * Each carries a picture of itself: a cue ball with the tip marked where that shot strikes
+   * it, and an arrow for what the ball does afterwards. As three words alone — DRAW, STUN,
+   * FOLLOW — they are jargon, and a player who does not already know the terms learns nothing
+   * from pressing them.
+   *
+   * They stop exactly at the edge of the tip's safe grip rather than at the edge of the pad:
+   * a one-tap preset carrying a 75% chance of miscuing would be a trap, not a shortcut.
+   */
   const SAFE = MAX_TIP_OFFSET / MISCUE_TIP_OFFSET;
-  for (const [label, x, y] of [
-    ['DRAW', 0, SAFE],
-    ['STUN', 0, 0],
-    ['FOLLOW', 0, -SAFE],
+  for (const [label, x, y, after] of [
+    ['Draw', 0, SAFE, 'comes back'],
+    ['Stun', 0, 0, 'stops dead'],
+    ['Follow', 0, -SAFE, 'runs on'],
   ] as const) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = label;
+    button.className = 'spin-preset';
     button.dataset.spin = `${x},${y}`;
+    button.title = `${label} — the cue ball ${after}`;
+    button.innerHTML = `
+      <span class="preset-ball"><i style="top:${50 + y * 30}%"></i></span>
+      <span class="preset-name">${label}</span>
+      <span class="preset-after">${after}</span>`;
     button.addEventListener('pointerdown', (e) => {
       // Stop the press reaching the aim surface behind it, which captures the pointer.
       e.stopPropagation();

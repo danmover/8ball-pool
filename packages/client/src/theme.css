@@ -1434,49 +1434,8 @@ button.mini.secondary {
   transform: translateY(-50%);
 }
 
-.spin-readout {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 800;
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  min-height: 1em;
-  text-align: center;
-}
-
-/* Once there's spin on, say so loudly — it changes the shot and must never be a surprise. */
-.spin-control.spun .spin-readout {
-  color: var(--accent-2);
-}
-
-.spin-presets {
-  display: flex;
-  gap: 0.22rem;
-}
-
-.spin-presets button {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 0.5rem;
-  letter-spacing: 0.06em;
-  padding: 0.26rem 0.34rem;
-  border: none;
-  border-radius: 7px;
-  cursor: pointer;
-  color: var(--paper);
-  background: var(--panel-2);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--paper-3);
-  touch-action: manipulation;
-}
-
-.spin-presets button:hover {
-  background: var(--panel);
-}
-
-.spin-presets button.active {
-  background: var(--gold);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2px 0 var(--wood-dark);
-}
+/* .spin-readout and the presets are styled with the deck in home.css, for the same reason
+   as the shot-type block above. */
 
 /* --- Controller --- */
 
@@ -1764,115 +1723,9 @@ body.reduce-motion .star.big.earned {
   border-color: rgba(200, 60, 45, 0.55);
 }
 
-/* --- Shot type: level, curve, jump ---
-   This replaced a side-view dial you dragged to an angle. The dial was honest about degrees
-   and useless about intent: it happily let you set 55° and then hit the ball softly, which
-   does nothing, or pick a swerve with the tip dead centre, which also does nothing. Three
-   named shots that arrive already working is the whole idea, so the buttons are the control
-   and the angle is a fine-tune that only appears once it matters. */
-
-.shot-type {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.shot-type-row {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.shot-type-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 0.5rem;
-  letter-spacing: 0.05em;
-  padding: 0.3rem 0.42rem 0.26rem;
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
-  color: var(--paper);
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3);
-  touch-action: manipulation;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
-}
-
-.shot-type-btn:active {
-  transform: translateY(2px);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 0.5px 0 var(--paper-3);
-}
-
-.shot-type-btn.active {
-  background: linear-gradient(180deg, var(--gold-light), var(--gold));
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--gold-dark);
-}
-
-/* The game noticing you are snookered and pointing at the way out. Without this, curve and
-   jump are two buttons most people never press once. */
-.shot-type.offered .shot-type-btn[data-kind='curve'],
-.shot-type.offered .shot-type-btn[data-kind='jump'] {
-  animation: shotOffer 1.1s ease-in-out infinite;
-}
-
-@keyframes shotOffer {
-  0%, 100% { box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3); }
-  50% { box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3), 0 0 12px 2px var(--gold); }
-}
-
-body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='curve'],
-body.reduce-motion .shot-type.offered .shot-type-btn[data-kind='jump'] {
-  animation: none;
-  box-shadow: 0 0 0 1.5px var(--ink), 0 2.5px 0 var(--paper-3), 0 0 10px 2px var(--gold);
-}
-
-/* Stated in what it does to the ball, not only in degrees — the readout is where the two
-   mechanics are actually taught. */
-.shot-type-hint {
-  max-width: 190px;
-  text-align: center;
-  font-size: 0.56rem;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--muted);
-  min-height: 2.2em;
-}
-
-.shot-type.raised .shot-type-hint {
-  color: var(--accent-2);
-}
-
-/* Hidden until a shot that uses it is chosen: a slider that does nothing in the default
-   state is clutter with a tooltip. */
-.shot-fine {
-  display: none;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.shot-type.raised .shot-fine {
-  display: flex;
-}
-
-.shot-fine-range {
-  width: 108px;
-  accent-color: var(--gold);
-  touch-action: none;
-}
-
-.shot-fine-deg {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 0.6rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--paper);
-  min-width: 2.2em;
-}
+/* The shot-type control (level / curve / jump) is styled with the rest of the shot deck in
+   home.css. It lived here when it was a dial in a corner; it is part of the deck now, and
+   theme.css loads last, so leaving a copy here quietly overrode the redesign. */
 
 /* --- Rule set picker ---
    Three presets rather than eight tick-boxes: nobody wants to configure a referee before
