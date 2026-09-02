@@ -2949,11 +2949,91 @@ body.reduce-motion .play-btn.searching {
   position: relative;
   display: flex;
   /* Stretch, so every bay is as tall as the tallest and the labels share a baseline. Top
-     aligned they landed at different heights, which with no panel to square them up read as
-     controls that had been dropped rather than placed. */
+     aligned they landed at different heights, which read as controls that had been dropped
+     rather than placed. */
   align-items: stretch;
   gap: 1.9rem;
-  padding: 0.2rem 0.6rem 0.1rem;
+  /* Room under the labels: with a plate behind them they were sitting on its bottom edge
+     rather than inside it. */
+  padding: 0.8rem 1.7rem 0.95rem;
+}
+
+/* ==========================================================================
+   The plinth.
+
+   A plate under the controls, not a bar across the screen. The difference is in three things:
+   it is only as wide as what it holds, its corners are cut back so it reads as a machined
+   plate rather than a rectangle of interface, and it is translucent — the floor of the room
+   shows through it, so it sits *in* the scene instead of on top of it.
+
+   Drawn as a pseudo-element rather than on the row itself, because `clip-path` clips a box
+   shadow along with everything else: the chamfer and the glow cannot live on the same box.
+   The glow is a drop-shadow filter, which follows the clipped silhouette.
+   ========================================================================== */
+
+.deck-controls::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Corners cut back; deeper at the top, where the eye meets the plate first. */
+  clip-path: polygon(
+    20px 0,
+    calc(100% - 20px) 0,
+    100% 20px,
+    100% calc(100% - 13px),
+    calc(100% - 13px) 100%,
+    13px 100%,
+    0 calc(100% - 13px),
+    0 20px
+  );
+  background:
+    /* Four bolts, one per corner, as background layers — no extra elements needed. */
+    radial-gradient(circle 3px at 16px 15px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 16px) 15px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at 14px calc(100% - 12px), rgba(255, 236, 255, 0.32), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 14px) calc(100% - 12px), rgba(255, 236, 255, 0.32), transparent 100%),
+    /* A soft pool of light under the middle of the plate. */
+    radial-gradient(ellipse 70% 90% at 50% 0%, rgba(255, 197, 49, 0.09), transparent 70%),
+    linear-gradient(180deg, rgba(78, 47, 102, 0.9) 0%, rgba(32, 18, 47, 0.94) 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.14);
+  filter: drop-shadow(0 6px 0 rgba(10, 5, 18, 0.75)) drop-shadow(0 16px 26px rgba(0, 0, 0, 0.6));
+}
+
+/* The lit lip along the top, fading out before the chamfer so it never runs off a cut corner. */
+.deck-controls::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 0;
+  height: 2.5px;
+  z-index: -1;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gold) 14%,
+    var(--gold-light) 50%,
+    var(--gold) 86%,
+    transparent
+  );
+  box-shadow: 0 0 12px rgba(255, 197, 49, 0.55);
+  transition: opacity 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* While the cue is back the lip takes the shot's own colour, so the plate is part of the
+   wind-up rather than furniture the wind-up happens in front of. */
+.shot-deck.aiming .deck-controls::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--power-color, var(--gold)) 12%,
+    #fff 50%,
+    var(--power-color, var(--gold)) 88%,
+    transparent
+  );
+  box-shadow: 0 0 18px var(--power-color, var(--gold));
 }
 
 /*
@@ -3003,11 +3083,10 @@ body.reduce-motion .play-btn.searching {
   height: 88px;
   border-radius: 50%;
   gap: 0;
-  /* The unfilled part is light, not black. Against the near-black floor a dark track made an
-     empty gauge indistinguishable from a plain disc — the same thing that hid the cue dial. */
+  /* The unfilled part reads against the plate behind it. */
   background: conic-gradient(
     var(--power-color, var(--gold)) var(--power-pct, 0%),
-    rgba(247, 236, 255, 0.14) 0
+    rgba(12, 6, 22, 0.5) 0
   );
   box-shadow:
     0 0 0 2px var(--ink),
@@ -3337,12 +3416,16 @@ body.reduce-motion .play-btn.searching {
   overflow: visible;
 }
 
-/* Light, not dark: the floor under the table is nearly black, so a black track was invisible
-   and the dial looked like a cue floating on nothing. */
+/*
+ * A groove cut into the plate, dark enough to read against it. This value has now been both
+ * ways round — a dark track vanished against the near-black floor, and a pale one vanished
+ * against the lit violet of the plinth. It has to follow whatever it is drawn on, and it is
+ * drawn on the plinth.
+ */
 .dial-track {
   fill: none;
-  stroke: rgba(247, 236, 255, 0.14);
-  stroke-width: 14;
+  stroke: rgba(8, 3, 16, 0.72);
+  stroke-width: 15;
   stroke-linecap: round;
 }
 
@@ -3350,20 +3433,24 @@ body.reduce-motion .play-btn.searching {
 .dial-zone {
   fill: none;
   stroke: var(--zone);
-  stroke-width: 14;
+  stroke-width: 13;
   stroke-linecap: butt;
-  opacity: 0.42;
+  /* Bright enough that the three bands are the first thing you see on the dial — they are the
+     control, and the cue lying across them is the readout. */
+  opacity: 0.72;
   transition: opacity 0.16s ease;
 }
 
 .cue-dial:hover .dial-zone {
-  opacity: 0.6;
+  opacity: 0.9;
 }
 
+/* The band you are in glows; the other two stay legible but plainly not chosen. */
 .shot-type[data-kind='level'] .dial-zone[data-kind='level'],
 .shot-type[data-kind='curve'] .dial-zone[data-kind='curve'],
 .shot-type[data-kind='jump'] .dial-zone[data-kind='jump'] {
-  opacity: 0.85;
+  opacity: 1;
+  filter: drop-shadow(0 0 6px var(--zone));
 }
 
 .dial-fill {
@@ -3416,22 +3503,24 @@ body.reduce-motion .play-btn.searching {
   position: absolute;
   left: 16.7%;
   top: 78.8%;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8.5px;
   border-radius: 50%;
   background: radial-gradient(circle at 34% 30%, #fff 0 18%, #f6f2e6 46%, #cfc7b4 100%);
   box-shadow: 0 0 0 2px var(--ink), inset -3px -4px 4px rgba(0, 0, 0, 0.18);
 }
 
+/* The handle, deliberately not ball-shaped: a smaller disc ringed in its band's colour, so
+   the dial reads as a cue on a track rather than as two balls joined by a stick. */
 .dial-knob {
   position: absolute;
-  width: 19px;
-  height: 19px;
-  margin: -9.5px 0 0 -9.5px;
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #fff, var(--zone, var(--gold)) 70%);
-  box-shadow: 0 0 0 2px var(--ink), 0 0 12px var(--zone, var(--gold));
+  background: radial-gradient(circle at 34% 30%, #fff, var(--zone, var(--gold)) 62%);
+  box-shadow: 0 0 0 2.5px var(--ink), 0 0 14px var(--zone, var(--gold));
   transition: left 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.25),
     top 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.25);
   pointer-events: none;

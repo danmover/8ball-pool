@@ -304,9 +304,16 @@ export function renderHostPage(
     shotDeck.style.setProperty('--deck-scale', '1');
     deckNaturalHeight = shotDeck.offsetHeight || deckNaturalHeight;
     if (!deckNaturalHeight) return;
-    const floor = window.innerHeight - renderer.tableBottomOnScreen() - 14;
-    const scale = Math.max(0.62, Math.min(1, floor / deckNaturalHeight));
+    const scale = Math.max(0.62, Math.min(1, (window.innerHeight - renderer.tableBottomOnScreen() - 18) / deckNaturalHeight));
     shotDeck.style.setProperty('--deck-scale', scale.toFixed(3));
+
+    /*
+     * If the deck has shrunk as far as it is allowed and still does not fit, the table gives
+     * way instead. Shrinking the controls without limit is the wrong trade — a deck nobody can
+     * hit is worse than a slightly smaller table — and letting it sit on the bottom rail
+     * covers the middle pocket.
+     */
+    renderer.setBottomClearance(deckNaturalHeight * scale + 22);
   }
 
   function setPowerHud(power: number): void {
@@ -330,6 +337,9 @@ export function renderHostPage(
     powerHud.classList.toggle('maxed', power > 0.95);
     powerHud.style.setProperty('--power-pct', `${pct}%`);
     powerHud.style.setProperty('--power-color', color);
+    // The plinth's lit lip reads the same colour, so the whole plate joins the wind-up. The
+    // var has to live on the deck for that: the ring is a sibling of the plate, not a parent.
+    shotDeck.style.setProperty('--power-color', color);
     // The number swells with the shot you are winding up.
     powerHud.style.setProperty('--power-swell', String(power));
   }

@@ -716,6 +716,8 @@ export class TableRenderer {
   private chromeless = false;
   /** Cue elevation in radians, so the drawn cue matches the shot being set up. */
   private cueElevation = 0;
+  /** Screen pixels that must stay clear below the board, for the shot deck to stand in. */
+  private bottomClearance = 0;
 
   private constructor(container: HTMLElement, app: Application) {
     this.container = container;
@@ -1084,6 +1086,22 @@ export class TableRenderer {
     const fitW = this.rotated ? boardH : boardW;
     const fitH = this.rotated ? boardW : boardH;
     this.scale = Math.min((w - pad * 2) / fitW, (h - pad * 2) / fitH) * FIT;
+
+    /*
+     * Make room for the deck by shrinking the table, not by shoving it upward.
+     *
+     * The board is centred, so a smaller table opens the same amount of floor at the top and
+     * the bottom — the scoreboard uses one end and the deck stands in the other. An offset
+     * would open one end only, and a band of screen reserved along one edge is the thing that
+     * reads as a panel however little is drawn in it.
+     *
+     * Only bites on windows short enough for the deck not to fit already; on a normal one the
+     * fit above wins and this changes nothing.
+     */
+    if (this.bottomClearance > 0 && !this.rotated) {
+      const wanted = (h - this.bottomClearance * 2) / fitH;
+      if (wanted < this.scale) this.scale = Math.max(wanted, this.scale * 0.55);
+    }
     this.root.scale.set(this.scale);
     this.root.rotation = this.rotated ? Math.PI / 2 : 0;
 
@@ -1642,6 +1660,18 @@ export class TableRenderer {
 
   setAimVisual(angle: number, power: number, visible: boolean): void {
     this.aim = { angle, power, visible };
+  }
+
+  /**
+   * How much screen the furniture along the bottom needs, so the table can stay clear of it.
+   *
+   * Asked for rather than assumed: the deck scales itself down to whatever floor there is, and
+   * only when it has run out of give does it need the table to yield some.
+   */
+  setBottomClearance(px: number): void {
+    if (this.bottomClearance === px) return;
+    this.bottomClearance = px;
+    this.layout();
   }
 
   /** How far the butt is raised, so the drawn cue shows the shot you are actually setting up. */
