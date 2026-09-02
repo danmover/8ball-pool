@@ -22,7 +22,7 @@ describe('summarizeShot', () => {
     const pos = { x: 0, y: 0 };
     const events: SimEvent[] = [
       { type: 'ballCollision', a: 0, b: 3, pos, impulse: 400 },
-      { type: 'cushion', ballId: 3, pos, speed: 200 },
+      { type: 'cushion', ballId: 3, pos, speed: 200 , normal: { x: 0, y: -1 } },
       { type: 'pot', ballId: 3, pos, pocketIndex: 0 },
     ];
     const result = summarizeShot(events);

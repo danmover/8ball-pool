@@ -52,10 +52,10 @@ describe('summarizeShot', () => {
     // One ball rattling round a corner would otherwise satisfy the break requirement alone.
     const events: SimEvent[] = [
       { type: 'ballCollision', a: 0, b: 1, pos, impulse: 400 },
-      { type: 'cushion', ballId: 1, pos, speed: 300 },
-      { type: 'cushion', ballId: 1, pos, speed: 200 },
-      { type: 'cushion', ballId: 1, pos, speed: 120 },
-      { type: 'cushion', ballId: 2, pos, speed: 200 },
+      { type: 'cushion', ballId: 1, pos, speed: 300 , normal: { x: 0, y: -1 } },
+      { type: 'cushion', ballId: 1, pos, speed: 200 , normal: { x: 0, y: -1 } },
+      { type: 'cushion', ballId: 1, pos, speed: 120 , normal: { x: 0, y: -1 } },
+      { type: 'cushion', ballId: 2, pos, speed: 200 , normal: { x: 0, y: -1 } },
     ];
     expect(summarizeShot(events).objectBallsToRail).toBe(2);
   });
@@ -63,7 +63,7 @@ describe('summarizeShot', () => {
   it('ignores the cue ball when counting balls to a rail', () => {
     const events: SimEvent[] = [
       { type: 'ballCollision', a: 0, b: 1, pos, impulse: 400 },
-      { type: 'cushion', ballId: 0, pos, speed: 300 },
+      { type: 'cushion', ballId: 0, pos, speed: 300 , normal: { x: 0, y: -1 } },
     ];
     expect(summarizeShot(events).objectBallsToRail).toBe(0);
   });

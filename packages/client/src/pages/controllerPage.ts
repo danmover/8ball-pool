@@ -524,8 +524,11 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         if (settings.hapticsEnabled) navigator.vibrate?.(8);
         renderer?.spawnSparks(ev.pos, ev.impulse, ev.a, ev.b);
       } else if (ev.type === 'cushion') {
-        if (settings.soundEnabled) sfx.playCushionThud(settings.soundVolume);
-        renderer?.spawnCushionDust(ev.pos, ev.speed);
+        /* Scaled by how hard it actually hit. Every rail contact used to thud identically, so
+           a ball grazing a cushion on its way past sounded like one slammed into it. */
+        const bite = Math.min(1.2, 0.15 + (ev.speed / 1400) * 1.05);
+        if (settings.soundEnabled) sfx.playCushionThud(settings.soundVolume, bite);
+        renderer?.spawnCushionDust(ev.pos, ev.speed, ev.normal, ev.ballId);
       } else if (ev.type === 'pot') {
         const combo = celebrator?.onPot(ev.pos, ev.ballId) ?? 0;
         // Longer buzz the deeper into a combo you get.

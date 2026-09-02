@@ -11,7 +11,7 @@ import {
   TABLE_WIDTH,
 } from '../constants.js';
 import { POCKETS } from '../table.js';
-import type { Ball } from '../types.js';
+import type { Ball, SimEvent } from '../types.js';
 
 /** Forces `applyCueStrike` never to miscue, so these tests measure mechanics, not dice. */
 const NO_MISCUE = (): number => 1;
@@ -87,7 +87,7 @@ describe('stepSimulation', () => {
     // carries the object ball into a cushion and back, so its resting place says nothing
     // about the cut angle — which is the thing this test is actually about.
     let departure: { x: number; y: number } | null = null;
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 900; i++) {
       const { events, settled } = stepSimulation(balls, 1 / 60);
       if (!departure && events.some((e) => e.type === 'ballCollision')) {
         departure = { ...target.vel };
@@ -294,7 +294,7 @@ describe('cue ball control (spin)', () => {
     // Exactly at the safe edge nothing slips; at the pad's edge most attempts do.
     const chance = (mag: number): number => {
       let slips = 0;
-      for (let i = 0; i < 400; i++) {
+      for (let i = 0; i < 900; i++) {
         const cue = ball(CUE_BALL_ID, 400, 500);
         if (applyCueStrike(cue, 0, 0.5, { x: 0, y: mag }).miscued) slips++;
       }
@@ -312,7 +312,7 @@ describe('cue ball control (spin)', () => {
     // now backspin relative to the new direction — and just sits down.
     const cue = ball(CUE_BALL_ID, 500, 300, 0, -900);
     let before = 0;
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 900; i++) {
       before = cue.angVel.x;
       stepSimulation([cue], 1 / 240);
       if (cue.vel.y > 0) break; // rebounded off the top rail, now heading back down
@@ -480,5 +480,67 @@ describe('cue ball control (spin)', () => {
     const { cue, target } = shot({ tip: CENTRE });
     expect(Math.abs(target.pos.y - 500)).toBeLessThan(1);
     expect(Math.abs(cue.pos.y - 500)).toBeLessThan(1);
+  });
+});
+
+/**
+ * What a cushion contact *reports*.
+ *
+ * The event used to carry the ball's whole speed and no normal at all, so a ball running the
+ * length of a rail and brushing it looked identical to one slammed square into it — same
+ * cloud of chalk, same thud. Everything downstream keyed off that number.
+ */
+describe('what a cushion hit reports', () => {
+  /*
+   * Aim points chosen to miss every pocket. Fired straight up the middle of the table a ball
+   * goes into the middle pocket, not the cushion behind it — which is correct, and useless
+   * for testing cushions.
+   */
+  const OFF_POCKET_X = TABLE_LENGTH * 0.3;
+  const MID_Y = TABLE_WIDTH * 0.5;
+
+  /** Fires a ball and returns the first cushion event it produces. */
+  function hit(
+    vel: { x: number; y: number },
+    from = { x: OFF_POCKET_X, y: MID_Y }
+  ): Extract<SimEvent, { type: 'cushion' }> {
+    const balls: Ball[] = [{ ...ball(0, from.x, from.y), kind: 'cue', vel }];
+    for (let i = 0; i < 900; i++) {
+      const { events } = stepSimulation(balls, 1 / 120);
+      const found = events.find((e) => e.type === 'cushion');
+      if (found && found.type === 'cushion') return found;
+    }
+    throw new Error('the ball never reached a cushion');
+  }
+
+  it('reports the impact, not how fast the ball was going', () => {
+    // Square into the top rail, against a ball racing along it and barely touching it. The
+    // second is the faster ball; it is much the softer contact.
+    const square = hit({ x: 0, y: -1800 });
+    const graze = hit({ x: 1800, y: -120 }, { x: TABLE_LENGTH * 0.15, y: BALL_RADIUS + 8 });
+    expect(graze.speed).toBeLessThan(square.speed / 4);
+  });
+
+  it('never reports more than the ball was travelling at', () => {
+    const e = hit({ x: 900, y: -1500 });
+    expect(e.speed).toBeLessThanOrEqual(Math.hypot(900, 1500) + 1);
+  });
+
+  it('gives the normal of the cushion it actually met', () => {
+    // Top rail: the normal points back down into play.
+    const top = hit({ x: 0, y: -1800 });
+    expect(top.normal.y).toBeGreaterThan(0.9);
+    expect(Math.abs(top.normal.x)).toBeLessThan(0.1);
+
+    // Left rail: back to the right.
+    const left = hit({ x: -1800, y: 0 });
+    expect(left.normal.x).toBeGreaterThan(0.9);
+  });
+
+  it('always sends a unit normal', () => {
+    for (const v of [{ x: 0, y: -1800 }, { x: -1800, y: 0 }, { x: -1400, y: 1400 }]) {
+      const e = hit(v);
+      expect(Math.hypot(e.normal.x, e.normal.y)).toBeCloseTo(1, 3);
+    }
   });
 });

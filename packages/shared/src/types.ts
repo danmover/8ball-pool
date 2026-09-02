@@ -588,7 +588,19 @@ export interface RoomStateDTO {
 export type SimEvent =
   /** `pocketIndex` indexes `POCKETS`, so the renderer can drop the ball into the right bag. */
   | { type: 'pot'; ballId: number; pos: Vec2; pocketIndex: number }
-  | { type: 'cushion'; ballId: number; pos: Vec2; speed: number }
+  /**
+   * A ball met a cushion.
+   *
+   * `speed` is the *impact* speed — the component of the ball's velocity along the cushion's
+   * normal — not how fast the ball was travelling. A ball running the length of a rail and
+   * grazing it is barely a contact, however quickly it is moving, and reporting its full speed
+   * made a graze kick up the same cloud of chalk and thud as loudly as a square hit.
+   *
+   * `normal` points back into play, so the dust knows which way to spray and the ball knows
+   * which way to squash. It used to be guessed from the ball's position, which worked for the
+   * four rails and fell back to "upward" for everything else, jaws included.
+   */
+  | { type: 'cushion'; ballId: number; pos: Vec2; speed: number; normal: Vec2 }
   | { type: 'ballCollision'; a: number; b: number; pos: Vec2; impulse: number }
   /** The tip slipped off the ball — struck too far off centre to hold. */
   | { type: 'miscue' }

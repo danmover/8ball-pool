@@ -11,11 +11,13 @@ import {
   SIDE_MOUTH,
   TABLE_LENGTH,
   TABLE_WIDTH,
+  predictedPocket,
   rackBalls,
   resolveLoadout,
   stepSimulation,
 } from '@8ball/shared';
 import { styleForBall } from './ballStyle';
+import { guidePalette, isIllegalTarget } from './guideColors';
 import { integrate, project, randomOrientation, type Mat3 } from './orientation';
 import { ParticleSystem } from './Particles';
 import { ballSetFor, styleForBallInSet, type BallSet } from './cosmetics/ballSets';
@@ -1695,20 +1697,66 @@ export class TableRenderer {
       g.stroke({ width: 2, color: 0x9ad8ff, alpha: 0.7 });
     }
 
+    /*
+     * Is the ball you are about to hit one you are allowed to hit?
+     *
+     * The renderer has known the legal targets all along — it uses them to ring the balls you
+     * may play — but the guide never said anything, so lining up on the wrong ball looked
+     * exactly like lining up on the right one, and you found out it was a foul afterwards.
+     * The ghost and the object line carry the answer now.
+     */
+    const first = preview.firstContactBallId;
+    const illegal = isIllegalTarget(first, this.legalTargets);
+    const { contact: contactColor, object: objectColor } = guidePalette(illegal);
+
     if (preview.ghostBallPos) {
-      // The contact point, and the single most useful thing on screen: it is where the cue
-      // ball has to *be* for the cut to work. A thin ring read as one more guide line, so it
-      // gets a fill and a heavier edge than anything else here.
+      // Where the cue ball has to *be* for the cut to work, and the single most useful thing
+      // on screen. A thin ring read as one more guide line, so it gets a fill and a heavier
+      // edge than anything else here.
       const { x, y } = preview.ghostBallPos;
-      g.circle(x, y, BALL_RADIUS).fill({ color: 0xffffff, alpha: 0.16 });
-      g.circle(x, y, BALL_RADIUS).stroke({ width: 3.5, color: 0xffffff, alpha: 0.85 });
+      g.circle(x, y, BALL_RADIUS).fill({ color: contactColor, alpha: illegal ? 0.2 : 0.16 });
+      g.circle(x, y, BALL_RADIUS).stroke({ width: 3.5, color: contactColor, alpha: 0.85 });
+
+      /*
+       * The contact point itself: where on the object ball the cue ball actually touches. The
+       * ghost shows where to send the cue ball; this dot shows how thin the cut is, which is
+       * the thing that decides whether it goes in.
+       */
+      const target = this.ballVisuals.get(first ?? -1);
+      if (target) {
+        const dx = target.sprite.x - x;
+        const dy = target.sprite.y - y;
+        const d = Math.hypot(dx, dy) || 1;
+        g.circle(x + (dx / d) * BALL_RADIUS, y + (dy / d) * BALL_RADIUS, 4.5).fill({
+          color: contactColor,
+          alpha: 0.95,
+        });
+      }
     }
 
     if (preview.objectBallPath.length) {
       for (const seg of preview.objectBallPath) {
         this.dashedLine(g, seg.from, seg.to);
       }
-      g.stroke({ width: 3, color: 0xffe27a, alpha: 0.55 });
+      g.stroke({ width: 3, color: objectColor, alpha: illegal ? 0.75 : 0.55 });
+
+      /*
+       * The pocket it is heading for, ringed. The guide already simulated the whole object
+       * ball path, so which pocket it ends in is known — and until now the only way to find
+       * out was to follow a dashed line to the edge of the table and guess.
+       */
+      const target = illegal ? null : predictedPocket(preview);
+      if (target !== null) {
+        const pocket = POCKETS[target];
+        if (pocket) {
+          const pulse = 0.55 + 0.25 * Math.sin(this.elapsed * 6);
+          g.circle(pocket.mid.x, pocket.mid.y, BALL_RADIUS * 2.1).stroke({
+            width: 4,
+            color: 0xffe27a,
+            alpha: pulse,
+          });
+        }
+      }
     }
 
     // Where the cue ball itself finishes — drawn in the accent colour so it's never confused
@@ -2120,13 +2168,34 @@ export class TableRenderer {
     requestAnimationFrame(step);
   }
 
-  spawnCushionDust(pos: { x: number; y: number }, speed: number): void {
-    const normal = {
-      x: pos.x < BALL_RADIUS * 2 ? 1 : pos.x > TABLE_LENGTH - BALL_RADIUS * 2 ? -1 : 0,
-      y: pos.y < BALL_RADIUS * 2 ? 1 : pos.y > TABLE_WIDTH - BALL_RADIUS * 2 ? -1 : 0,
+  /**
+   * Chalk dust off a rail, and the ball flattening against it.
+   *
+   * The normal comes from the physics now. It used to be guessed from the ball's position —
+   * near the left edge, spray right; near the top, spray down — which was right for the four
+   * rails and fell back to "spray upward" for everything else, jaws included. And the ball
+   * did not deform at all: hitting another ball squashed it, hitting a cushion did nothing,
+   * so a rail felt softer than a ball when it is the harder of the two.
+   */
+  spawnCushionDust(
+    pos: { x: number; y: number },
+    speed: number,
+    normal: { x: number; y: number } = { x: 0, y: -1 },
+    ballId?: number
+  ): void {
+    const strength = Math.min(speed / 1400, 1);
+    this.particles.dust(pos.x, pos.y, normal, strength);
+
+    if (ballId === undefined || strength < 0.08) return;
+    const visual = this.ballVisuals.get(ballId);
+    if (!visual) return;
+    // Squash along the normal — the same shape a ball takes off another ball, which is what
+    // makes the two contacts read as the same world.
+    visual.squash = {
+      start: performance.now(),
+      angle: Math.atan2(normal.y, normal.x),
+      power: Math.min(0.3, 0.08 + strength * 0.24),
     };
-    if (normal.x === 0 && normal.y === 0) normal.y = 1;
-    this.particles.dust(pos.x, pos.y, normal, Math.min(speed / 1800, 1));
   }
 
   spawnChalkPuff(pos: { x: number; y: number }, angle: number): void {

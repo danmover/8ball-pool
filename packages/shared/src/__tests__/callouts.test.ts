@@ -126,10 +126,10 @@ describe('reading the events', () => {
 
   it('splits rails at the moment of contact', () => {
     const events: SimEvent[] = [
-      { type: 'cushion', ballId: CUE_BALL_ID, pos: { x: 0, y: 0 }, speed: 100 },
-      { type: 'cushion', ballId: CUE_BALL_ID, pos: { x: 0, y: 0 }, speed: 100 },
+      { type: 'cushion', ballId: CUE_BALL_ID, pos: { x: 0, y: 0 }, speed: 100, normal: { x: 0, y: -1 } },
+      { type: 'cushion', ballId: CUE_BALL_ID, pos: { x: 0, y: 0 }, speed: 100, normal: { x: 0, y: -1 } },
       { type: 'ballCollision', a: CUE_BALL_ID, b: 3, pos: { x: 0, y: 0 }, impulse: 500 },
-      { type: 'cushion', ballId: 3, pos: { x: 0, y: 0 }, speed: 100 },
+      { type: 'cushion', ballId: 3, pos: { x: 0, y: 0 }, speed: 100, normal: { x: 0, y: -1 } },
     ];
     const f = factsFromEvents(events, rest, new Map());
     expect(f.railsBeforeContact).toBe(2);

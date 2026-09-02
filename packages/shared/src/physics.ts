@@ -204,7 +204,10 @@ function cushionRestitution(speed: number): number {
 function resolveCushions(ball: Ball, events: SimEvent[]): void {
   const r = BALL_RADIUS;
   let bounced = false;
-  const speedBefore = Vec2.length(ball.vel);
+  /* The hardest contact of this pass, and the cushion it was against. A ball tucked into a
+     corner can meet two runs and a jaw in one step; what it *felt* is the biggest of them. */
+  let impact = 0;
+  let impactNormal: Vec2 = { x: 0, y: -1 };
 
   /**
    * Rebound off a cushion whose inward normal is `n`.
@@ -216,6 +219,10 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
   const rebound = (n: Vec2): void => {
     const vn = Vec2.dot(ball.vel, n);
     if (vn >= 0) return;
+    if (-vn > impact) {
+      impact = -vn;
+      impactNormal = { ...n };
+    }
     const t = { x: n.y, y: -n.x };
     const surface = Vec2.dot(ball.vel, t) + ball.angVel.z * r;
 
@@ -268,7 +275,13 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
   }
 
   if (bounced) {
-    events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: speedBefore });
+    events.push({
+      type: 'cushion',
+      ballId: ball.id,
+      pos: { ...ball.pos },
+      speed: impact,
+      normal: impactNormal,
+    });
   }
 }
 
@@ -305,7 +318,13 @@ function resolvePocket(ball: Ball, events: SimEvent[], mods?: ShotModifiers): bo
     const n = Vec2.scale(pocket.out, -1);
     ball.pos = Vec2.add(pocket.mid, Vec2.scale(n, BALL_RADIUS * 2.2));
     ball.vel = Vec2.scale(Vec2.reflect(ball.vel, n), 0.55);
-    events.push({ type: 'cushion', ballId: ball.id, pos: { ...ball.pos }, speed: Vec2.length(ball.vel) });
+    events.push({
+      type: 'cushion',
+      ballId: ball.id,
+      pos: { ...ball.pos },
+      speed: Vec2.length(ball.vel),
+      normal: n,
+    });
     return false;
   }
 
