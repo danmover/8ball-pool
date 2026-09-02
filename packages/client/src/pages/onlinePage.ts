@@ -14,7 +14,8 @@ import { formatRating, identify, rankedIdentity, type RankedIdentity } from '../
 import { getProfile } from '../profile/profile';
 import { icon } from '../render/icons';
 import { showToast } from '../render/dialogs';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
+import { mountResumeStrip } from './pageShell';
 
 /**
  * The online front door.
@@ -297,7 +298,8 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   }
 
   function wire(): void {
-    root.querySelector('#backBtn')!.addEventListener('click', () => navigate('/'));
+    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
+    mountResumeStrip(root);
     root.querySelector('#refreshBtn')!.addEventListener('click', refresh);
 
     root.querySelector('#rankedBtn')!.addEventListener('click', () => {

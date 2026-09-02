@@ -31,7 +31,8 @@ import { icon } from '../render/icons';
 import { openCase } from '../profile/caseReel';
 import { playerBannerHtml } from '../render/banner';
 import { showToast } from '../render/dialogs';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
+import { mountResumeStrip } from './pageShell';
 
 /**
  * The locker.
@@ -373,7 +374,8 @@ export function renderProfilePage(root: HTMLElement): () => void {
   }
 
   function wire(): void {
-    root.querySelector('#backBtn')!.addEventListener('click', () => navigate('/'));
+    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
+    mountResumeStrip(root);
 
     const nameInput = root.querySelector<HTMLInputElement>('#nameInput')!;
     nameInput.addEventListener('change', () => {

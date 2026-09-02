@@ -17,7 +17,8 @@ import {
 } from '../profile/progression';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
 import { icon } from '../render/icons';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
+import { mountResumeStrip } from './pageShell';
 
 /**
  * Where progress is actually visible.
@@ -68,7 +69,8 @@ export function renderProgressPage(root: HTMLElement): () => void {
         }</div>
       </div>`;
 
-    root.querySelector('#backBtn')!.addEventListener('click', () => navigate('/'));
+    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
+    mountResumeStrip(root);
     root.querySelectorAll<HTMLElement>('.settings-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         tab = btn.dataset.tab as Tab;

@@ -1,7 +1,8 @@
 import { modeDescriptor, topRivals, framesAgainst, type GameMode } from '@8ball/shared';
 import { getProfile } from '../profile/profile';
 import { icon } from '../render/icons';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
+import { mountResumeStrip } from './pageShell';
 
 /**
  * The numbers, honestly.
@@ -134,7 +135,8 @@ export function renderStatsPage(root: HTMLElement): () => void {
         </section>
       </div>`;
 
-    root.querySelector('#backBtn')?.addEventListener('click', () => navigate('/'));
+    root.querySelector('#backBtn')?.addEventListener('click', () => goBack());
+    mountResumeStrip(root);
   }
 
   draw();

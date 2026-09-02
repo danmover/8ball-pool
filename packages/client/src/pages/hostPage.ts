@@ -72,6 +72,7 @@ import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+import { forgetTable } from '../net/activeTable';
 import { identify } from '../net/identity';
 
 /** Centre-ball, used when no pad exists yet. */
@@ -179,8 +180,20 @@ export function renderHostPage(
       <div class="top-bar">
         <div id="playerPanels" style="display:flex; gap:0.5rem; flex-wrap:wrap; flex:1"></div>
         <div class="top-right">
-          <button class="icon-btn" id="settingsBtn" title="Settings">${icon('settings')}</button>
-          <button class="icon-btn danger" id="leaveBtn" title="Leave table">${icon('leave')}</button>
+          <!--
+            One way out, not two. The gear opened settings and the door left the table, and
+            there was no way at all to reach the locker or your stats without abandoning the
+            frame to do it. The menu holds all of them, and everything in it comes back here.
+          -->
+          <button class="icon-btn" id="tableMenuBtn" title="Menu" aria-expanded="false">${icon('settings')}</button>
+          <div class="table-menu" id="tableMenu" hidden>
+            <button class="table-menu-item" data-go="settings">${icon('settings', { size: 17 })}<span>Settings</span></button>
+            <button class="table-menu-item" data-go="/profile">${icon('locker', { size: 17 })}<span>Locker</span></button>
+            <button class="table-menu-item" data-go="/stats">${icon('chart', { size: 17 })}<span>Stats</span></button>
+            <button class="table-menu-item" data-go="/career">${icon('trophy', { size: 17 })}<span>Career</span></button>
+            <div class="table-menu-rule"></div>
+            <button class="table-menu-item danger" data-go="leave">${icon('leave', { size: 17 })}<span id="leaveLabel">Leave table</span></button>
+          </div>
         </div>
       </div>
       <!-- The centre column carries anything that must be noticed: the clock counting down and
@@ -344,20 +357,64 @@ export function renderHostPage(
     powerHud.style.setProperty('--power-swell', String(power));
   }
 
-  root.querySelector('#leaveBtn')!.addEventListener('click', () => {
-    confirmLeave(
-      'Leave the table?',
-      'The game ends for everyone at this table.',
-      () => navigate('/')
-    );
+  /*
+   * The table menu.
+   *
+   * Everything in it except Leave navigates away and comes straight back via the route stack,
+   * so wandering off to the locker mid-frame is a round trip rather than a decision.
+   */
+  const tableMenuBtn = root.querySelector<HTMLButtonElement>('#tableMenuBtn')!;
+  const tableMenu = root.querySelector<HTMLElement>('#tableMenu')!;
+  const setTableMenu = (open: boolean): void => {
+    tableMenu.hidden = !open;
+    tableMenuBtn.setAttribute('aria-expanded', String(open));
+    tableMenuBtn.classList.toggle('open', open);
+  };
+  tableMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setTableMenu(tableMenu.hidden);
   });
+  const closeTableMenu = (e: PointerEvent): void => {
+    if (!tableMenu.hidden && !tableMenu.contains(e.target as Node) && e.target !== tableMenuBtn) {
+      setTableMenu(false);
+    }
+  };
+  window.addEventListener('pointerdown', closeTableMenu);
+  cleanups.push(() => window.removeEventListener('pointerdown', closeTableMenu));
 
-  root.querySelector('#settingsBtn')!.addEventListener('click', () => {
+  const openSettings = (): void => {
     openSettingsPanel(settings, (s) => {
       Object.assign(settings, s);
       saveSettings(settings);
       applyRenderSettings(renderer, settings);
       if (lastAimAngle !== null) renderPreview(lastAimAngle);
+    });
+  };
+
+  tableMenu.querySelectorAll<HTMLElement>('.table-menu-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      const go = item.dataset.go!;
+      setTableMenu(false);
+      if (go === 'settings') return openSettings();
+      if (go === 'leave') {
+        /*
+         * What leaving actually costs depends on the table. Hosting a party frame ends it for
+         * everybody in the room; an online seat is only yours to give up. The button said the
+         * former in both cases.
+         */
+        confirmLeave(
+          online ? 'Leave this table?' : 'End the game?',
+          online
+            ? 'Your seat opens up for whoever is waiting.'
+            : 'The frame ends for everyone at this table.',
+          () => {
+            forgetTable(code);
+            navigate('/');
+          }
+        );
+        return;
+      }
+      navigate(go);
     });
   });
 

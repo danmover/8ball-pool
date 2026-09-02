@@ -8,10 +8,11 @@ import {
 } from '@8ball/shared';
 import { getProfile } from '../profile/profile';
 import { getSocket } from '../net/socket';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { icon } from '../render/icons';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
 import { loadSettings, saveSession, saveSettings } from '../settings/settingsStore';
+import { mountResumeStrip } from './pageShell';
 
 /**
  * The career ladder.
@@ -66,7 +67,8 @@ export function renderCareerPage(root: HTMLElement): () => void {
         }).join('')}
       </div>`;
 
-    root.querySelector('#backBtn')!.addEventListener('click', () => navigate('/'));
+    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
+    mountResumeStrip(root);
     root.querySelectorAll<HTMLButtonElement>('[data-opponent]').forEach((btn) => {
       btn.addEventListener('click', () => play(btn.dataset.opponent!));
     });

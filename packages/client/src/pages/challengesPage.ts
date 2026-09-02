@@ -3,8 +3,9 @@ import { getSocket } from '../net/socket';
 import { saveSession } from '../settings/settingsStore';
 import { challengeStars, equippedLoadout, getProfile } from '../profile/profile';
 import { icon } from '../render/icons';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import * as sfx from '../render/sfx';
+import { mountResumeStrip } from './pageShell';
 
 /**
  * The trick-shot browser.
@@ -82,7 +83,8 @@ export function renderChallengesPage(root: HTMLElement): () => void {
           .join('')}
       </div>`;
 
-    root.querySelector('#backBtn')!.addEventListener('click', () => navigate('/'));
+    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
+    mountResumeStrip(root);
 
     root.querySelectorAll<HTMLButtonElement>('[data-challenge]').forEach((btn) => {
       btn.addEventListener('click', () => start(btn.dataset.challenge!));
