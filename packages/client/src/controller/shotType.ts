@@ -6,6 +6,7 @@ import {
   MAX_ELEVATION,
 } from '@8ball/shared';
 import type { SpinPad } from './spinPad';
+import { capturePointer } from './capture';
 
 export type ShotKind = 'level' | 'curve' | 'jump';
 
@@ -216,7 +217,7 @@ export function createShotTypeControl(
     dragging = true;
     moved = 0;
     downAt = fromEvent(e);
-    dial.setPointerCapture(e.pointerId);
+    capturePointer(dial, e.pointerId);
     dial.classList.add('dragging');
     apply(downAt);
   });

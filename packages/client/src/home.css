@@ -3483,6 +3483,30 @@ body.reduce-motion .play-btn.searching {
 
 /* --- Keyboard shortcuts, behind a key --- */
 
+/* --- Putting the cue down ---
+   Only while the cue is actually back. A permanent "Esc to cancel" is one more line of chrome
+   to read past on every shot; shown at the moment it applies it is an answer to a question you
+   are already asking. */
+.deck-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: rgba(247, 236, 255, 0.5);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+
+.shot-deck.aiming .deck-hint {
+  opacity: 1;
+}
+
 /* Tucked to the right cluster's bottom corner rather than floating off the top of it, where
    with no panel behind it there was nothing for it to be attached to. */
 .deck-keys {

@@ -241,6 +241,9 @@ export function renderHostPage(
           <div class="bay-label">How you hold the cue</div>
         </section>
 
+        <!-- Only while the cue is back: how to put it down again without playing it. -->
+        <div class="deck-hint">Esc or right-click to put the cue down</div>
+
         <button class="deck-keys" id="deckKeys" type="button" aria-expanded="false"
                 title="Keyboard shortcuts">${icon('settings', { size: 15 })}</button>
         <div class="deck-shortcuts" id="deckShortcuts" hidden>
@@ -729,6 +732,9 @@ export function renderHostPage(
         lastAimPower = power;
         renderer?.setAimVisual(angle, power, true);
         setPowerHud(power);
+        // Drives the "put the cue down" hint, and dims the deck's labels so the controls stay
+        // legible while the shot is being wound up.
+        shotDeck.classList.toggle('aiming', power > 0.02);
         socket.emit('updateAim', {
           seat: ownedSeat,
           angle,
@@ -740,6 +746,7 @@ export function renderHostPage(
       onShoot: (angle, rawPower) => {
         if (!ownedSeat) return;
         const power = Math.max(rawPower, cueLift?.getMinPower() ?? 0);
+        shotDeck.classList.remove('aiming');
         setPowerHud(0);
         socket.emit('takeShot', {
           seat: ownedSeat,

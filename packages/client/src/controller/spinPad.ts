@@ -1,4 +1,5 @@
 import { MAX_TIP_OFFSET, MISCUE_MAX_CHANCE, MISCUE_TIP_OFFSET } from '@8ball/shared';
+import { capturePointer } from './capture';
 
 export interface SpinPad {
   el: HTMLElement;
@@ -153,7 +154,7 @@ export function createSpinPad(onChange?: (value: { x: number; y: number }) => vo
   let dragging = false;
   pad.addEventListener('pointerdown', (e) => {
     dragging = true;
-    pad.setPointerCapture(e.pointerId);
+    capturePointer(pad, e.pointerId);
     setFromEvent(e);
   });
   pad.addEventListener('pointermove', (e) => {
