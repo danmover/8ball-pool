@@ -22,6 +22,7 @@ import { promptText } from '../render/dialogs';
 import { challengeForToday, challengeProgress } from '../profile/dailyChallenge';
 import { navigate } from '../router';
 import * as sfx from '../render/sfx';
+import { mountResumeStrip } from './pageShell';
 
 /** The game's mark: a cartoon 8-ball, drawn rather than borrowed from the emoji font. */
 function eightBallLogo(): string {
@@ -63,6 +64,8 @@ export function renderHomePage(root: HTMLElement): () => void {
           </div>
           <div class="home-player" id="homePlayer"></div>
         </header>
+
+        <div id="homeResume"></div>
 
         <!--
           The mode carousel, restored. The poster-and-rack version gave the page more hierarchy
@@ -414,6 +417,13 @@ export function renderHomePage(root: HTMLElement): () => void {
   };
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
+
+  /*
+   * The way back into a frame, on the screen you are most likely to be looking at when you
+   * want it. Mounted into the content column rather than the page root: the root holds the
+   * live table backdrop and the scrim above it, and a strip prepended there lands behind both.
+   */
+  mountResumeStrip(root.querySelector<HTMLElement>('#homeResume')!);
 
   drawPlayer();
   drawModes();

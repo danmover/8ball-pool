@@ -60,7 +60,7 @@ import { recordChallengeEvent } from '../profile/dailyChallenge';
 import { addSeasonXp, recordFrameResult, recordShotFeats } from '../profile/progression';
 import { openCase } from '../profile/caseReel';
 import { getSocket } from '../net/socket';
-import { clearSeatToken, loadSeatToken, saveSeatToken, loadSession, loadSettings, saveSettings } from '../settings/settingsStore';
+import { clearSeatToken, loadSeatToken, saveSeatToken, loadSession, loadSettings, saveSettings, touchSession } from '../settings/settingsStore';
 import { TableRenderer, powerToCssColor } from '../render/TableRenderer';
 import { powerTierLabel } from '../render/powerTier';
 import { ballChipHtml, placeholderChipHtml } from '../render/ballChip';
@@ -449,7 +449,14 @@ export function renderHostPage(
       return () => {};
     }
     socket.emit('hostRejoin', { code, token: hostSession.token }, (res) => {
-      if (!res.ok) showFatalError('This table has expired.');
+      if (res.ok) return;
+      /*
+       * The table has gone. Forget it rather than leaving a dead end: the session that brought
+       * us here is also what the resume strip reads, so without this the menu would go on
+       * offering a table that answers with this same error every time you accept.
+       */
+      forgetTable(code);
+      showFatalError('This table has ended.');
     });
   }
 
@@ -791,6 +798,13 @@ export function renderHostPage(
       window.removeEventListener('keydown', onShift);
       window.removeEventListener('keyup', onShift);
     });
+
+    /*
+     * Keep the session fresh while this table is open, so what the resume strip measures is
+     * "how long since you were here" rather than "how long since the room was made".
+     */
+    const heartbeat = window.setInterval(() => touchSession(code, 'host'), 20_000);
+    cleanups.push(() => window.clearInterval(heartbeat));
 
     // The floor under the table changes size with the window, so the deck refits with it.
     const onResize = (): void => fitDeck();
@@ -1294,7 +1308,12 @@ export function renderHostPage(
       resetFrameBookkeeping();
       overlay.remove();
     });
-    overlay.querySelector('#menuBtn')!.addEventListener('click', () => navigate('/'));
+    overlay.querySelector('#menuBtn')!.addEventListener('click', () => {
+      // Leaving from the result card is done with this table. Without this the resume strip
+      // went on offering a finished frame until the server got round to reaping it.
+      forgetTable(code);
+      navigate('/');
+    });
   }
 
   /** Clears everything scoped to a single frame, so the next one starts from zero. */

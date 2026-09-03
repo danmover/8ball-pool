@@ -32,6 +32,15 @@ export function saveSettings(settings: PlayerSettings): void {
 export interface StoredSession {
   token: string;
   seat?: Seat;
+  /**
+   * When this session was opened.
+   *
+   * Added because the resume strip needs to know which of several stored tables is the one you
+   * were actually last at. Without it every party session looked equally recent and the strip
+   * offered whichever the store happened to iterate first — in practice the oldest, and long
+   * abandoned. Optional because sessions written before this existed have no timestamp.
+   */
+  at?: number;
 }
 
 function sessionKey(code: string, role: 'host' | 'player'): string {
@@ -39,7 +48,19 @@ function sessionKey(code: string, role: 'host' | 'player'): string {
 }
 
 export function saveSession(code: string, role: 'host' | 'player', session: StoredSession): void {
-  sessionStorage.setItem(sessionKey(code, role), JSON.stringify(session));
+  sessionStorage.setItem(sessionKey(code, role), JSON.stringify({ at: Date.now(), ...session }));
+}
+
+/**
+ * Marks a session as still in use.
+ *
+ * The stamp has to mean "when you were last at this table", not "when the room was made" —
+ * otherwise a frame you have been playing for ten minutes looks older than the three-minute
+ * reaping window and the resume strip stops offering the table you are sitting at.
+ */
+export function touchSession(code: string, role: 'host' | 'player'): void {
+  const existing = loadSession(code, role);
+  if (existing) saveSession(code, role, { token: existing.token, seat: existing.seat });
 }
 
 export function loadSession(code: string, role: 'host' | 'player'): StoredSession | null {

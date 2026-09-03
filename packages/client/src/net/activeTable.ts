@@ -30,6 +30,17 @@ const SEAT_RE = /^8ball:seat:([A-Za-z0-9]{4})$/;
 /** Online seat tokens older than this are assumed to be for a table that has gone. */
 const SEAT_TTL_MS = 6 * 60 * 60 * 1000;
 
+/*
+ * How long a party table is worth offering after you walked away from it.
+ *
+ * Deliberately short, and deliberately the server's own number: a room with nobody connected
+ * is reaped after three minutes, so past that the table genuinely does not exist and an offer
+ * to go back to it is a lie that ends in an error screen. An online seat is different — the
+ * table lives on without you and your chair is held — which is why that one is measured in
+ * hours.
+ */
+const PARTY_TTL_MS = 3 * 60 * 1000;
+
 function pathFor(role: TableRole, code: string): string {
   if (role === 'host') return `/table/${code}`;
   if (role === 'online') return `/t/${code}`;
@@ -39,12 +50,14 @@ function pathFor(role: TableRole, code: string): string {
 /**
  * Every table this device could walk back into, newest first.
  *
- * Party sessions carry no timestamp — they were only ever read by code — so they sort as
- * "now": within a single tab a host session is the live one by definition, and it is the one
- * worth offering first.
+ * "Newest" has to mean something, which is why sessions carry a timestamp now. They did not,
+ * so every party table sorted as equally recent and the strip offered whichever the store
+ * iterated first — reliably the oldest one, abandoned several games ago. Playing two solo
+ * frames and opening the locker offered you the first.
  */
 export function activeTables(): ActiveTable[] {
   const found: ActiveTable[] = [];
+  const now = Date.now();
 
   try {
     for (let i = 0; i < sessionStorage.length; i++) {
@@ -53,7 +66,20 @@ export function activeTables(): ActiveTable[] {
       if (!m) continue;
       const role = m[1] as 'host' | 'player';
       const code = m[2].toUpperCase();
-      found.push({ code, role, path: pathFor(role, code), at: Number.MAX_SAFE_INTEGER });
+      const raw = sessionStorage.getItem(key!);
+      if (!raw) continue;
+      let at = 0;
+      try {
+        at = (JSON.parse(raw) as { at?: number }).at ?? 0;
+      } catch {
+        continue;
+      }
+      // Sessions written before timestamps existed, and tables the server will have reaped.
+      if (!at || now - at > PARTY_TTL_MS) {
+        sessionStorage.removeItem(key!);
+        continue;
+      }
+      found.push({ code, role, path: pathFor(role, code), at });
     }
   } catch {
     // Storage can be unavailable in a locked-down browser. A missing resume strip is a far
