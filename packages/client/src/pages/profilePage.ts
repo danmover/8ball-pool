@@ -31,8 +31,8 @@ import { icon } from '../render/icons';
 import { openCase } from '../profile/caseReel';
 import { playerBannerHtml } from '../render/banner';
 import { showToast } from '../render/dialogs';
-import { goBack, navigate } from '../router';
-import { mountResumeStrip } from './pageShell';
+import { navigate } from '../router';
+import { bindPageShell, emptyStateHtml, pageShellHtml } from './pageShell';
 
 /**
  * The locker.
@@ -119,7 +119,12 @@ export function renderProfilePage(root: HTMLElement): () => void {
       <div class="item-grid">
         ${
           shown.length === 0
-            ? '<p class="muted empty-grid">Nothing here matches that.</p>'
+            ? emptyStateHtml({
+                icon: 'locker',
+                title: 'Nothing matches that',
+                body: 'Try a different shelf, or clear the filters to see everything on this one.',
+                action: { id: 'clearFilters', label: 'Clear filters' },
+              })
             : shown.map((item) => itemCard(item, profile, loadout)).join('')
         }
       </div>`;
@@ -306,19 +311,12 @@ export function renderProfilePage(root: HTMLElement): () => void {
 
     root.innerHTML = `
       <div class="profile-page">
-        <div class="profile-top">
-          <button class="icon-btn" id="backBtn" title="Back">${icon('back', { size: 20 })}</button>
-          <h1>Your Locker</h1>
-          <div class="wallet">
-            <span class="wallet-chip" title="Chalk">${icon('chalk', { size: 18 })} ${
-              profile.chalk
-            }</span>
-            <span class="wallet-chip ${profile.spins > 0 ? 'hot' : ''}" title="Spins">${icon(
-              'wheel',
-              { size: 18 }
-            )} ${profile.spins}</span>
-          </div>
-        </div>
+        ${pageShellHtml({
+          title: 'Your Locker',
+          subtitle: `Level ${progress.level} · ${profile.unlocked.length} items unlocked`,
+          actions: `<span class="wallet-chip" title="Chalk">${icon('chalk', { size: 18 })} ${profile.chalk}</span>
+            <span class="wallet-chip ${profile.spins > 0 ? 'hot' : ''}" title="Spins">${icon('wheel', { size: 18 })} ${profile.spins}</span>`,
+        })}
 
         <div class="profile-hero">
           ${playerBannerHtml({
@@ -374,8 +372,7 @@ export function renderProfilePage(root: HTMLElement): () => void {
   }
 
   function wire(): void {
-    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
-    mountResumeStrip(root);
+    bindPageShell(root);
 
     const nameInput = root.querySelector<HTMLInputElement>('#nameInput')!;
     nameInput.addEventListener('change', () => {
@@ -408,6 +405,14 @@ export function renderProfilePage(root: HTMLElement): () => void {
     });
 
     // --- filters ---
+    // The way out of an empty grid, from the empty state itself.
+    root.querySelector('#clearFilters')?.addEventListener('click', () => {
+      search = '';
+      ownership = 'all';
+      rarity = 'all';
+      draw();
+    });
+
     const searchInput = root.querySelector<HTMLInputElement>('#lockerSearch');
     searchInput?.addEventListener('input', () => {
       search = searchInput.value;

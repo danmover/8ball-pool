@@ -1,8 +1,7 @@
 import { modeDescriptor, topRivals, framesAgainst, type GameMode } from '@8ball/shared';
 import { getProfile } from '../profile/profile';
-import { icon } from '../render/icons';
-import { goBack, navigate } from '../router';
-import { mountResumeStrip } from './pageShell';
+import { navigate } from '../router';
+import { bindPageShell, emptyStateHtml, pageShellHtml } from './pageShell';
 
 /**
  * The numbers, honestly.
@@ -88,32 +87,44 @@ export function renderStatsPage(root: HTMLElement): () => void {
       },
     ];
 
+    /*
+     * A row per rival, marked up as a definition list rather than a table row.
+     *
+     * It was a `<table>`, which is honest about what it is but cannot reflow — below about
+     * 600px the four columns squeezed into an unreadable stack of wrapped words. Each rival is
+     * one record with four fields, and a row of labelled cells says that at any width.
+     */
     const rivalRows = topRivals(rivals)
       .map((r) => {
         const played = framesAgainst(r);
         const ahead = r.wins > r.losses ? 'ahead' : r.wins < r.losses ? 'behind' : 'level';
         return `
-          <tr class="rival-${ahead}">
-            <td class="who">${r.name}</td>
-            <td><b>${r.wins}</b>–<b>${r.losses}</b></td>
-            <td>${pct(r.wins, played)}</td>
-            <td class="muted">${r.lastPlayed}</td>
-          </tr>`;
+          <li class="rival-row rival-${ahead}">
+            <span class="rival-name">${r.name}</span>
+            <span class="rival-cell rival-record"><i>Record</i><b>${r.wins}–${r.losses}</b></span>
+            <span class="rival-cell"><i>Win rate</i><b>${pct(r.wins, played)}</b></span>
+            <span class="rival-cell"><i>Last played</i><b>${r.lastPlayed}</b></span>
+          </li>`;
       })
       .join('');
 
+    // Says how much the numbers below are worth. "31 frames" and "no frames yet" are the
+    // difference between a statistic and a placeholder, and the page already makes that
+    // distinction card by card — the header should make it once, up front.
+    const subtitle =
+      stats.games > 0
+        ? `${stats.games} ${stats.games === 1 ? 'frame' : 'frames'} played${shots > 0 ? ` · ${shots} shots taken` : ''}`
+        : 'Nothing recorded yet — play a frame and this fills in';
+
     root.innerHTML = `
       <div class="page stats-page">
-        <header class="page-head">
-          <button class="mini secondary" id="backBtn">${icon('home', { size: 14 })} Back</button>
-          <h1>Your numbers</h1>
-        </header>
+        ${pageShellHtml({ title: 'Your numbers', subtitle })}
 
         <div class="stat-grid">
           ${cards
             .map(
-              (c) => `
-            <div class="stat-card">
+              (c, i) => `
+            <div class="stat-card" style="--stagger:${i}">
               <span class="stat-value${c.wide ? ' text' : ''}">${c.value}</span>
               <span class="stat-label">${c.label}</span>
               ${c.note ? `<span class="stat-note">${c.note}</span>` : ''}
@@ -126,17 +137,19 @@ export function renderStatsPage(root: HTMLElement): () => void {
           <h2>Rivals</h2>
           ${
             rivalRows
-              ? `<table class="rivals-table">
-                   <thead><tr><th>Who</th><th>Record</th><th>Win rate</th><th>Last played</th></tr></thead>
-                   <tbody>${rivalRows}</tbody>
-                 </table>`
-              : `<p class="muted">Nobody yet. Play someone more than once and they'll show up here.</p>`
+              ? `<ul class="rivals-list">${rivalRows}</ul>`
+              : emptyStateHtml({
+                  icon: 'target',
+                  title: 'No rivals yet',
+                  body: 'Play somebody more than once and they turn up here, with the score between you.',
+                  action: { id: 'findGame', label: 'Find a game' },
+                })
           }
         </section>
       </div>`;
 
-    root.querySelector('#backBtn')?.addEventListener('click', () => goBack());
-    mountResumeStrip(root);
+    bindPageShell(root);
+    root.querySelector('#findGame')?.addEventListener('click', () => navigate('/online'));
   }
 
   draw();

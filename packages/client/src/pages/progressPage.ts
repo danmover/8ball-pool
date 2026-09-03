@@ -17,8 +17,8 @@ import {
 } from '../profile/progression';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
 import { icon } from '../render/icons';
-import { goBack, navigate } from '../router';
-import { mountResumeStrip } from './pageShell';
+import { navigate } from '../router';
+import { bindPageShell, pageShellHtml } from './pageShell';
 
 /**
  * Where progress is actually visible.
@@ -41,13 +41,13 @@ export function renderProgressPage(root: HTMLElement): () => void {
 
     root.innerHTML = `
       <div class="progress-page">
-        <header class="progress-head">
-          <button class="icon-btn" id="backBtn" title="Back">${icon('back')}</button>
-          <h1>Progress</h1>
-          <div class="progress-rating" title="Elo against the computer opponents">
-            <b>${profile.rating ?? 1000}</b><span>rating</span>
-          </div>
-        </header>
+        ${pageShellHtml({
+          title: 'Progress',
+          subtitle: `${earned.size} of ${ACHIEVEMENTS.length} achievements earned`,
+          actions: `<div class="progress-rating" title="Elo against the computer opponents">
+              <b>${profile.rating ?? 1000}</b><span>rating</span>
+            </div>`,
+        })}
 
         <div class="settings-tabs">
           ${(
@@ -69,8 +69,7 @@ export function renderProgressPage(root: HTMLElement): () => void {
         }</div>
       </div>`;
 
-    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
-    mountResumeStrip(root);
+    bindPageShell(root);
     root.querySelectorAll<HTMLElement>('.settings-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         tab = btn.dataset.tab as Tab;
@@ -155,7 +154,8 @@ export function renderProgressPage(root: HTMLElement): () => void {
                 <div style="width:${Math.round((progress / mission.target) * 100)}%"></div>
                 <span>${progress} / ${mission.target}</span>
               </div>
-              <button data-mission="${mission.id}" ${done && !claimed ? '' : 'disabled'}>
+              <button class="mini${done && !claimed ? ' claimable' : ''}" data-mission="${mission.id}"
+                      ${done && !claimed ? '' : 'disabled'}>
                 ${claimed ? 'Claimed' : done ? 'Claim' : 'In progress'}
               </button>
             </div>`;
@@ -195,7 +195,8 @@ export function renderProgressPage(root: HTMLElement): () => void {
               }</div>
               <div class="tier-label">${label}</div>
               <div class="tier-xp">${t.xp.toLocaleString()} XP</div>
-              <button data-tier="${t.tier}" ${reached && !taken ? '' : 'disabled'}>
+              <button class="mini${reached && !taken ? ' claimable' : ''}" data-tier="${t.tier}"
+                      ${reached && !taken ? '' : 'disabled'}>
                 ${taken ? 'Taken' : reached ? 'Claim' : 'Locked'}
               </button>
             </div>`;

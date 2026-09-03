@@ -8,11 +8,13 @@ import {
 } from '@8ball/shared';
 import { getProfile } from '../profile/profile';
 import { getSocket } from '../net/socket';
-import { goBack, navigate } from '../router';
+import { navigate } from '../router';
 import { icon } from '../render/icons';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
 import { loadSettings, saveSession, saveSettings } from '../settings/settingsStore';
-import { mountResumeStrip } from './pageShell';
+import { bindPageShell, pageShellHtml } from './pageShell';
+import { runBusyWithTimeout } from '../ui/busy';
+import { showToast } from '../render/dialogs';
 
 /**
  * The career ladder.
@@ -25,7 +27,6 @@ import { mountResumeStrip } from './pageShell';
 export function renderCareerPage(root: HTMLElement): () => void {
   const socket = getSocket();
   const settings = loadSettings();
-  let launching = false;
 
   function draw(): void {
     const profile = getProfile();
@@ -36,20 +37,13 @@ export function renderCareerPage(root: HTMLElement): () => void {
 
     root.innerHTML = `
       <div class="career-page">
-        <header class="career-head">
-          <button class="icon-btn" id="backBtn" title="Back">${icon('back')}</button>
-          <div>
-            <h1>Career</h1>
-            <p class="tagline">${
-              next
-                ? `Next up: ${next.name} at the ${next.venue} table`
-                : 'You have beaten everyone. There is nobody left.'
-            }</p>
-          </div>
-          <div class="career-progress">
-            <b>${progress.beaten}</b><span>/ ${progress.total}</span>
-          </div>
-        </header>
+        ${pageShellHtml({
+          title: 'Career',
+          subtitle: next
+            ? `Next up: ${next.name} at the ${next.venue} table`
+            : 'You have beaten everyone. There is nobody left.',
+          actions: `<div class="career-progress"><b>${progress.beaten}</b><span>/ ${progress.total}</span></div>`,
+        })}
 
         ${CAREER.map((chapter) => {
           const cleared = chapter.opponents.every((o) => beaten.has(o.id));
@@ -65,12 +59,12 @@ export function renderCareerPage(root: HTMLElement): () => void {
             </div>
           </section>`;
         }).join('')}
+        <div class="toast-stack" id="careerToasts" role="status" aria-live="polite"></div>
       </div>`;
 
-    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
-    mountResumeStrip(root);
+    bindPageShell(root);
     root.querySelectorAll<HTMLButtonElement>('[data-opponent]').forEach((btn) => {
-      btn.addEventListener('click', () => play(btn.dataset.opponent!));
+      btn.addEventListener('click', () => play(btn, btn.dataset.opponent!));
     });
   }
 
@@ -112,31 +106,55 @@ export function renderCareerPage(root: HTMLElement): () => void {
    * toward the ladder. A query parameter rather than a socket concept, because the server has
    * no reason to know what a career is.
    */
-  function play(opponentId: string): void {
-    if (launching) return;
+  function play(btn: HTMLButtonElement, opponentId: string): void {
     const opponent = CAREER.flatMap((c) => c.opponents).find((o) => o.id === opponentId);
     if (!opponent) return;
-    launching = true;
 
-    socket.emit('hostCreateRoom', { hostName: getProfile().displayName || 'Player' }, (res) => {
-      saveSession(res.code, 'host', { token: res.token });
-      socket.emit('hostUpdateLobby', {
-        mode: opponent.mode,
-        ruleSet: opponent.ruleSet,
-        maxPlayers: 2,
-        seriesTarget: opponent.target,
-      });
-      // You play the opponent at *their* table — the venues exist and nothing ever sent you
-      // to one before.
-      settings.tableTheme = opponent.venue;
-      saveSettings(settings);
+    /*
+     * The card itself shows that it is working.
+     *
+     * There was a `launching` flag doing the guarding and nothing doing the telling, so pressing
+     * an opponent looked exactly like not pressing one until the room came back. On anything
+     * slower than localhost that reads as a dead button — and the second press was landing
+     * before the guard was ever visible, hosting a room nobody would ever join.
+     */
+    runBusyWithTimeout(
+      btn,
+      (done) => {
+        socket.emit('hostCreateRoom', { hostName: getProfile().displayName || 'Player' }, (res) => {
+          socket.emit('hostUpdateLobby', {
+            mode: opponent.mode,
+            ruleSet: opponent.ruleSet,
+            maxPlayers: 2,
+            seriesTarget: opponent.target,
+          });
+          // You play the opponent at *their* table — the venues exist and nothing ever sent you
+          // to one before.
+          settings.tableTheme = opponent.venue;
+          saveSettings(settings);
 
-      sessionStorage.setItem(
-        `8ball:autostart:${res.code}`,
-        JSON.stringify({ solo: true, botDifficulty: opponent.difficulty })
-      );
-      navigate(`/table/${res.code}?career=${opponent.id}`);
-    });
+          /*
+           * The session is saved last, and only once everything that could still fail has not.
+           * Saving it first left a session behind for a table that was never reached, which the
+           * resume strip would then offer.
+           */
+          saveSession(res.code, 'host', { token: res.token });
+          sessionStorage.setItem(
+            `8ball:autostart:${res.code}`,
+            JSON.stringify({ solo: true, botDifficulty: opponent.difficulty })
+          );
+          done();
+          navigate(`/table/${res.code}?career=${opponent.id}`);
+        });
+      },
+      () => toastTimeout()
+    );
+  }
+
+  /** The server did not answer. Say so, rather than quietly handing the button back. */
+  function toastTimeout(): void {
+    const stack = root.querySelector<HTMLElement>('#careerToasts');
+    if (stack) showToast(stack, 'Could not reach the table. Try again.', 'foul');
   }
 
   draw();

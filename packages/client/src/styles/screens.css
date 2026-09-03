@@ -1069,32 +1069,92 @@
   opacity: 0.6;
 }
 
-.rivals-table {
-  width: 100%;
-  border-collapse: collapse;
+/* --- Rivals ---
+   Was a `<table>`, which is honest about the data and hopeless about the width: four columns
+   squeezed below about 600px into a stack of wrapped words. Each rival is one record with four
+   labelled fields, which reads at any width — the labels sit with their values rather than in a
+   header row a phone cannot keep on screen. */
+.rivals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
-.rivals-table th,
-.rivals-table td {
-  padding: 0.45rem 0.6rem;
-  text-align: left;
-  font-size: 0.85rem;
+.rival-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1.1rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--paper-3);
 }
 
-.rivals-table thead th {
-  font-size: 0.7rem;
+.rival-name {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 0.98rem;
+  /* Takes the whole first line on a phone, so the figures wrap underneath it as a group. */
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rival-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rival-cell i {
+  font-style: normal;
+  font-size: 0.62rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.55;
+  letter-spacing: 0.07em;
+  color: var(--muted);
 }
 
-.rivals-table tbody tr {
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
+.rival-cell b {
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
-.rival-ahead td:nth-child(2) b:first-child { color: #6ee7a0; }
+/* Ahead and behind, said in colour on the record itself. Targeted by class rather than by
+   position: `:nth-of-type` counts spans, and the name is a span too, so a positional selector
+   here silently matches nothing. */
+.rival-ahead .rival-record b {
+  color: #6ee7a0;
+}
 
-.rival-behind td:nth-child(2) b:last-child { color: #f08b7e; }
+.rival-behind .rival-record b {
+  color: #f08b7e;
+}
+
+/* --- Stat cards arrive in order ---
+   A grid of eight cards appearing at once reads as a flash; dealt out left to right, it reads
+   as a hand. Capped so the last card is never a noticeable wait. */
+.stat-card {
+  animation: statIn 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
+  animation-delay: calc(min(var(--stagger, 0), 8) * 45ms);
+}
+
+@keyframes statIn {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+}
+
+body.reduce-motion .stat-card {
+  animation: none;
+}
 
 /* A value that is words rather than a number needs to be set smaller to fit its card. */
 .stat-value.text {

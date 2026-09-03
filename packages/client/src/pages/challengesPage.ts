@@ -3,9 +3,10 @@ import { getSocket } from '../net/socket';
 import { saveSession } from '../settings/settingsStore';
 import { challengeStars, equippedLoadout, getProfile } from '../profile/profile';
 import { icon } from '../render/icons';
-import { goBack, navigate } from '../router';
+import { navigate } from '../router';
 import * as sfx from '../render/sfx';
-import { mountResumeStrip } from './pageShell';
+import { bindPageShell, pageShellHtml } from './pageShell';
+import { runBusyWithTimeout } from '../ui/busy';
 
 /**
  * The trick-shot browser.
@@ -56,17 +57,11 @@ export function renderChallengesPage(root: HTMLElement): () => void {
 
     root.innerHTML = `
       <div class="profile-page challenges-page">
-        <div class="profile-top">
-          <button class="icon-btn" id="backBtn" title="Back">${icon('back', { size: 20 })}</button>
-          <h1>Trick Shots</h1>
-          <div class="wallet">
-            <span class="wallet-chip">${icon('star', { size: 18 })} ${total} / ${possible}</span>
-          </div>
-        </div>
-
-        <p class="challenges-intro">
-          Hand-built puzzles built around cue ball control. Fewer shots means more stars.
-        </p>
+        ${pageShellHtml({
+          title: 'Trick Shots',
+          subtitle: 'Hand-built puzzles about cue ball control. Fewer shots means more stars.',
+          actions: `<span class="wallet-chip">${icon('star', { size: 18 })} ${total} / ${possible}</span>`,
+        })}
 
         ${sets
           .map(
@@ -83,11 +78,10 @@ export function renderChallengesPage(root: HTMLElement): () => void {
           .join('')}
       </div>`;
 
-    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
-    mountResumeStrip(root);
+    bindPageShell(root);
 
     root.querySelectorAll<HTMLButtonElement>('[data-challenge]').forEach((btn) => {
-      btn.addEventListener('click', () => start(btn.dataset.challenge!));
+      btn.addEventListener('click', () => start(btn, btn.dataset.challenge!));
     });
   }
 
@@ -96,19 +90,25 @@ export function renderChallengesPage(root: HTMLElement): () => void {
    * ball-in-hand — works without a special case. The host claims seat one and the room is
    * switched into challenge mode in a single round trip.
    */
-  function start(challengeId: string): void {
+  function start(btn: HTMLButtonElement, challengeId: string): void {
     sfx.unlockAudio();
     const socket = getSocket();
-    socket.emit('hostCreateRoom', { hostName: getProfile().displayName || 'Player' }, (res) => {
-      saveSession(res.code, 'host', { token: res.token });
-      socket.emit('hostClaimSeat', {
-        seat: 'p1',
-        loadout: equippedLoadout(),
-        name: getProfile().displayName,
+    // The card says it is working, and cannot be pressed into hosting a second room.
+    runBusyWithTimeout(btn, (done) => {
+      socket.emit('hostCreateRoom', { hostName: getProfile().displayName || 'Player' }, (res) => {
+        socket.emit('hostClaimSeat', {
+          seat: 'p1',
+          loadout: equippedLoadout(),
+          name: getProfile().displayName,
+        });
+        socket.emit('hostStartChallenge', { challengeId });
+        // Written only once nothing else can fail, so a table that was never reached does not
+        // leave a session behind for the resume strip to offer.
+        saveSession(res.code, 'host', { token: res.token });
+        sessionStorage.setItem(`8ball:challenge:${res.code}`, challengeId);
+        done();
+        navigate(`/table/${res.code}`);
       });
-      socket.emit('hostStartChallenge', { challengeId });
-      sessionStorage.setItem(`8ball:challenge:${res.code}`, challengeId);
-      navigate(`/table/${res.code}`);
     });
   }
 

@@ -3418,3 +3418,44 @@ body.reduce-motion .skeleton {
   animation: none;
   background: var(--panel-2);
 }
+
+/* --- A reward waiting to be taken ---
+   The claim buttons on the progress page were bare `<button>`s, so a reward you had earned and
+   a reward you had not looked the same except for being greyed out. Something you are owed
+   should be the thing your eye lands on. */
+button.claimable {
+  animation: claimNudge 2.4s ease-in-out infinite;
+}
+
+@keyframes claimNudge {
+  0%,
+  72%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--ink),
+      0 5px 0 var(--gold-dark),
+      0 10px 18px rgba(0, 0, 0, 0.35);
+  }
+  84% {
+    box-shadow:
+      0 0 0 2px var(--ink),
+      0 5px 0 var(--gold-dark),
+      0 10px 18px rgba(0, 0, 0, 0.35),
+      0 0 22px rgba(255, 197, 49, 0.75);
+  }
+}
+
+body.reduce-motion button.claimable {
+  animation: none;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 0 16px rgba(255, 197, 49, 0.55);
+}
+
+/* An event row is taller than a table row, so its placeholder is too — a skeleton that is the
+   wrong shape makes the layout jump when the real thing lands, which is the one problem it
+   exists to prevent. */
+.skeleton-event {
+  height: 74px;
+}

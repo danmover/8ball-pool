@@ -14,8 +14,9 @@ import { formatRating, identify, rankedIdentity, type RankedIdentity } from '../
 import { getProfile } from '../profile/profile';
 import { icon } from '../render/icons';
 import { showToast } from '../render/dialogs';
-import { goBack, navigate } from '../router';
-import { mountResumeStrip } from './pageShell';
+import { navigate } from '../router';
+import { bindPageShell, emptyStateHtml, pageShellHtml, skeletonRowsHtml } from './pageShell';
+import { runBusyWithTimeout } from '../ui/busy';
 
 /**
  * The online front door.
@@ -38,6 +39,12 @@ const REFRESH_MS = 4000;
 export function renderOnlinePage(root: HTMLElement): () => void {
   const socket = getSocket();
   let tables: TableSummary[] = [];
+  /*
+   * Whether the server has answered yet, which is not the same question as whether there are
+   * any tables. Without it "still asking" and "nothing open" render identically, so the lobby
+   * announced that nothing was open before it had asked.
+   */
+  let listed = false;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let eventTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -74,6 +81,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   function refresh(): void {
     socket.emit('listTables', (list) => {
       tables = list;
+      listed = true;
       paintList();
     });
   }
@@ -105,15 +113,53 @@ export function renderOnlinePage(root: HTMLElement): () => void {
       </div>`;
   }
 
+  /*
+   * Straight into a game.
+   *
+   * Can take a moment — the server may have to open a table — and it used to look exactly like
+   * a button that had not been pressed. Lives here rather than in `wire` because the empty
+   * state offers the same action from the place you find there is nothing to join.
+   */
+  function onEmptyQuickPlay(btn: HTMLButtonElement): void {
+    runBusyWithTimeout(
+      btn,
+      (done) => {
+        socket.emit('quickPlay', {}, (res) => {
+          done();
+          if (!res.ok) {
+            toast(res.error, 'foul');
+            return;
+          }
+          navigate(`/t/${res.code}`);
+        });
+      },
+      () => toast('The server did not answer. Try again.', 'foul')
+    );
+  }
+
   function paintList(): void {
     const listEl = root.querySelector<HTMLElement>('#tableList');
     if (!listEl) return;
-    listEl.innerHTML =
-      tables.length === 0
-        ? `<p class="muted empty-tables">
-             No tables open right now. Quick Play will start one and wait for somebody.
-           </p>`
+    /*
+     * Three states, not two. An empty list and a list that has not arrived yet look identical
+     * if you only handle "no tables" — so on a slow connection the lobby confidently announced
+     * that nothing was open before it had asked.
+     */
+    listEl.innerHTML = !listed
+      ? skeletonRowsHtml(3)
+      : tables.length === 0
+        ? emptyStateHtml({
+            icon: 'globe',
+            title: 'No tables open',
+            body: 'Nobody is waiting right now. Quick Play will open one and hold it until somebody joins.',
+            action: { id: 'emptyQuickPlay', label: 'Start one' },
+          })
         : tables.map(tableRow).join('');
+
+    // The empty state's own way out. Same action as the Quick Play button above it, offered at
+    // the moment you find there is nothing to join.
+    const emptyBtn = listEl.querySelector<HTMLButtonElement>('#emptyQuickPlay');
+    emptyBtn?.addEventListener('click', () => onEmptyQuickPlay(emptyBtn));
 
     listEl.querySelectorAll<HTMLButtonElement>('[data-join]').forEach((btn) => {
       btn.addEventListener('click', () => navigate(`/t/${btn.dataset.join}`));
@@ -123,11 +169,11 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   function draw(): void {
     root.innerHTML = `
       <div class="page online-page">
-        <header class="page-head">
-          <button class="mini secondary" id="backBtn">${icon('home', { size: 14 })} Back</button>
-          <h1>Play Online</h1>
-          <span class="rank-badge" title="Your ranked standing">${formatRating(me)}</span>
-        </header>
+        ${pageShellHtml({
+          title: 'Play Online',
+          subtitle: 'Jump into a table, or pick one from the list',
+          actions: `<span class="rank-badge" title="Your ranked standing">${formatRating(me)}</span>`,
+        })}
 
         <section class="quick-play">
           <button class="play-btn" id="quickPlayBtn">
@@ -157,7 +203,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
           <h2>Scheduled tournaments</h2>
           ${
             events.length === 0
-              ? '<p class="muted">Loading the calendar…</p>'
+              ? skeletonRowsHtml(2, 'skeleton-event')
               : events
                   .map(
                     (e) => `
@@ -298,8 +344,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
   }
 
   function wire(): void {
-    root.querySelector('#backBtn')!.addEventListener('click', () => goBack());
-    mountResumeStrip(root);
+    bindPageShell(root);
     root.querySelector('#refreshBtn')!.addEventListener('click', refresh);
 
     root.querySelector('#rankedBtn')!.addEventListener('click', () => {
@@ -319,15 +364,8 @@ export function renderOnlinePage(root: HTMLElement): () => void {
       });
     });
 
-    root.querySelector('#quickPlayBtn')!.addEventListener('click', () => {
-      socket.emit('quickPlay', {}, (res) => {
-        if (!res.ok) {
-          toast(res.error, 'foul');
-          return;
-        }
-        navigate(`/t/${res.code}`);
-      });
-    });
+    const quickBtn = root.querySelector<HTMLButtonElement>('#quickPlayBtn')!;
+    quickBtn.addEventListener('click', () => onEmptyQuickPlay(quickBtn));
 
     root.querySelector<HTMLFormElement>('#codeForm')!.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -382,27 +420,39 @@ export function renderOnlinePage(root: HTMLElement): () => void {
       }
     });
 
-    root.querySelector('#createBtn')!.addEventListener('click', () => {
-      if (creating) return;
-      creating = true;
-      socket.emit(
-        'createTable',
-        {
-          mode: newMode,
-          ruleSet: newRules,
-          seats: newSeats,
-          visibility: newVisibility,
-          seriesTarget: 1,
-          ranked: newRanked,
-          tournament: newTournament,
+    // `creating` used to be the whole story: it stopped the second press and told nobody about
+    // the first. The button now says so itself.
+    const createBtn = root.querySelector<HTMLButtonElement>('#createBtn')!;
+    createBtn.addEventListener('click', () => {
+      runBusyWithTimeout(
+        createBtn,
+        (done) => {
+          creating = true;
+          socket.emit(
+            'createTable',
+            {
+              mode: newMode,
+              ruleSet: newRules,
+              seats: newSeats,
+              visibility: newVisibility,
+              seriesTarget: 1,
+              ranked: newRanked,
+              tournament: newTournament,
+            },
+            (res) => {
+              creating = false;
+              done();
+              if (!res.ok) {
+                toast(res.error, 'foul');
+                return;
+              }
+              navigate(`/t/${res.code}`);
+            }
+          );
         },
-        (res) => {
+        () => {
           creating = false;
-          if (!res.ok) {
-            toast(res.error, 'foul');
-            return;
-          }
-          navigate(`/t/${res.code}`);
+          toast('The server did not answer. Try again.', 'foul');
         }
       );
     });
