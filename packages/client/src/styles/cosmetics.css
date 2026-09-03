@@ -1,0 +1,241 @@
+/* ==========================================================================
+   Cosmetics: the previews, the rarity treatments, the banner effects and the case reel.
+   ========================================================================== */
+
+/* --- Banner frames --- */
+
+.bn-oak {
+  background:
+    radial-gradient(ellipse 120% 90% at 30% 0%, rgba(255, 255, 255, 0.1), transparent 70%),
+    linear-gradient(180deg, #2c9d5c, #17703d);
+  box-shadow:
+    inset 0 0 0 3px #c99a63,
+    inset 0 0 0 5px #7d5533,
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-felt {
+  background:
+    radial-gradient(ellipse 120% 90% at 30% 0%, rgba(255, 255, 255, 0.08), transparent 70%),
+    linear-gradient(180deg, #1f6f8f, #0d4257);
+  box-shadow:
+    inset 0 0 0 3px #d9a441,
+    inset 0 0 0 5px #6b4a12,
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-neon {
+  background: linear-gradient(180deg, #101826, #070b12);
+  box-shadow:
+    inset 0 0 0 2px #34e2b0,
+    inset 0 0 22px rgba(52, 226, 176, 0.28),
+    0 0 24px rgba(52, 226, 176, 0.28),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-carbon {
+  background:
+    repeating-linear-gradient(45deg, #1a1d24 0 4px, #12151b 4px 8px),
+    linear-gradient(180deg, #1a1d24, #0d0f14);
+  box-shadow:
+    inset 0 0 0 2px #ff4d4d,
+    inset 0 0 0 4px #1a1d24,
+    0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+.bn-gold {
+  background: linear-gradient(180deg, #3a2f12, #1c1608);
+  box-shadow:
+    inset 0 0 0 3px #ffc94d,
+    inset 0 0 0 5px #8a6314,
+    0 0 22px rgba(255, 201, 77, 0.3),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-champion {
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, transparent 60%),
+    linear-gradient(180deg, #4a3a10, #241a05);
+  background-size:
+    250% 100%,
+    100% 100%;
+  animation: championSheen 3.5s linear infinite;
+  box-shadow:
+    inset 0 0 0 3px #ffe27a,
+    inset 0 0 0 6px #b8862a,
+    0 0 28px rgba(255, 226, 122, 0.35),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-chalkboard {
+  background:
+    radial-gradient(ellipse 90% 70% at 30% 20%, rgba(255, 255, 255, 0.06), transparent 70%),
+    linear-gradient(180deg, #2a3630, #16201c);
+  box-shadow:
+    inset 0 0 0 3px #a8794a,
+    inset 0 0 0 5px #63452a,
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-copper {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 10px),
+    linear-gradient(180deg, #b5713f, #6e3d1c);
+  box-shadow:
+    inset 0 0 0 3px #e0a06a,
+    inset 0 0 0 5px #4a2510,
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-marble {
+  background:
+    linear-gradient(118deg, transparent 42%, rgba(255, 255, 255, 0.35) 46%, transparent 50%),
+    linear-gradient(200deg, transparent 60%, rgba(120, 130, 150, 0.35) 64%, transparent 68%),
+    linear-gradient(180deg, #e8e6e0, #b9b6ae);
+  box-shadow:
+    inset 0 0 0 3px #8f8c84,
+    inset 0 0 0 5px #4a4842,
+    0 6px 18px rgba(0, 0, 0, 0.45);
+  color: #1a1410;
+}
+
+.bn-marble .player-name,
+.bn-marble .banner-sub {
+  color: #1a1410;
+  text-shadow: none;
+}
+
+.bn-circuit {
+  background:
+    repeating-linear-gradient(0deg, rgba(52, 226, 176, 0.14) 0 1px, transparent 1px 14px),
+    repeating-linear-gradient(90deg, rgba(52, 226, 176, 0.14) 0 1px, transparent 1px 14px),
+    linear-gradient(180deg, #0f2a22, #06140f);
+  box-shadow:
+    inset 0 0 0 2px #34e2b0,
+    inset 0 0 18px rgba(52, 226, 176, 0.2),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-royal {
+  background:
+    radial-gradient(ellipse 120% 90% at 30% 0%, rgba(255, 255, 255, 0.12), transparent 70%),
+    linear-gradient(180deg, #4a2a8f, #24124a);
+  box-shadow:
+    inset 0 0 0 3px #ffc94d,
+    inset 0 0 0 6px #8a6314,
+    0 0 26px rgba(255, 201, 77, 0.28),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bn-oracle {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(185, 140, 255, 0.45), transparent 45%),
+    radial-gradient(circle at 80% 70%, rgba(52, 226, 176, 0.3), transparent 45%),
+    linear-gradient(180deg, #241155, #0a0616);
+  box-shadow:
+    inset 0 0 0 2px #b98cff,
+    inset 0 0 26px rgba(185, 140, 255, 0.35),
+    0 0 30px rgba(122, 74, 255, 0.4),
+    0 6px 18px rgba(0, 0, 0, 0.55);
+  animation: oracleBreathe 5s ease-in-out infinite alternate;
+}
+
+/* --- Banner effects --- */
+
+.bn-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.bn-fx i {
+  position: absolute;
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bn-fx,
+  .bn-fx i,
+  .bn-champion,
+  .fire-tag {
+    animation: none !important;
+  }
+}
+
+/* --- Rarity --- */
+
+.rarity-common {
+  --rarity: #7d8aa0;
+}
+
+.rarity-rare {
+  --rarity: #4aa8ff;
+}
+
+.rarity-epic {
+  --rarity: #b46aff;
+}
+
+.rarity-legendary {
+  --rarity: #ffc94d;
+}
+
+.rarity-mystic {
+  --rarity: #b98cff;
+}
+
+/* Mystic cards shimmer, so the tier is obvious before you read the label. */
+.item-card.rarity-mystic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    transparent 34%,
+    rgba(185, 140, 255, 0.35) 47%,
+    rgba(52, 226, 176, 0.28) 53%,
+    transparent 66%
+  );
+  background-size: 260% 100%;
+  animation: mysticSheen 3.2s linear infinite;
+}
+
+.item-rarity {
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rarity);
+  font-weight: 800;
+}
+
+.lock-veil {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.reel-cell.rarity-common { --rc: #7d8aa0; }
+
+.reel-cell.rarity-rare { --rc: #4aa8ff; }
+
+.reel-cell.rarity-epic { --rc: #b46aff; }
+
+.reel-cell.rarity-legendary { --rc: #ffc94d; }
+
+.reel-cell.rarity-mystic { --rc: #c9a8ff; }
+
+.item-rarity {
+  /* The pale rarity colours were designed against a dark card; darken for cream. */
+  filter: brightness(0.72) saturate(1.3);
+}
+
+.lock-veil {
+  color: var(--muted);
+}

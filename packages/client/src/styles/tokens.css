@@ -1,0 +1,81 @@
+/* ==========================================================================
+   Every custom property the game has, in one place.
+
+   They used to be spread through the stylesheet that happened to need them first, which is how
+   a back-compat alias (`--panel: var(--paper)`) came to sit further down the same :root and
+   silently undo the neon panel colour.
+   ========================================================================== */
+
+:root {
+  /*
+   * Arcade cabinet: neon on deep violet, everything ink-outlined, everything sitting on a
+   * hard offset shadow it drops into when pressed.
+   *
+   * The names are the ones the whole stylesheet already speaks, so they are kept and retuned
+   * rather than replaced — but two of them changed *meaning*, and it matters:
+   *
+   *   --paper   is now the light TYPE colour only. Panels are dark here.
+   *   --panel*  is the panel face, which is what --paper used to be.
+   *   --wood*   is no longer maple; it is the lit edge running round a panel.
+   *
+   * The table itself is untouched by any of this: cloth, rails, pockets and balls come from
+   * the renderer's own theme, and nothing in here reaches them.
+   */
+  --ink: #120a1a;
+  --ink-soft: rgba(18, 10, 26, 0.55);
+
+  /* Type, in three steps of emphasis. Light, because everything behind it is dark. */
+  --paper: #f7ecff;
+  --paper-2: #cbb2e4;
+  /* Was the pale lip under a cream panel; now the dark lip under a violet one. */
+  --paper-3: #1b0f28;
+
+  /* The panel face: violet, lit from the top edge. */
+  --panel: #3d2450;
+  --panel-2: #281539;
+  --panel-3: #1b0f28;
+
+  /* The edge round a panel, replacing the maple frame it used to draw. */
+  --wood: #6a3f8f;
+  --wood-dark: #3a1f56;
+  --wood-deep: #ffd76b;
+
+  --felt: #2fd07a;
+  --felt-dark: #16a057;
+  --felt-deep: #0a6b3a;
+
+  --gold: #ffc531;
+  --gold-light: #ffe66d;
+  --gold-dark: #b57c07;
+  --accent: #34e2b0;
+  --accent-2: #22d3ee;
+  --plum: #a855f7;
+  --danger: #ff4d6d;
+  --muted: #a68bc4;
+
+  /* The two neon accents the cabinet is lit by. */
+  --hot: #ff3d8b;
+  --hot-dark: #b3195a;
+
+  /* Set per table theme by applyTableThemeToPage; these are the Classic Green fallbacks. */
+  --surround: radial-gradient(ellipse 90% 70% at 50% 40%, #2a3a2f 0%, #131a17 60%, #0a0d0c 100%);
+  --theme-accent: #ffc94d;
+  --theme-felt: #5fd88a;
+  --theme-felt-dark: #28a85c;
+  --theme-wood: #c99a63;
+  --theme-wood-dark: #7d5533;
+
+  /*
+   * Back-compat aliases so older rules keep working. `--panel` used to alias `--paper` here,
+   * which quietly won over the real definition above — the whole restyle rendered cream until
+   * this line went.
+   */
+  --bg-0: #150c1f;
+  --bg-1: #21112f;
+  --bg-2: #2f1a42;
+  --stroke: rgba(255, 236, 255, 0.14);
+
+  --radius: 18px;
+  --frame: 3px;
+  color-scheme: dark;
+}

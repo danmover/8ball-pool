@@ -3,7 +3,7 @@ import { DEFAULT_LOADOUT } from '@8ball/shared';
 /**
  * Banners and their effects are DOM, not canvas — the scoreboard panels are already HTML,
  * and CSS keyframes on a handful of elements are far cheaper than standing up a second
- * renderer over the table. Each cosmetic id maps to a class defined in `style.css`.
+ * renderer over the table. Each cosmetic id maps to a class defined in `styles/cosmetics.css`.
  */
 
 const BANNER_CLASSES: Record<string, string> = {

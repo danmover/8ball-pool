@@ -1,0 +1,2356 @@
+/* ==========================================================================
+   The table.
+
+   The HUD, the shot deck, the power ring, the spin pad, the cue dial, the scoreboard, callouts,
+   the replay bar, the lobby and the spectator view. All of it only exists while a frame does.
+   ========================================================================== */
+
+/* --- Lobby --- */
+
+/* The lobby is taller than the screen once every mode is listed, so it has to be a real
+   scroll container pinned to the viewport.
+   `height: 100%` was resolving against an unconstrained parent, so the element simply grew to
+   its content (1177px in a 900px window), never overflowed itself, and had nothing above it
+   that scrolled either — leaving the shot clock, seats and Start button permanently below the
+   fold with no way to reach them.
+   `safe center` keeps the centring when it fits but falls back to top-aligned when it doesn't;
+   plain `center` pushes the overflow off the top where no scrollbar can reach it. */
+.lobby {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 1rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Cards must keep their height in a scrolling flex column, or they squash instead of overflow. */
+.lobby > * {
+  flex: 0 0 auto;
+}
+
+.lobby-code {
+  font-size: 2.6rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  color: var(--gold);
+  text-align: center;
+  text-shadow: 0 0 26px rgba(255, 201, 77, 0.4);
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.seat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  font-size: 0.85rem;
+  min-height: 52px;
+}
+
+.seat-card.empty {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.seat-team {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.seat-card .seat-team {
+  margin-left: auto;
+}
+
+.score-pill {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Player panels: green-felt cards with a wood trim, matching the table --- */
+
+.player-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 18px;
+  padding: 0.6rem 0.9rem;
+  min-width: 232px;
+  background:
+    radial-gradient(ellipse 120% 90% at 30% 0%, rgba(255, 255, 255, 0.1), transparent 70%),
+    linear-gradient(180deg, #2c9d5c, #17703d);
+  box-shadow:
+    inset 0 0 0 3px #c99a63,
+    inset 0 0 0 5px #7d5533,
+    0 6px 18px rgba(0, 0, 0, 0.5);
+  opacity: 0.66;
+  transition:
+    box-shadow 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.player-panel.active {
+  opacity: 1;
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    inset 0 0 0 5px #7d5533,
+    0 0 24px rgba(255, 201, 77, 0.4),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.player-panel.right {
+  flex-direction: row-reverse;
+}
+
+.player-panel.active .avatar {
+  box-shadow:
+    0 0 0 3px var(--gold),
+    0 0 16px rgba(255, 201, 77, 0.55);
+}
+
+.player-panel.right .player-info {
+  align-items: flex-end;
+}
+
+.ball-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 34vw;
+}
+
+.player-panel.right .ball-row {
+  justify-content: flex-end;
+}
+
+.room-code {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+}
+
+.seat-slots {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.seat-slot {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.mini-table-wrap {
+  flex: 0 0 42vh;
+  position: relative;
+}
+
+.mini-ball-strip {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.mini-ball-strip .ball-row {
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  padding: 5px 8px;
+  backdrop-filter: blur(3px);
+  gap: 4px;
+}
+
+.power-ring {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 88%;
+  max-width: 420px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.power-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4ac26b, var(--gold), var(--danger));
+  transition:
+    width 0.05s linear,
+    background 0.05s linear;
+  box-shadow: 0 0 14px currentColor;
+}
+
+.power-hud {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(var(--power-scale, 1));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  opacity: 0.45;
+  transition:
+    transform 0.06s ease-out,
+    opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.power-hud.charged {
+  opacity: 1;
+}
+
+.power-value {
+  font-size: clamp(2.6rem, 14vw, 4rem);
+  font-weight: 800;
+  color: var(--paper);
+  text-shadow: 0 0 22px currentColor;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.power-tier {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  opacity: 0.75;
+}
+
+.turn-banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.spin-pad {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 6px, rgba(255, 255, 255, 0.15) 7px 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.spin-pad .dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 820px) and (orientation: landscape) {
+  .controller-root {
+    flex-direction: row;
+  }
+  .mini-table-wrap {
+    flex: 0 0 45vw;
+  }
+}
+
+.seat-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+/* --- Pot celebrations --- */
+
+.combo-callout {
+  position: fixed;
+  left: 50%;
+  top: 34%;
+  z-index: 30;
+  transform: translate(-50%, -50%);
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #fff6d8;
+  text-shadow:
+    0 0 18px rgba(255, 170, 40, 0.8),
+    0 6px 0 #b8500f,
+    0 10px 22px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: comboPop 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.rail-nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.rail-arrow {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper);
+  background: linear-gradient(180deg, #4d2f63 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--panel-3);
+}
+
+.rail-arrow:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3);
+}
+
+.rail-arrow:disabled {
+  opacity: 0.3;
+}
+
+.rail-dots {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.rail-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(247, 236, 255, 0.24);
+  box-shadow: none;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.rail-dot:active {
+  transform: none;
+}
+
+.rail-dot.active {
+  width: 26px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 197, 49, 0.5);
+}
+
+/*
+ * The ball sits low and right, the cue comes in from above left at an angle, and there is a
+ * clear gap between the tip and the ball.
+ *
+ * Laid out flat and touching, as they were first, the two read as a toggle switch — a bar
+ * with a knob on the end — which is the last thing the button that starts a game should
+ * look like. The angle and the gap are what make it a cue about to strike.
+ */
+.cue-ball {
+  position: absolute;
+  right: 1px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff 0 18%, #f6f2e6 45%, #cfc7b4 100%);
+  box-shadow: 0 0 0 2px var(--ink), 0 2px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.btn-play:hover .cue-ball {
+  transform: translateX(7px);
+}
+
+/* --- Centre HUD ---
+   Anything the player has to notice goes here, dead centre at the top of the screen. The shot
+   clock used to sit in the top-right corner beside the settings cog, and the ball-in-hand
+   prompt at the very bottom — both places the eye never goes while the balls are moving. */
+
+.centre-hud {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.callout {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 1.1rem 0.55rem 0.7rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 14px 26px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+/* A drawn cue ball, so the instruction is recognisable before it's read. */
+.callout-ball {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background:
+    radial-gradient(circle at 34% 30%, #fff 0 26%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 50% 50%, #fdfaf2 0 55%, #d9cdb6 100%);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.callout-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.callout-text b {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.callout-text small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* Only pulse when it's actually your move — otherwise it's just a status line. */
+.callout.actionable {
+  animation: calloutPulse 1.5s ease-in-out infinite;
+}
+
+.callout.actionable .callout-ball {
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px rgba(255, 203, 82, 0.45);
+}
+
+.shot-clock {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  font-size: 1.9rem;
+  color: var(--paper);
+  background:
+    conic-gradient(var(--accent) calc(var(--clock, 1) * 360deg), rgba(255, 255, 255, 0.08) 0);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 6px 18px rgba(0, 0, 0, 0.55);
+  position: relative;
+  /* The text node paints after ::before, so the number sits over the punched-out middle. */
+  isolation: isolate;
+}
+
+/* The dial is a ring, so punch the middle out and sit the number in the hole. The negative
+   z-index is load-bearing: absolutely-positioned children paint after in-flow text, so
+   without it this disc covers the number it's meant to sit behind. */
+.shot-clock::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--bg-1);
+}
+
+.shot-clock[data-urgent='true'] {
+  background: conic-gradient(var(--danger) calc(var(--clock, 1) * 360deg), rgba(255, 255, 255, 0.08) 0);
+  color: var(--danger);
+  animation: clockPulse 0.5s ease-in-out infinite alternate;
+}
+
+.series-pill {
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* --- Emotes --- */
+
+.emote-bar {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.6rem calc(env(safe-area-inset-bottom, 8px) + 0.5rem);
+  background: rgba(10, 12, 17, 0.7);
+  flex: 0 0 auto;
+}
+
+.emote-bar.cooling {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.emote-btn {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  font-size: 1.35rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--bg-2), #141822);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+}
+
+.emote-pop {
+  position: fixed;
+  z-index: 40;
+  /* Explicit emoji stack — without it some platforms fall back to a narrow tofu glyph. */
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: 3.2rem;
+  line-height: 1;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  animation: emoteFloat 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.75));
+}
+
+/* --- Extra lobby controls --- */
+
+.lobby-options {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.seat-card.bot {
+  position: relative;
+}
+
+.seat-x {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  background: rgba(255, 92, 92, 0.18);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px rgba(255, 92, 92, 0.35);
+}
+
+/* ---- Speed pool: a clock that counts up, and the penalty it has cost so far ---- */
+.speed-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.95rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 14px 26px rgba(0, 0, 0, 0.45);
+}
+
+.speed-time {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 800;
+  font-size: 1.55rem;
+  /* Tabular figures, or the whole readout jitters as the tenths tick over. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.speed-penalty {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #c0392b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A finished run stops shouting and settles into a result. */
+.speed-clock[data-done='true'] {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+}
+
+/* ---- Handicap spot ---- */
+.spot-bar {
+  /* The rest of the centre column is display-only; this one is a control. */
+  pointer-events: auto;
+}
+
+/* A quiet chip until it's set, so an unused handicap doesn't clutter every seat. */
+.seat-handicap {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.seat-handicap:hover {
+  opacity: 1;
+}
+
+.seat-handicap.on {
+  opacity: 1;
+  background: #ffd569;
+  color: #14141a;
+  border-color: #14141a;
+}
+
+/* ---- King of the table: the queue reuses the bracket column ---- */
+.king-holder {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  color: #14141a;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.king-crown {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.king-name {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 800;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.king-streak {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.queue-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.king-best {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  text-align: center;
+}
+
+/* ---- Shot callouts: a word about what just happened, when there is one ---- */
+.shot-callout {
+  align-self: center;
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  color: #14141a;
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 rgba(0, 0, 0, 0.3);
+  animation: calloutPop 2.6s ease forwards;
+}
+
+.shot-callout.tone-great {
+  background: linear-gradient(180deg, #ffe27a 0%, #ffb32e 100%);
+  font-size: 1.35rem;
+}
+
+/* A foul gets a word too, but it must not look like a trophy. */
+.shot-callout.tone-wry {
+  background: linear-gradient(180deg, #e6e0d2 0%, #c8bfae 100%);
+  font-size: 1rem;
+}
+
+/* ---- Replay bar ---- */
+.replay-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--paper-3),
+    0 18px 34px rgba(0, 0, 0, 0.5);
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.replay-controls input[type='range'] {
+  width: min(46vw, 340px);
+  accent-color: #d98324;
+}
+
+.replay-rate {
+  min-width: 3.2rem;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.6;
+}
+
+/* ---- Rivalry line on the result card ---- */
+.rivalry-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.4rem;
+  font-weight: 800;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* ---- Spectator view ---- */
+.spectator-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+  min-height: 100dvh;
+}
+
+/* ================= Portrait phone, online table =================
+   The table rotates a quarter turn to fill the screen (TableRenderer.setAutoRotate), which
+   leaves the HUD — laid out for a television in landscape — sitting on top of it. Everything
+   below shrinks the furniture and pins it to the edges so the cloth stays visible.
+
+   Scoped to the online table page via .table-portrait, so the party host screen is untouched. */
+@media (orientation: portrait) and (max-width: 720px) {
+  .table-portrait .top-bar {
+    gap: 0.3rem;
+    padding: 0.35rem;
+  }
+
+  /* Two compact name plates side by side instead of two big banners stacked. */
+  .table-portrait #playerPanels {
+    gap: 0.3rem !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .table-portrait #playerPanels > * {
+    flex: 1 1 0;
+    min-width: 0;
+    transform: scale(0.72);
+    /* Scaled from the top *centre* so the two plates shrink toward their own middles and stay
+       side by side, rather than each collapsing leftward into the other. */
+    transform-origin: top center;
+  }
+
+  /* The deck is already one centred strip along the bottom; portrait only shrinks it. */
+  .table-portrait .shot-deck {
+    bottom: 0.4rem;
+    transform: translateX(-50%) scale(0.82);
+    transform-origin: bottom center;
+  }
+
+  /* A phone has no arrow keys to nudge with, so the shortcut key has nothing to offer. */
+  .table-portrait .deck-keys,
+  .table-portrait .deck-shortcuts {
+    display: none;
+  }
+
+  /* Keep the centre column clear of the deck. */
+  .table-portrait .centre-hud {
+    top: 64px;
+  }
+
+  .table-portrait .bracket-wrap {
+    display: none;
+  }
+}
+
+/* ================= The shot deck =================
+   Three round controls standing on the floor under the table.
+
+   It was a panel: a rounded bar with an outline and a lip, stretched across the bottom of the
+   screen. However well drawn, a bar there reads as a strip of interface bolted over the room
+   rather than as part of it — and it cut the picture in half with a hard edge. There is no
+   panel now. The controls sit directly on the floor beneath the table, each with a soft
+   contact shadow, and the eye runs off the bottom of the table into the room.
+
+   All three are circles, which is what makes a boxless row hold together: power reads round
+   because it is a gauge, spin because it is a ball, and the cue because it swings on a pivot.
+   ========================================================================== */
+
+/*
+ * One centred row, floating on the floor below the table. It paints nothing behind itself and
+ * nothing is reserved for it: the controls are sized so the whole row fits in the strip of
+ * room the table already leaves, rather than the table being pushed up to make a band.
+ */
+.shot-deck {
+  position: fixed;
+  left: 50%;
+  bottom: 8px;
+  /* Scaled by the page to whatever floor the table leaves — see fitDeck() in hostPage. */
+  transform: translateX(-50%) scale(var(--deck-scale, 1));
+  transform-origin: bottom center;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: deckIn 0.36s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.deck-controls {
+  position: relative;
+  display: flex;
+  /* Stretch, so every bay is as tall as the tallest and the labels share a baseline. Top
+     aligned they landed at different heights, which read as controls that had been dropped
+     rather than placed. */
+  align-items: stretch;
+  gap: 1.9rem;
+  /* Room under the labels: with a plate behind them they were sitting on its bottom edge
+     rather than inside it. */
+  padding: 0.8rem 1.7rem 0.95rem;
+}
+
+/* ==========================================================================
+   The plinth.
+
+   A plate under the controls, not a bar across the screen. The difference is in three things:
+   it is only as wide as what it holds, its corners are cut back so it reads as a machined
+   plate rather than a rectangle of interface, and it is translucent — the floor of the room
+   shows through it, so it sits *in* the scene instead of on top of it.
+
+   Drawn as a pseudo-element rather than on the row itself, because `clip-path` clips a box
+   shadow along with everything else: the chamfer and the glow cannot live on the same box.
+   The glow is a drop-shadow filter, which follows the clipped silhouette.
+   ========================================================================== */
+
+.deck-controls::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Corners cut back; deeper at the top, where the eye meets the plate first. */
+  clip-path: polygon(
+    20px 0,
+    calc(100% - 20px) 0,
+    100% 20px,
+    100% calc(100% - 13px),
+    calc(100% - 13px) 100%,
+    13px 100%,
+    0 calc(100% - 13px),
+    0 20px
+  );
+  background:
+    /* Four bolts, one per corner, as background layers — no extra elements needed. */
+    radial-gradient(circle 3px at 16px 15px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 16px) 15px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at 14px calc(100% - 12px), rgba(255, 236, 255, 0.32), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 14px) calc(100% - 12px), rgba(255, 236, 255, 0.32), transparent 100%),
+    /* A soft pool of light under the middle of the plate. */
+    radial-gradient(ellipse 70% 90% at 50% 0%, rgba(255, 197, 49, 0.09), transparent 70%),
+    linear-gradient(180deg, rgba(78, 47, 102, 0.9) 0%, rgba(32, 18, 47, 0.94) 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.14);
+  filter: drop-shadow(0 6px 0 rgba(10, 5, 18, 0.75)) drop-shadow(0 16px 26px rgba(0, 0, 0, 0.6));
+}
+
+/* The lit lip along the top, fading out before the chamfer so it never runs off a cut corner. */
+.deck-controls::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 0;
+  height: 2.5px;
+  z-index: -1;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gold) 14%,
+    var(--gold-light) 50%,
+    var(--gold) 86%,
+    transparent
+  );
+  box-shadow: 0 0 12px rgba(255, 197, 49, 0.55);
+  transition: opacity 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* While the cue is back the lip takes the shot's own colour, so the plate is part of the
+   wind-up rather than furniture the wind-up happens in front of. */
+.shot-deck.aiming .deck-controls::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--power-color, var(--gold)) 12%,
+    #fff 50%,
+    var(--power-color, var(--gold)) 88%,
+    transparent
+  );
+  box-shadow: 0 0 18px var(--power-color, var(--gold));
+}
+
+/*
+ * Sized to the band of floor under the table rather than to itself.
+ *
+ * At full size a cluster was taller than the gap between the bottom rail and the foot of the
+ * screen, so it climbed back over the table — onto the corner pockets, which are no more
+ * expendable than the middle one. Everything here is a little smaller for that reason.
+ */
+.deck-bay {
+  gap: 0.25rem;
+}
+
+.deck-bay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+/* --- Power: a ring that fills with the drag --- */
+
+.shot-deck .power-hud {
+  position: relative;
+  inset: auto;
+  transform: none;
+  opacity: 1;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  gap: 0;
+  /* The unfilled part reads against the plate behind it. */
+  background: conic-gradient(
+    var(--power-color, var(--gold)) var(--power-pct, 0%),
+    rgba(12, 6, 22, 0.5) 0
+  );
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 10px 22px rgba(0, 0, 0, 0.55);
+  transition: box-shadow 0.18s ease;
+}
+
+/* A sweep chasing round the ring while the shot is held, so the gauge is alive under the
+   drag rather than a static wedge that happens to be a different size each frame. */
+.power-sweep {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.55) 14deg,
+    transparent 34deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
+  transition: opacity 0.2s ease;
+}
+
+.power-hud.charged .power-sweep {
+  opacity: 1;
+  animation: powerSpin 1.1s linear infinite;
+}
+
+/* The dark face inside the ring, so the ring reads as a gauge and not a pie chart. */
+.power-face {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 34%, #33204a, #180d26 78%);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.7), 0 0 0 2px var(--ink);
+}
+
+.shot-deck .power-value {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1.22rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+  /* Swells a little as the shot charges — the number grows into the shot you are winding up. */
+  transform: scale(calc(1 + var(--power-swell, 0) * 0.14));
+  transition: transform 0.09s ease-out;
+}
+
+/* The tier lives inside the ring, under the number it describes. Outside, as the bay's label,
+   it was competing with the other two labels while saying something quite different from
+   them — they name the control, it names the state. */
+.shot-deck .power-tier {
+  position: static;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 1;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+}
+
+.power-hud.charged .power-tier {
+  color: var(--power-color, var(--gold));
+}
+
+.power-hud.charged {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 10px 22px rgba(0, 0, 0, 0.55),
+    0 0 26px var(--power-color, var(--gold));
+}
+
+.power-hud.charged + .bay-label {
+  color: var(--power-color, var(--gold));
+}
+
+/* At the very top it flashes, because "as hard as it goes" is worth knowing before you let go
+   rather than after. */
+.power-hud.maxed {
+  animation: powerMax 0.42s ease-in-out infinite;
+}
+
+/* --- Spin: the cue ball --- */
+
+.bay-spin .spin-control {
+  gap: 0.24rem;
+}
+
+/*
+ * The cue ball you strike, drawn like the balls on the cloth: a broad sheen upper-left, a
+ * crescent of shade low-right, and one hard catchlight. It was a flat white circle with a
+ * dashed cross on it, which read as a diagram of a cue ball rather than as one.
+ */
+.bay-spin .spin-pad {
+  width: 88px;
+  height: 88px;
+  background:
+    radial-gradient(circle at 68% 72%, rgba(20, 10, 30, 0.36) 0%, rgba(20, 10, 30, 0.08) 44%, transparent 68%),
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 34%, transparent 60%),
+    radial-gradient(circle at 50% 50%, #f8f5ec 0 58%, #d8d1c0 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* The catchlight, in the same place the renderer paints it on every other ball. */
+.bay-spin .spin-pad::before,
+.bay-spin .spin-pad::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.bay-spin .spin-pad::before {
+  left: 20%;
+  top: 15%;
+  width: 27%;
+  height: 20%;
+  transform: rotate(-40deg);
+}
+
+.bay-spin .spin-pad::after {
+  right: 15%;
+  bottom: 17%;
+  width: 15%;
+  height: 9%;
+  transform: rotate(-40deg);
+}
+
+/* The safe grip: inside this ring the tip will not slip. Drawn as a real edge rather than
+   left to be discovered by miscuing. */
+.bay-spin .spin-safe {
+  position: absolute;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(26, 20, 16, 0.18);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.spin-control.risky .spin-safe {
+  box-shadow: inset 0 0 0 2px rgba(217, 75, 58, 0.55);
+}
+
+/* Crosshair through the middle, so centre-ball is findable without hunting. */
+.bay-spin .spin-pad .spin-axis {
+  z-index: 3;
+  font-weight: 800;
+  font-size: 0.42rem;
+  color: rgba(26, 20, 16, 0.34);
+}
+
+.bay-spin .spin-pad .dot {
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 34% 30%, #7fe6ff, var(--accent-2) 68%);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 12px rgba(34, 211, 238, 0.8);
+  transition: left 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4), top 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.spin-control.risky .dot {
+  background: radial-gradient(circle at 34% 30%, #ffb0b8, var(--danger) 68%);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 14px rgba(255, 77, 109, 0.85);
+}
+
+.spin-readout {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: rgba(247, 236, 255, 0.62);
+  text-align: center;
+  min-height: 1.1em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.spin-control.spun .spin-readout {
+  color: var(--accent-2);
+}
+
+.spin-control.risky .spin-readout {
+  color: var(--danger);
+}
+
+.spin-presets {
+  display: flex;
+  gap: 0.3rem;
+}
+
+/* Each preset shows where it strikes the ball and says what the ball does. As three bare
+   words — DRAW, STUN, FOLLOW — they were jargon, and pressing one taught you nothing. */
+.spin-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.16rem;
+  width: 58px;
+  padding: 0.24rem 0.18rem 0.26rem;
+  border: none;
+  border-radius: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(66, 42, 86, 0.92), rgba(28, 16, 40, 0.92));
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.16),
+    0 0 0 2px var(--ink),
+    0 4px 0 rgba(0, 0, 0, 0.45),
+    0 8px 14px rgba(0, 0, 0, 0.45);
+  transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.15s ease,
+    box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.spin-preset:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(82, 52, 106, 0.95), rgba(40, 24, 56, 0.95));
+}
+
+.spin-preset:active {
+  transform: translateY(2px);
+}
+
+.spin-preset.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--gold-dark), 0 0 18px rgba(255, 197, 49, 0.45);
+}
+
+.spin-preset.active .preset-ball i {
+  background: radial-gradient(circle at 34% 30%, #ffd8de, var(--danger) 70%);
+}
+
+/* --- Cue: a cue you lift --- */
+
+.shot-type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  width: 132px;
+}
+
+.cue-dial {
+  position: relative;
+  width: 112px;
+  height: 90px;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+
+/* No disc behind the arc. One was added to give the dial the weight the other two controls
+   have, and it just put a panel back — a dark blob under the cue, which is the thing the deck
+   had its panel removed to avoid. The arc carries its own weight instead: a thick light track,
+   which is what the other two are as well, a ring and a ball. */
+
+.cue-dial.dragging {
+  cursor: grabbing;
+}
+
+.dial-svg {
+  position: absolute;
+  inset: 0;
+  width: 112px;
+  height: 112px;
+  overflow: visible;
+}
+
+/*
+ * A groove cut into the plate, dark enough to read against it. This value has now been both
+ * ways round — a dark track vanished against the near-black floor, and a pale one vanished
+ * against the lit violet of the plinth. It has to follow whatever it is drawn on, and it is
+ * drawn on the plinth.
+ */
+.dial-track {
+  fill: none;
+  stroke: rgba(8, 3, 16, 0.72);
+  stroke-width: 15;
+  stroke-linecap: round;
+}
+
+/* The three named shots, marked on the arc rather than sitting under it as buttons. */
+.dial-zone {
+  fill: none;
+  stroke: var(--zone);
+  stroke-width: 13;
+  stroke-linecap: butt;
+  /* Bright enough that the three bands are the first thing you see on the dial — they are the
+     control, and the cue lying across them is the readout. */
+  opacity: 0.72;
+  transition: opacity 0.16s ease;
+}
+
+.cue-dial:hover .dial-zone {
+  opacity: 0.9;
+}
+
+/* The band you are in glows; the other two stay legible but plainly not chosen. */
+.shot-type[data-kind='level'] .dial-zone[data-kind='level'],
+.shot-type[data-kind='curve'] .dial-zone[data-kind='curve'],
+.shot-type[data-kind='jump'] .dial-zone[data-kind='jump'] {
+  opacity: 1;
+  filter: drop-shadow(0 0 6px var(--zone));
+}
+
+.dial-fill {
+  fill: none;
+  stroke: var(--zone, var(--gold));
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px var(--zone, var(--gold)));
+}
+
+.dial-tick {
+  stroke: rgba(12, 8, 20, 0.85);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* The cloth the ball rests on, so the pivot reads as a table and not a hinge. */
+.dial-cloth {
+  position: absolute;
+  left: 2px;
+  bottom: 12px;
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(247, 236, 255, 0.22);
+}
+
+/* The cue itself, pivoting at the ball exactly as a real one does. */
+.dial-cue {
+  position: absolute;
+  left: 16.7%;
+  top: 78.8%;
+  width: 75px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 4px;
+  transform-origin: 0 50%;
+  rotate: calc(var(--lift, 0deg) * -1);
+  background: linear-gradient(90deg, #2a1c11 0%, #6b4a2a 14%, #c99a63 62%, #f0dcb4 88%, #2a6ee0 100%);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 7px rgba(0, 0, 0, 0.55);
+  transition: rotate 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+
+.cue-dial.dragging .dial-cue {
+  /* Following a finger has to be immediate; easing here shows an angle you are not on. */
+  transition: none;
+}
+
+.dial-ball {
+  position: absolute;
+  left: 16.7%;
+  top: 78.8%;
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff 0 18%, #f6f2e6 46%, #cfc7b4 100%);
+  box-shadow: 0 0 0 2px var(--ink), inset -3px -4px 4px rgba(0, 0, 0, 0.18);
+}
+
+/* The handle, deliberately not ball-shaped: a smaller disc ringed in its band's colour, so
+   the dial reads as a cue on a track rather than as two balls joined by a stick. */
+.dial-knob {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff, var(--zone, var(--gold)) 62%);
+  box-shadow: 0 0 0 2.5px var(--ink), 0 0 14px var(--zone, var(--gold));
+  transition: left 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.25),
+    top 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+  pointer-events: none;
+}
+
+.cue-dial.dragging .dial-knob {
+  transition: none;
+  transform: scale(1.15);
+}
+
+.shot-type-hint {
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: rgba(247, 236, 255, 0.55);
+  min-height: 1.2em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+/* Snookered: the two bands that get you out light up until you use one. */
+.shot-type.offered .dial-zone[data-kind='curve'],
+.shot-type.offered .dial-zone[data-kind='jump'] {
+  animation: zoneOffer 1.2s ease-in-out infinite;
+}
+
+/* --- Keyboard shortcuts, behind a key --- */
+
+/* --- Putting the cue down ---
+   Only while the cue is actually back. A permanent "Esc to cancel" is one more line of chrome
+   to read past on every shot; shown at the moment it applies it is an answer to a question you
+   are already asking. */
+.deck-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: rgba(247, 236, 255, 0.5);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+
+.shot-deck.aiming .deck-hint {
+  opacity: 1;
+}
+
+/* Tucked to the right cluster's bottom corner rather than floating off the top of it, where
+   with no panel behind it there was nothing for it to be attached to. */
+.deck-keys {
+  position: absolute;
+  bottom: 2px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: rgba(247, 236, 255, 0.5);
+  background: rgba(16, 9, 26, 0.75);
+  box-shadow: 0 0 0 2px var(--ink);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.deck-keys:hover:not(:disabled),
+.deck-keys.open {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+}
+
+.deck-keys:active:not(:disabled) {
+  transform: none;
+}
+
+.deck-shortcuts {
+  position: absolute;
+  right: -14px;
+  bottom: calc(100% + 8px);
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--panel-3),
+    0 14px 24px rgba(0, 0, 0, 0.5);
+  animation: fineIn 0.18s ease;
+}
+
+.deck-shortcuts[hidden] {
+  display: none;
+}
+
+/* --- Narrow and portrait --- */
+@media (max-width: 800px), (orientation: portrait) {
+  .deck-controls {
+    gap: 1rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .shot-deck .power-hud,
+  .bay-spin .spin-pad {
+    width: 84px;
+    height: 84px;
+  }
+
+  .power-face {
+    width: 62px;
+    height: 62px;
+  }
+
+  .shot-deck .power-value {
+    font-size: 1.15rem;
+  }
+
+  .bay-label,
+  .preset-after {
+    display: none;
+  }
+
+  .spin-preset {
+    width: 46px;
+  }
+
+  .shot-type {
+    width: 118px;
+  }
+
+  .cue-dial {
+    width: 106px;
+    height: 86px;
+  }
+
+  .dial-svg {
+    width: 106px;
+    height: 106px;
+  }
+
+  .dial-cue {
+    width: 70px;
+  }
+}
+
+.table-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 6;
+  min-width: 178px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--panel-3),
+    0 16px 26px rgba(0, 0, 0, 0.55);
+  animation: tableMenuIn 0.16s ease;
+}
+
+@keyframes tableMenuIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.table-menu[hidden] {
+  display: none;
+}
+
+.table-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.84rem;
+  text-align: left;
+  color: var(--paper);
+  background: none;
+  box-shadow: none;
+  transition: background 0.13s ease, color 0.13s ease, transform 0.13s ease;
+}
+
+.table-menu-item:hover:not(:disabled) {
+  transform: translateX(2px);
+  background: rgba(255, 236, 255, 0.1);
+  filter: none;
+}
+
+.table-menu-item:active:not(:disabled) {
+  transform: translateX(2px) translateY(1px);
+}
+
+.table-menu-item .icon {
+  color: var(--accent-2);
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.table-menu-item:hover .icon {
+  transform: scale(1.12) rotate(-6deg);
+}
+
+.table-menu-item.danger {
+  color: var(--danger);
+}
+
+.table-menu-item.danger .icon {
+  color: var(--danger);
+}
+
+.table-menu-rule {
+  height: 1.5px;
+  margin: 0.2rem 0.3rem;
+  background: rgba(255, 236, 255, 0.14);
+}
+
+/* ==========================================================================
+   Whose shot it is, and why the last one ended.
+
+   The table had neither. The turn banner existed only on the phone, so on the big screen a
+   turn arriving was a scoreboard highlight moving and nothing else — easy to miss from across
+   a room, which is exactly where the big screen is watched from. And the reason for a foul was
+   said once in a toast and then gone, at the moment you were looking at the balls rather than
+   the corner of the screen.
+   ========================================================================== */
+
+.turn-flourish {
+  align-self: center;
+  padding: 0.42rem 1.5rem;
+  border-radius: 999px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(78, 47, 102, 0.95), rgba(32, 18, 47, 0.95));
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--panel-3),
+    0 12px 22px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+}
+
+.turn-flourish[hidden] {
+  display: none;
+}
+
+/* Your own turn is the one that has to carry across a room. */
+.turn-flourish.mine {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 0 30px rgba(255, 197, 49, 0.5);
+}
+
+/* Arrives, holds long enough to read, and leaves. It must not sit over the table: the shot it
+   is announcing is played on the cloth underneath it. */
+.turn-flourish.show {
+  animation: turnIn 2.1s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+
+@keyframes turnIn {
+  0% { opacity: 0; transform: translateY(-14px) scale(0.9); }
+  12% { opacity: 1; transform: translateY(0) scale(1.04); }
+  20% { transform: translateY(0) scale(1); }
+  76% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-8px) scale(0.97); }
+}
+
+/*
+ * The foul, which stays. Deliberately not on a timer — the point is that it is still there
+ * when you look up from the balls, so it lasts until the next shot clears it.
+ */
+.foul-note {
+  align-self: center;
+  margin-top: 0.4rem;
+  padding: 0.32rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+  color: #ffe1e6;
+  background: linear-gradient(180deg, rgba(120, 26, 46, 0.95), rgba(70, 12, 26, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 2px var(--ink),
+    0 4px 0 rgba(40, 6, 14, 0.9);
+  animation: foulIn 0.3s ease;
+}
+
+.foul-note[hidden] {
+  display: none;
+}
+
+@keyframes foulIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Toast stack (top centre, under the scoreboard) --- */
+
+.toast-stack {
+  position: fixed;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--paper-3),
+    0 12px 24px rgba(0, 0, 0, 0.4);
+  animation: toastIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: min(560px, 92vw);
+}
+
+.toast-foul {
+  background: linear-gradient(180deg, #eb6055, var(--danger));
+  color: #fff;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 #92251d,
+    0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast-reward {
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast.leaving {
+  animation: toastOut 0.25s ease forwards;
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateY(-18px) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes toastOut {
+  to {
+    transform: translateY(-12px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+/* --- Lobby --- */
+
+.lobby-card.hero {
+  padding: 1.1rem 1.4rem;
+}
+
+.lobby-code {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.25rem 0;
+}
+
+/* Each character sits on its own tile, like letters on a scoreboard. */
+.lobby-code span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 66px;
+  border-radius: 12px;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: var(--gold);
+  background: linear-gradient(180deg, #2c2118, #16100b);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 0 16px rgba(255, 201, 77, 0.55);
+}
+
+/* The seat count beside the PLAYERS heading was cream-on-cream after the restyle. */
+.lobby-card h2 span {
+  color: var(--paper);
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+/* Player slots: a framed plate per seat rather than a bare dashed box. */
+.seat-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  min-height: 68px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffaf0, var(--panel-2));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 var(--paper-3);
+}
+
+.seat-slot.empty {
+  background:
+    repeating-linear-gradient(45deg, rgba(26, 20, 16, 0.05) 0 8px, transparent 8px 16px),
+    var(--panel-2);
+  box-shadow:
+    0 0 0 2px rgba(26, 20, 16, 0.45),
+    0 4px 0 rgba(26, 20, 16, 0.12);
+}
+
+.seat-slot.filled {
+  animation: seatPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes seatPop {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.seat-no {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: var(--gold);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.seat-slot .seat-avatar {
+  width: 44px;
+  height: 44px;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.seat-empty-art {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: rgba(26, 20, 16, 0.35);
+  box-shadow: inset 0 0 0 2px rgba(26, 20, 16, 0.25);
+}
+
+.seat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.seat-name {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 800;
+  font-size: 0.98rem;
+  color: var(--paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seat-name.muted {
+  color: var(--muted);
+}
+
+.seat-meta,
+.seat-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.seat-source {
+  color: var(--muted);
+  display: inline-flex;
+}
+
+.seat-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.lobby-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(6, 10, 8, 0.55), transparent 70%),
+    linear-gradient(180deg, rgba(6, 10, 8, 0.78) 0%, rgba(6, 10, 8, 0.5) 40%, rgba(6, 10, 8, 0.85) 100%);
+}
+
+/* Only the stacking is set here — the lobby's `position: fixed` in style.css is what makes it
+   a scroll container pinned to the viewport, and overriding it back to `relative` let the
+   element grow past the bottom of the screen with nothing able to scroll to it. */
+.lobby {
+  z-index: 2;
+}
+
+/* --- End of frame ---
+   Was a headline and one Rematch button, which made changing the mode or the match length a
+   matter of leaving the table entirely. Now it reports the frame and offers somewhere to go. */
+
+.result-card {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.6rem 1.2rem;
+  width: min(520px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow:
+    inset 0 0 0 var(--frame) var(--wood),
+    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
+    0 0 0 2px var(--ink),
+    0 12px 0 rgba(26, 20, 16, 0.22),
+    0 22px 44px rgba(0, 0, 0, 0.5);
+}
+
+.result-card h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.75rem;
+  color: var(--wood-deep);
+}
+
+.result-reason {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.result-series {
+  margin: 0.5rem 0 0.9rem;
+}
+
+.series-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.series-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.series-row b {
+  min-width: 7ch;
+  text-align: right;
+}
+
+.series-row .pip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--panel-3);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.series-row .pip.won {
+  background: var(--gold);
+}
+
+.result-stats {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.4rem 0 0.8rem;
+  font-size: 0.88rem;
+}
+
+.result-stats th {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.2rem 0.4rem;
+  border-bottom: 2px solid var(--paper-3);
+}
+
+.result-stats td {
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--paper-3);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-stats td.who {
+  text-align: left;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.result-stats tr.winner td {
+  background: rgba(255, 203, 82, 0.22);
+  color: var(--wood-deep);
+}
+
+/* The reward panel was written for a dark overlay, so its values are cream on cream now that
+   the result sits on a paper card — "+30 XP" and the spin count were effectively invisible. */
+.result-card .reward-line {
+  color: var(--muted);
+}
+
+.result-card .reward-line b {
+  color: var(--wood-deep);
+  font-weight: 900;
+}
+
+.result-card .level-up {
+  color: var(--wood-deep);
+  text-shadow: 0 1px 0 var(--gold);
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.9rem;
+}
+
+.result-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* --- Spin control ---
+   Drawn as an actual cue ball with the tip position on it, so where you're striking is
+   literal rather than an abstract joystick. */
+
+.spin-pad {
+  width: 92px;
+  height: 92px;
+  /* This one is exempt from the restyle on purpose: it is a cue ball, and the cue ball is
+     white. Painting it violet with everything else made the one control that is supposed to
+     read as an object on the table read as another panel. */
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 45%),
+    radial-gradient(circle at 50% 50%, #f6f2e6 0 46%, #cfc7b4 100%);
+  border: none;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset -6px -8px 14px rgba(26, 20, 16, 0.25);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Crosshair through the middle, so centre-ball is findable without hunting. */
+.spin-pad::before,
+.spin-pad::after {
+  content: '';
+  position: absolute;
+  background: rgba(26, 20, 16, 0.18);
+}
+
+.spin-pad::before {
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 1.5px;
+}
+
+.spin-pad::after {
+  top: 12%;
+  bottom: 12%;
+  left: 50%;
+  width: 1.5px;
+}
+
+.spin-pad .dot {
+  width: 16px;
+  height: 16px;
+  background: radial-gradient(circle at 35% 32%, #7fd4ff, var(--accent-2));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 10px rgba(42, 110, 224, 0.6);
+}
+
+/* --- Spin control ---
+   The pad is a cue ball you strike; the axes are named on it, the readout says what you did in
+   words, and the three presets cover the shots you actually want without any fine dragging. */
+
+.spin-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.spin-pad {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+}
+
+.spin-axis {
+  position: absolute;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  font-size: 0.44rem;
+  letter-spacing: 0.1em;
+  color: rgba(26, 20, 16, 0.42);
+  pointer-events: none;
+  user-select: none;
+}
+
+.spin-axis.top {
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.spin-axis.bottom {
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.spin-axis.left {
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.spin-axis.right {
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+@media (max-width: 640px) {
+  .toast-stack {
+    top: 70px;
+  }
+}
+
+.result-stars {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0;
+}
+
+.result-stars .star.big.earned:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.result-stars .star.big.earned:nth-child(2) {
+  animation-delay: 0.28s;
+}
+
+.result-stars .star.big.earned:nth-child(3) {
+  animation-delay: 0.46s;
+}
+
+/* The tip's safe grip, drawn on the pad.
+   The pad reaches past it deliberately — that outer band is where a miscue becomes possible,
+   which is what stops maximum english being a free option. The ring is sized from the same
+   shared constants the physics uses, so the picture and the rule can't drift apart. */
+.spin-safe {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(26, 20, 16, 0.3);
+  pointer-events: none;
+}
+
+.spin-control.risky .spin-pad {
+  box-shadow:
+    0 0 0 2px var(--danger),
+    inset -6px -8px 14px rgba(26, 20, 16, 0.25);
+}
+
+.spin-control.risky .spin-readout {
+  color: var(--danger);
+}
+
+.spin-control.risky .spin-safe {
+  border-color: rgba(200, 60, 45, 0.55);
+}
+
+/* --- Tournament bracket ---
+   Down the left of the table and visible throughout, not just between matches: half the fun of
+   a knockout is the people who aren't playing watching their next opponent take shape. */
+
+.bracket-wrap {
+  position: fixed;
+  left: 12px;
+  top: 96px;
+  z-index: 4;
+  pointer-events: none;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.bracket {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3), 0 12px 22px rgba(0, 0, 0, 0.45);
+}
+
+.bracket-title {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 900;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--wood-deep);
+}
+
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bracket-match {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1.5px var(--ink);
+  min-width: 132px;
+}
+
+.bracket-match .side {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.18rem 0.4rem;
+  font-size: 0.72rem;
+  background: var(--panel-2);
+}
+
+.bracket-match .side + .side {
+  border-top: 1.5px solid var(--ink);
+}
+
+.bracket-match .side b {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.bracket-match .side.won {
+  background: var(--gold);
+  font-weight: 800;
+}
+
+/* The match actually being played, so the eye finds it without reading every row. */
+.bracket-match.live {
+  box-shadow: 0 0 0 2px var(--accent-2), 0 0 12px rgba(42, 110, 224, 0.5);
+}
+
+.bracket-match.done .side:not(.won) {
+  opacity: 0.5;
+}
+
+@media (max-width: 900px) {
+  .bracket-wrap {
+    display: none;
+  }
+}

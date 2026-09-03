@@ -1,8 +1,22 @@
-import './style.css';
-import './cosmetics.css';
-import './home.css';
-// Last, so it re-skins components built against the old dark palette.
-import './theme.css';
+/*
+ * Layers, in the order they are allowed to override each other.
+ *
+ * They used to be four files named after the order they were written in — a base, a cosmetics
+ * sheet, a "home" sheet that had grown to hold the HUD and the stats page and the online lobby,
+ * and a theme sheet whose stated job was re-skinning the first one. The cascade encoded the
+ * project's history rather than any structure, so eighty-one selectors were defined in two
+ * places at once and changing a button meant finding all of them.
+ *
+ * Now each layer may only override the ones above it: tokens are facts, base knows nothing
+ * about pool, components are what every screen is built from, and game and screens are the two
+ * places something is allowed to be local to.
+ */
+import './styles/tokens.css';
+import './styles/base.css';
+import './styles/components.css';
+import './styles/game.css';
+import './styles/screens.css';
+import './styles/cosmetics.css';
 import { startRouter, setCleanup } from './router';
 import { renderHomePage } from './pages/homePage';
 import { renderHostPage } from './pages/hostPage';
