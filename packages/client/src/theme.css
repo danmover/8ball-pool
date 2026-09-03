@@ -2454,3 +2454,257 @@ body.reduce-motion .star.big.earned {
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.022) 0 14px, transparent 14px 28px),
     radial-gradient(ellipse 92% 76% at 50% 34%, #2b1740 0%, #1a0e28 56%, #0c0614 100%);
 }
+
+/* ==========================================================================
+   PHASE 2 — The shared chrome.
+
+   The home screen got a button vocabulary and nothing else did: `btn-play`, `btn-hot`,
+   `btn-quiet` and the token discs appeared in exactly one file, while the other ninety-odd
+   buttons across ten files were the base gold sticker or `.secondary`. And four pages each
+   hand-rolled the same header with a different class name.
+
+   This is the part they share. Everything below is deliberately generic — a page header, a
+   press, a lift — so a screen can be converted by changing which class it asks for rather
+   than by being redesigned.
+   ========================================================================== */
+
+/* --- The page header ---
+   `.page-head` was the stats page's alone; `.career-head`, `.progress-head` and
+   `.profile-top` were the same thing under three other names. They are one look now. */
+.page-head,
+.career-head,
+.progress-head,
+.profile-top,
+.challenges-page .profile-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.page-head h1,
+.career-head h1,
+.progress-head h1,
+.profile-top h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 3.4vw, 2rem);
+  line-height: 1.1;
+}
+
+.page-title {
+  min-width: 0;
+}
+
+.page-title .tagline,
+.career-head .tagline {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* Anything the page wants at the far end — a wallet, a rating, a count. */
+.page-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* --- Pages arrive rather than appearing ---
+   The same rise the shot deck uses, so moving between screens feels like one product. */
+.page,
+.online-page,
+.profile-page,
+.career-page,
+.progress-page,
+.challenges-page {
+  animation: pageIn 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Tabs ---
+   The locker's shelf tabs, the progress page's sections and the settings drawer were three
+   different pill treatments. One. */
+.locker-tab,
+.settings-tab,
+.slot-tab {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  padding: 0.42rem 0.95rem;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.09), rgba(0, 0, 0, 0.3));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 255, 0.14),
+    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
+  transition: transform 0.13s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.14s ease,
+    box-shadow 0.14s ease, color 0.14s ease;
+}
+
+.locker-tab:hover,
+.settings-tab:hover,
+.slot-tab:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.16), rgba(0, 0, 0, 0.24));
+}
+
+.locker-tab:active,
+.settings-tab:active,
+.slot-tab:active {
+  transform: translateY(2px);
+}
+
+.locker-tab.active,
+.settings-tab.active,
+.slot-tab.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 3px 0 var(--gold-dark), 0 0 18px rgba(255, 197, 49, 0.4);
+}
+
+/* --- Cards that can be pressed ---
+   Item tiles, opponent cards, challenge cards and table rows all did their own thing. */
+.item-card,
+.opponent-card,
+.challenge-card,
+.table-row {
+  transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.25), box-shadow 0.14s ease;
+}
+
+.item-card:hover:not(.locked),
+.opponent-card:hover:not(.locked),
+.challenge-card:hover:not(.locked),
+.table-row:hover {
+  transform: translateY(-3px);
+}
+
+.item-card:active:not(.locked),
+.opponent-card:active:not(.locked),
+.challenge-card:active:not(.locked),
+.table-row:active {
+  transform: translateY(2px);
+}
+
+/* --- Reduce motion ---
+   Every state above survives without the movement: hover still lights, active still presses
+   through colour, the page still arrives — it just does not slide to get there. */
+body.reduce-motion .page,
+body.reduce-motion .online-page,
+body.reduce-motion .profile-page,
+body.reduce-motion .career-page,
+body.reduce-motion .progress-page,
+body.reduce-motion .challenges-page {
+  animation: none;
+}
+
+body.reduce-motion .locker-tab,
+body.reduce-motion .settings-tab,
+body.reduce-motion .slot-tab,
+body.reduce-motion .item-card,
+body.reduce-motion .opponent-card,
+body.reduce-motion .challenge-card,
+body.reduce-motion .table-row,
+body.reduce-motion .icon-btn {
+  transition: background 0.14s ease, box-shadow 0.14s ease, color 0.14s ease;
+}
+
+body.reduce-motion .locker-tab:hover,
+body.reduce-motion .settings-tab:hover,
+body.reduce-motion .slot-tab:hover,
+body.reduce-motion .item-card:hover,
+body.reduce-motion .opponent-card:hover,
+body.reduce-motion .challenge-card:hover,
+body.reduce-motion .table-row:hover,
+body.reduce-motion .icon-btn:hover {
+  transform: none;
+}
+
+/* --- The back button, and every other icon button ---
+   It had a press state and nothing else: no hover, no life in the icon. It is the control
+   every page shares, so it is the one most worth getting right. */
+.icon-btn {
+  transition:
+    transform 0.13s cubic-bezier(0.2, 0.9, 0.3, 1.3),
+    box-shadow 0.13s ease,
+    background 0.14s ease;
+}
+
+.icon-btn .icon {
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.35);
+}
+
+.icon-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, #5a3874 0%, var(--panel-2) 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 6px 0 var(--panel-3),
+    0 12px 18px rgba(0, 0, 0, 0.4);
+}
+
+/* Back leans the way it is going. */
+.icon-btn.back-btn:hover .icon,
+#backBtn:hover .icon,
+#shellBack:hover .icon {
+  transform: translateX(-3px);
+}
+
+.icon-btn:not(.back-btn):hover .icon {
+  transform: scale(1.1) rotate(-7deg);
+}
+
+.icon-btn.danger:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f0705f, var(--danger));
+  box-shadow: 0 0 0 2px var(--ink), 0 6px 0 #8a2418, 0 12px 18px rgba(0, 0, 0, 0.4);
+}
+
+body.reduce-motion .icon-btn .icon {
+  transition: none;
+}
+
+body.reduce-motion .icon-btn:hover .icon {
+  transform: none;
+}
+
+/* --- Every ordinary button gets the home screen's feel ---
+   Ninety-odd buttons across ten files were the base gold sticker or `.secondary`, and none of
+   them lifted on hover — pressing worked, pointing at them did nothing. Rather than adding a
+   class to all of them, the lift goes on `button` itself.
+
+   The exclusion list is the price of that, and it is deliberate rather than defensive: each
+   of these owns its own hover already, and a bare `button:hover` outranks a single class
+   selector, so without naming them here this rule would quietly overwrite every one. */
+button:not(.icon-btn):not(.spin-preset):not(.token):not(.rack-plate):not(.mode-tile):not(.table-menu-item):not(.deck-keys):not(.rail-dot):not(.locker-tab):not(.settings-tab):not(.slot-tab):not(.item-card):not(.opponent-card):not(.challenge-card):not(.seat-x):not(.mode-card):not(.rule-card):not(.resume-strip):not(.cue-dial):hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+button:not(.icon-btn):not(.spin-preset):not(.token):not(.rack-plate):not(.mode-tile):not(.table-menu-item):not(.deck-keys):not(.rail-dot):not(.locker-tab):not(.settings-tab):not(.slot-tab):not(.item-card):not(.opponent-card):not(.challenge-card):not(.seat-x):not(.mode-card):not(.rule-card):not(.resume-strip):not(.cue-dial):active:not(:disabled) {
+  transform: translateY(3px);
+}
+
+/* An icon inside a button leans in with it. */
+button:not(.icon-btn) > .icon {
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.35);
+}
+
+button:not(.icon-btn):hover:not(:disabled) > .icon {
+  transform: scale(1.1) rotate(-6deg);
+}
+
+body.reduce-motion button:hover:not(:disabled) {
+  transform: none;
+}
+
+body.reduce-motion button > .icon {
+  transition: none;
+}
+
+body.reduce-motion button:hover:not(:disabled) > .icon {
+  transform: none;
+}

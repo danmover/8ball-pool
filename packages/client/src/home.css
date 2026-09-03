@@ -4048,3 +4048,105 @@ body.reduce-motion .resume-dot,
 body.reduce-motion .table-menu {
   animation: none;
 }
+
+/* ==========================================================================
+   Whose shot it is, and why the last one ended.
+
+   The table had neither. The turn banner existed only on the phone, so on the big screen a
+   turn arriving was a scoreboard highlight moving and nothing else — easy to miss from across
+   a room, which is exactly where the big screen is watched from. And the reason for a foul was
+   said once in a toast and then gone, at the moment you were looking at the balls rather than
+   the corner of the screen.
+   ========================================================================== */
+
+.turn-flourish {
+  align-self: center;
+  padding: 0.42rem 1.5rem;
+  border-radius: 999px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(78, 47, 102, 0.95), rgba(32, 18, 47, 0.95));
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 236, 255, 0.2),
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--panel-3),
+    0 12px 22px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+}
+
+.turn-flourish[hidden] {
+  display: none;
+}
+
+/* Your own turn is the one that has to carry across a room. */
+.turn-flourish.mine {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 0 30px rgba(255, 197, 49, 0.5);
+}
+
+/* Arrives, holds long enough to read, and leaves. It must not sit over the table: the shot it
+   is announcing is played on the cloth underneath it. */
+.turn-flourish.show {
+  animation: turnIn 2.1s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+
+@keyframes turnIn {
+  0% { opacity: 0; transform: translateY(-14px) scale(0.9); }
+  12% { opacity: 1; transform: translateY(0) scale(1.04); }
+  20% { transform: translateY(0) scale(1); }
+  76% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-8px) scale(0.97); }
+}
+
+/*
+ * The foul, which stays. Deliberately not on a timer — the point is that it is still there
+ * when you look up from the balls, so it lasts until the next shot clears it.
+ */
+.foul-note {
+  align-self: center;
+  margin-top: 0.4rem;
+  padding: 0.32rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+  color: #ffe1e6;
+  background: linear-gradient(180deg, rgba(120, 26, 46, 0.95), rgba(70, 12, 26, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 2px var(--ink),
+    0 4px 0 rgba(40, 6, 14, 0.9);
+  animation: foulIn 0.3s ease;
+}
+
+.foul-note[hidden] {
+  display: none;
+}
+
+@keyframes foulIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+body.reduce-motion .turn-flourish.show {
+  animation: turnHold 2.1s steps(1) forwards;
+}
+
+/* Still appears and still goes; it simply does not move to do either. */
+@keyframes turnHold {
+  0%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: none; }
+}
+
+body.reduce-motion .foul-note {
+  animation: none;
+}

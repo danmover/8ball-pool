@@ -200,6 +200,15 @@ export function renderHostPage(
            the prompt telling you it's your move. Both used to sit off in a corner. -->
       <div class="bracket-wrap" id="bracketWrap"></div>
       <div class="centre-hud">
+        <!--
+          Whose shot it is, and why the last one ended. The table had neither: the turn banner
+          existed only on the phone, so on the big screen a turn arriving was a scoreboard
+          highlight moving and nothing else — easy to miss across a room. And the reason for a
+          foul was said once in a toast and then gone, which is exactly the moment you were
+          looking at the balls rather than the corner of the screen.
+        -->
+        <div class="turn-flourish" id="turnFlourish" hidden></div>
+        <div class="foul-note" id="foulNote" hidden></div>
         <div class="shot-clock" id="shotClock" style="display:none"></div>
         <div class="speed-clock" id="speedClock" style="display:none"></div>
         <div class="spot-bar" id="spotBar" style="display:none"></div>
@@ -831,8 +840,14 @@ export function renderHostPage(
           called: calledBall !== null && calledPocket !== null,
           miscued: false,
         };
-        spinPad?.reset();
-        cueLift?.reset();
+        /*
+         * The tip and the cue stay where you put them.
+         *
+         * They used to reset to centre after every shot, which meant a run of shots with the
+         * same draw was setting it up again each time. They are cleared when the table passes
+         * to somebody else instead — see `applyState` — so a new visit still starts clean and
+         * nobody inherits the last player's english.
+         */
         calledBall = null;
         calledPocket = null;
       },
@@ -1647,6 +1662,45 @@ export function renderHostPage(
     renderCallHud(preview);
   }
 
+  /**
+   * Announces the turn, and keeps the reason for the last foul on screen.
+   *
+   * The flourish fires only when the shooter actually changes — running it on every broadcast
+   * would put a banner over the table sixty times a second. The foul note is deliberately not
+   * on a timer: it stays until the next shot is taken, because the whole point is that it is
+   * still there when you look up from the balls.
+   */
+  let announcedShooter: Seat | null = null;
+  function announceTurn(state: GameState): void {
+    const flourish = root.querySelector<HTMLElement>('#turnFlourish');
+    const foul = root.querySelector<HTMLElement>('#foulNote');
+    if (!flourish || !foul) return;
+
+    if (state.phase === 'game_over') {
+      flourish.hidden = true;
+      foul.hidden = true;
+      announcedShooter = null;
+      return;
+    }
+
+    if (state.currentShooter !== announcedShooter) {
+      announcedShooter = state.currentShooter;
+      const mine = state.currentShooter === ownedSeat;
+      const who = state.players[state.currentShooter]?.name ?? 'Someone';
+      flourish.textContent = mine ? 'Your shot' : `${who} to play`;
+      flourish.classList.toggle('mine', mine);
+      flourish.hidden = false;
+      // Restarting the animation needs the class off and a reflow between, or a second turn
+      // in a row silently plays nothing.
+      flourish.classList.remove('show');
+      void flourish.offsetWidth;
+      flourish.classList.add('show');
+
+      foul.textContent = state.lastFoulReason ?? '';
+      foul.hidden = !state.lastFoulReason;
+    }
+  }
+
   function applyState(state: GameState): void {
     // If the host has claimed several seats (hotseat on one screen), always control
     // whichever of them is actually up — not just the first claimed.
@@ -1659,6 +1713,12 @@ export function renderHostPage(
     }
 
     // Cue and trail belong to whoever is shooting, so they swap on every turn change.
+    // A new visit starts on a clean cue ball; a run of shots keeps what you set up.
+    if (state.currentShooter !== announcedShooter && announcedShooter !== null) {
+      spinPad?.reset();
+      cueLift?.reset();
+    }
+    announceTurn(state);
     renderer?.setShooterLoadout(state.players[state.currentShooter]?.loadout);
     renderer?.setStreakFire((streaks[state.currentShooter] ?? 0) >= 2);
 
