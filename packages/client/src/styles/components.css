@@ -1518,36 +1518,7 @@
   color: var(--muted);
 }
 
-.bot-tag {
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--accent-2);
-  text-transform: uppercase;
-}
 
-/* --- Tabbed settings --- */
-
-.settings-tabs {
-  display: flex;
-  gap: 0.35rem;
-  margin-bottom: 0.8rem;
-}
-
-.settings-tab {
-  flex: 1;
-  padding: 0.5em 0.4em;
-  font-size: 0.82rem;
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--bg-2), #141822);
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--stroke);
-}
-
-.settings-tab.active {
-  color: var(--ink);
-  background: linear-gradient(180deg, #ffd76b, var(--gold));
-}
 
 .settings-body {
   min-height: 250px;
@@ -2359,26 +2330,6 @@
   display: flex;
   gap: 0.35rem;
   margin-bottom: 0.6rem;
-}
-
-.settings-tab {
-  flex: 1;
-  padding: 0.5em 0.4em;
-  font-size: 0.85rem;
-  border-radius: 12px;
-  background: var(--panel-2);
-  color: var(--muted);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 3px 0 var(--paper-3);
-}
-
-.settings-tab.active {
-  color: var(--ink);
-  background: linear-gradient(180deg, #ffe08a, var(--gold));
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 3px 0 var(--gold-dark);
 }
 
 .segmented {
@@ -3236,4 +3187,91 @@
 .icon-btn.danger:hover:not(:disabled) {
   background: linear-gradient(180deg, #f0705f, var(--danger));
   box-shadow: 0 0 0 2px var(--ink), 0 6px 0 #8a2418, 0 12px 18px rgba(0, 0, 0, 0.4);
+}
+
+/* ==========================================================================
+   Tabs
+   ==========================================================================
+   The locker's shelf tabs, the locker's slot picker and the settings drawer were three
+   different pill treatments — and each was defined two or three times across two files, so
+   the shape you actually saw was the sum of seven blocks in two stylesheets.
+
+   One definition. The three differences below are the only ones any of them genuinely needed;
+   everything else the fragments set was already being overridden further down and had not
+   changed a pixel in a long time. */
+.locker-tab,
+.settings-tab,
+.slot-tab {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  padding: 0.42rem 0.95rem;
+  color: var(--paper);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.09), rgba(0, 0, 0, 0.3));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 255, 0.14),
+    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
+  transition: transform 0.13s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.14s ease,
+    box-shadow 0.14s ease, color 0.14s ease;
+}
+
+/* Carries a count badge pinned to its corner. */
+.locker-tab {
+  position: relative;
+}
+
+/* Shares a row with its siblings and divides it evenly. */
+.settings-tab {
+  flex: 1;
+}
+
+.locker-tab:hover,
+.settings-tab:hover,
+.slot-tab:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(255, 236, 255, 0.16), rgba(0, 0, 0, 0.24));
+}
+
+.locker-tab:active,
+.settings-tab:active,
+.slot-tab:active {
+  transform: translateY(2px);
+}
+
+.locker-tab.active,
+.settings-tab.active,
+.slot-tab.active {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  box-shadow: 0 0 0 1.5px var(--ink), 0 3px 0 var(--gold-dark), 0 0 18px rgba(255, 197, 49, 0.4);
+}
+
+/* ==========================================================================
+   Cards that can be pressed
+   ==========================================================================
+   Item tiles, opponent cards, challenge cards and table rows are each laid out by their own
+   screen, but they are all a card you press, and they should all answer to a pointer the same
+   way. Only the press lives here; what each one looks like stays with its screen. */
+.item-card,
+.opponent-card,
+.challenge-card,
+.table-row {
+  transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.25), box-shadow 0.14s ease;
+}
+
+.item-card:hover:not(.locked),
+.opponent-card:hover:not(.locked),
+.challenge-card:hover:not(.locked),
+.table-row:hover {
+  transform: translateY(-3px);
+}
+
+.item-card:active:not(.locked),
+.opponent-card:active:not(.locked),
+.challenge-card:active:not(.locked),
+.table-row:active {
+  transform: translateY(2px);
 }

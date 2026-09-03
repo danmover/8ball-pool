@@ -42,12 +42,6 @@
   text-shadow: 0 0 26px rgba(255, 201, 77, 0.4);
 }
 
-.seat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
 
 .seat-card {
   display: flex;
@@ -991,16 +985,6 @@
   box-shadow: 0 0 18px var(--power-color, var(--gold));
 }
 
-/*
- * Sized to the band of floor under the table rather than to itself.
- *
- * At full size a cluster was taller than the gap between the bottom rail and the foot of the
- * screen, so it climbed back over the table — onto the corner pockets, which are no more
- * expendable than the middle one. Everything here is a little smaller for that reason.
- */
-.deck-bay {
-  gap: 0.25rem;
-}
 
 .deck-bay {
   display: flex;

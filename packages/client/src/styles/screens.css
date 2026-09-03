@@ -129,19 +129,6 @@
   flex-wrap: wrap;
 }
 
-.slot-tab {
-  background: linear-gradient(180deg, var(--bg-2), #141822);
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--stroke);
-  padding: 0.5em 1em;
-  font-size: 0.85rem;
-}
-
-.slot-tab.active {
-  color: var(--ink);
-  background: linear-gradient(180deg, #ffd76b, var(--gold));
-}
-
 .kit-strip {
   display: flex;
   gap: 0.4rem;
@@ -1329,23 +1316,6 @@
   margin: 0.8rem 0 0.6rem;
 }
 
-.locker-tab {
-  position: relative;
-  padding: 0.45rem 1.1rem;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: inherit;
-  font-weight: 800;
-  font-size: 0.85rem;
-}
-
-.locker-tab.active {
-  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
-  color: #14141a;
-  border-color: #14141a;
-}
-
 .slot-tab.complete .slot-count {
   opacity: 1;
   color: #6ee7a0;
@@ -2112,21 +2082,6 @@
   paint-order: stroke fill;
 }
 
-.slot-tab {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--muted);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 4px 0 var(--paper-3);
-}
-
-.slot-tab.active {
-  color: var(--ink);
-  background: linear-gradient(180deg, #ffe08a, var(--gold));
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 4px 0 var(--gold-dark);
-}
 
 .stat-row {
   color: var(--paper);
@@ -2721,67 +2676,3 @@
   animation: pageIn 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 
-/* --- Tabs ---
-   The locker's shelf tabs, the progress page's sections and the settings drawer were three
-   different pill treatments. One. */
-.locker-tab,
-.settings-tab,
-.slot-tab {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  border-radius: 999px;
-  padding: 0.42rem 0.95rem;
-  color: var(--paper);
-  background: linear-gradient(180deg, rgba(255, 236, 255, 0.09), rgba(0, 0, 0, 0.3));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 236, 255, 0.14),
-    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
-  transition: transform 0.13s cubic-bezier(0.2, 0.9, 0.3, 1.3), background 0.14s ease,
-    box-shadow 0.14s ease, color 0.14s ease;
-}
-
-.locker-tab:hover,
-.settings-tab:hover,
-.slot-tab:hover {
-  transform: translateY(-2px);
-  background: linear-gradient(180deg, rgba(255, 236, 255, 0.16), rgba(0, 0, 0, 0.24));
-}
-
-.locker-tab:active,
-.settings-tab:active,
-.slot-tab:active {
-  transform: translateY(2px);
-}
-
-.locker-tab.active,
-.settings-tab.active,
-.slot-tab.active {
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
-  box-shadow: 0 0 0 1.5px var(--ink), 0 3px 0 var(--gold-dark), 0 0 18px rgba(255, 197, 49, 0.4);
-}
-
-/* --- Cards that can be pressed ---
-   Item tiles, opponent cards, challenge cards and table rows all did their own thing. */
-.item-card,
-.opponent-card,
-.challenge-card,
-.table-row {
-  transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.25), box-shadow 0.14s ease;
-}
-
-.item-card:hover:not(.locked),
-.opponent-card:hover:not(.locked),
-.challenge-card:hover:not(.locked),
-.table-row:hover {
-  transform: translateY(-3px);
-}
-
-.item-card:active:not(.locked),
-.opponent-card:active:not(.locked),
-.challenge-card:active:not(.locked),
-.table-row:active {
-  transform: translateY(2px);
-}
