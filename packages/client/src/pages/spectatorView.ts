@@ -1,6 +1,7 @@
 import type { GameState, Seat } from '@8ball/shared';
 import { STAKES, oddsFor, newRound, type BettingRound } from '@8ball/shared';
 import { icon } from '../render/icons';
+import { showToast } from '../render/dialogs';
 
 /**
  * What a phone shows when the table is full.
@@ -57,12 +58,16 @@ export function createSpectatorView(
   const toasts = root.querySelector<HTMLElement>('#specToasts')!;
   root.querySelector('#specLeave')!.addEventListener('click', () => cb.onLeave());
 
-  function toast(message: string, kind = 'info'): void {
-    const el = document.createElement('div');
-    el.className = `toast ${kind}`;
-    el.textContent = message;
-    toasts.appendChild(el);
-    setTimeout(() => el.remove(), 3400);
+  /*
+   * The shared toast, not a second copy of it.
+   *
+   * This built its own, with `class="toast ${kind}"` — but the styled classes are `toast-foul`
+   * and `toast-reward`, so every spectator toast landed with the base shape and none of the
+   * colour, no icon, no cap on how many could stack up and no leaving animation. Winning a bet
+   * and losing one looked exactly the same.
+   */
+  function toast(message: string, kind: 'info' | 'foul' | 'reward' = 'info'): void {
+    showToast(toasts, message, kind, 3400);
   }
 
   function drawScore(): void {
