@@ -2,7 +2,7 @@ import type { BotDifficulty, PlayerSettings } from '@8ball/shared';
 import { navigate } from '../router';
 import { icon } from '../render/icons';
 import { openTransferDialog } from '../profile/transferDialog';
-import { promptText } from '../render/dialogs';
+import { modalBehaviour, promptText } from '../render/dialogs';
 import { getProfile, setDisplayName } from '../profile/profile';
 import { TABLE_THEMES } from '../render/cosmetics/tableThemes';
 
@@ -71,10 +71,15 @@ export function openSettingsPanel(
   // Next frame, so the slide-in transition has a starting state to animate from.
   requestAnimationFrame(() => overlay.classList.add('open'));
 
-  function close(): void {
-    overlay.classList.remove('open');
-    setTimeout(() => overlay.remove(), 240);
-  }
+  /*
+   * Escape, a focus trap, and focus put back where it came from — the same behaviour the
+   * confirm dialog gets, from the same place.
+   *
+   * The drawer had its own Escape handler that only unhooked itself when Escape was what
+   * closed it, so closing with the X or a click on the scrim left a listener on `window`
+   * holding a reference to a removed overlay. Every open-and-close added another.
+   */
+  const close = modalBehaviour(overlay, drawer, 'Settings');
 
   function panelFor(id: TabId): string {
     if (id === 'game') {
@@ -293,12 +298,7 @@ export function openSettingsPanel(
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close();
   });
-  window.addEventListener('keydown', function onKey(e) {
-    if (e.key === 'Escape') {
-      close();
-      window.removeEventListener('keydown', onKey);
-    }
-  });
-
   render();
+  // Focused after the first render, since nothing exists to focus before it.
+  drawer.querySelector<HTMLElement>('#closeSettings')?.focus();
 }

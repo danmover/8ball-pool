@@ -20,7 +20,24 @@ import { icon, type IconName } from './icons';
  * @returns the `close` the caller should use — it undoes the listeners as well as the markup.
  */
 function asDialog(scrim: HTMLElement, label: string): () => void {
-  const dialog = scrim.querySelector<HTMLElement>('.dialog')!;
+  return modalBehaviour(scrim, scrim.querySelector<HTMLElement>('.dialog')!, label);
+}
+
+/**
+ * The same, for anything that behaves like a dialog without being one of the two above — the
+ * settings drawer, chiefly.
+ *
+ * @param scrim   the dimmed backdrop, removed on close.
+ * @param panel   the thing focus is held inside.
+ * @param onClose extra teardown the caller owns, run before the panel goes.
+ */
+export function modalBehaviour(
+  scrim: HTMLElement,
+  panel: HTMLElement,
+  label: string,
+  onClose?: () => void
+): () => void {
+  const dialog = panel;
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
   dialog.setAttribute('aria-label', label);
@@ -58,7 +75,14 @@ function asDialog(scrim: HTMLElement, label: string): () => void {
   function close(): void {
     if (closed) return;
     closed = true;
+    /*
+     * Always, on every route out — not only on the Escape that installed it. The settings
+     * drawer had its own version of this that only unhooked itself when Escape was the thing
+     * that closed it, so closing with the X or a click on the scrim left the listener behind.
+     * Every open-and-close after that added another.
+     */
     document.removeEventListener('keydown', onKey, true);
+    onClose?.();
     scrim.classList.remove('open');
     setTimeout(() => scrim.remove(), 200);
     /*
