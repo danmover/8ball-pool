@@ -354,12 +354,9 @@ body.reduce-motion .star.big.earned {
 /* --- Reduce motion ---
    Every state above survives without the movement: hover still lights, active still presses
    through colour, the page still arrives — it just does not slide to get there. */
-body.reduce-motion .page,
-body.reduce-motion .online-page,
-body.reduce-motion .profile-page,
-body.reduce-motion .career-page,
-body.reduce-motion .progress-page,
-body.reduce-motion .challenges-page {
+/* Matches the entrance rule in screens.css, which is now written the same way — by what a
+   screen *is not* rather than by a list of names that new screens keep falling out of. */
+body.reduce-motion #app > * {
   animation: none;
 }
 

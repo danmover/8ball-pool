@@ -28,6 +28,8 @@ import { renderProgressPage } from './pages/progressPage';
 import { renderStatsPage } from './pages/statsPage';
 import { renderOnlinePage } from './pages/onlinePage';
 import { unlockAudio } from './render/audio';
+import * as sfx from './render/sfx';
+import { soundFor } from './ui/uiSound';
 import { startMusic } from './render/music';
 import { startAmbience } from './render/ambience';
 import { tableThemeFor } from './render/cosmetics/tableThemes';
@@ -106,6 +108,37 @@ window.addEventListener(
   },
   { once: true }
 );
+
+/*
+ * Interface sound: one listener, not a handler per button.
+ *
+ * The menus made no noise at all — 120 buttons across ten screens, and pressing any of them
+ * sounded exactly like pressing nothing. Delegated from the document for the same reason the
+ * hover lift lives on `button` rather than on ninety class names: a rule you have to remember
+ * to apply to each new control is a rule that will be missing from some of them.
+ *
+ * On `pointerdown` rather than `click`, because a physical button makes its noise when it goes
+ * down. Keyboard activation is handled separately, since it has no pointer.
+ */
+function pressSound(target: EventTarget | null): void {
+  const settings = loadSettings();
+  if (!settings.soundEnabled) return;
+  const which = soundFor(target instanceof Element ? target : null);
+  if (!which) return;
+  // Quieter than the table. These play many times a minute and are meant to sit under it.
+  const volume = settings.soundVolume * 0.55;
+  if (which === 'hero') sfx.playUiHero(volume);
+  else if (which === 'back') sfx.playUiBack(volume);
+  else sfx.playUiClick(volume);
+}
+
+document.addEventListener('pointerdown', (e) => pressSound(e.target), { passive: true });
+document.addEventListener('keydown', (e) => {
+  // Space and Enter are how a button is pressed without a pointer. Repeats are ignored: a held
+  // key would otherwise machine-gun the click.
+  if (e.repeat || (e.key !== 'Enter' && e.key !== ' ')) return;
+  pressSound(document.activeElement);
+});
 
 startRouter(app, (path) => {
   const tableMatch = path.match(/^\/table\/([A-Za-z0-9]{4})$/);

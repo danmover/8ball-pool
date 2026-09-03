@@ -318,3 +318,41 @@ export function playLevelUp(volume: number): void {
     });
   });
 }
+
+/* ==========================================================================
+   Interface sounds
+   ==========================================================================
+   The menus were completely silent: 120 buttons and nothing to hear from any
+   of them. In a game styled like an arcade cabinet, pressing something and
+   hearing nothing reads as the press not having registered.
+
+   Deliberately small. These play many times a minute, so anything with a tail
+   on it becomes a drone — each is under 90ms, quiet, and built from the same
+   primitives as the table sounds so the interface belongs to the same object.
+   ========================================================================== */
+
+/** An ordinary press. Woody and short, like a chip set down on a table. */
+export function playUiClick(volume: number): void {
+  tone({ freq: 520, to: 380, duration: 0.055, volume: 0.1 * volume, type: 'triangle' });
+  noise({ duration: 0.028, volume: 0.045 * volume, freq: 2400, q: 1.6 });
+}
+
+/** Going back, or closing something. The click, falling instead of rising. */
+export function playUiBack(volume: number): void {
+  tone({ freq: 380, to: 250, duration: 0.07, volume: 0.09 * volume, type: 'triangle' });
+  noise({ duration: 0.025, volume: 0.035 * volume, freq: 1500, q: 1.4 });
+}
+
+/** Starting a game. The one press in the menus that deserves more than a tick. */
+export function playUiHero(volume: number): void {
+  [0, 0.055].forEach((delay, i) => {
+    tone({
+      freq: 440 * (i === 0 ? 1 : 1.5),
+      duration: 0.2,
+      volume: (0.16 - i * 0.04) * volume,
+      type: 'triangle',
+      delay,
+    });
+  });
+  noise({ duration: 0.14, volume: 0.05 * volume, freq: 3200, to: 800, q: 0.7 });
+}
