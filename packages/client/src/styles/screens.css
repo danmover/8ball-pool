@@ -2196,8 +2196,9 @@ body.reduce-motion .stat-card {
   color: var(--muted);
 }
 
-.challenge-set.locked {
-  opacity: 0.6;
+/* Same reasoning as the career ladder: the heading dims, the cards say it themselves. */
+.challenge-set.locked > h2 {
+  opacity: 0.75;
 }
 
 .challenge-grid {
@@ -2231,8 +2232,10 @@ body.reduce-motion .stat-card {
 }
 
 .challenge-card.locked {
-  filter: saturate(0.4);
   cursor: not-allowed;
+  /* Same as the career cards: drained rather than faded, and not stacking with `:disabled`. */
+  opacity: 1;
+  filter: brightness(0.82) saturate(0.35);
 }
 
 .challenge-top {
@@ -2425,8 +2428,10 @@ body.reduce-motion .stat-card {
   margin-bottom: 1.5rem;
 }
 
-.career-chapter.locked {
-  opacity: 0.45;
+/* The chapter heading dims; the cards inside say it for themselves. Dimming the whole section
+   stacked with the cards' own disabled state and with `button:disabled`. */
+.career-chapter.locked .chapter-head {
+  opacity: 0.75;
 }
 
 .chapter-head h2 {
@@ -2466,9 +2471,21 @@ body.reduce-motion .stat-card {
   box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3), 0 12px 22px rgba(0, 0, 0, 0.35);
 }
 
+/*
+ * A locked opponent, still readable.
+ *
+ * Three separate dimmings were stacking on the same card: `button:disabled` at 0.45 opacity
+ * from the base sheet, the chapter's own locked opacity, and this filter. They multiply, so
+ * the name and rules of everyone you have not reached yet came out at about a third strength —
+ * and the whole point of showing a locked opponent is that you can see who is coming.
+ *
+ * The card says unavailable through *colour* now — drained and darkened — rather than by being
+ * faded towards the background, and the base `:disabled` opacity is cancelled here.
+ */
 .opponent-card:disabled {
   cursor: not-allowed;
-  filter: brightness(0.86) saturate(0.5);
+  opacity: 1;
+  filter: brightness(0.82) saturate(0.35);
 }
 
 .opponent-card.beaten {

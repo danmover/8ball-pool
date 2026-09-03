@@ -3102,9 +3102,31 @@
   filter: brightness(0.9) saturate(0.65);
 }
 
+/*
+ * Earned cards go gold, and everything on them goes dark with the background.
+ *
+ * They used to fade from cream at the top to the dark panel colour at the bottom while their
+ * text kept the colours it uses on violet — so an achievement you had actually earned showed
+ * its name in near-white on cream and its description in light violet on cream, and the only
+ * legible thing on it was the reward line down in the dark half. The cards you had *not*
+ * earned were the readable ones.
+ *
+ * Gold throughout is also what the rest of the game already means by "yours": the active tab,
+ * the selected rule set, a reward waiting to be claimed.
+ */
 .ach-card.earned {
-  background: linear-gradient(180deg, #ffeec0 0%, var(--panel-2) 100%);
+  background: linear-gradient(180deg, #ffeec0 0%, #f2cd74 100%);
   box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--wood-dark);
+  color: var(--ink);
+}
+
+.ach-card.earned .ach-blurb,
+.ach-card.earned .ach-pct {
+  color: rgba(24, 13, 26, 0.66);
+}
+
+.ach-card.earned .ach-reward {
+  color: rgba(24, 13, 26, 0.82);
 }
 
 .ach-top {

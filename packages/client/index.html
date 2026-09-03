@@ -3,14 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a0c11" />
+    <!--
+      The colour a phone paints its own chrome with. It was #0a0c11 — a near-black from the
+      palette this game had before the violet one, so the browser's address bar and the top of
+      the page were visibly different colours. This is `--bg-0`.
+    -->
+    <meta name="theme-color" content="#150c1f" />
+    <meta name="description" content="Eight-ball pool for a room full of people. Host on the big screen and play from your phone, or take a seat at an online table." />
+    <!-- Nothing here is a stable page worth indexing on its own, and a room code in a search
+         result would be a small privacy leak. -->
+    <meta name="robots" content="noindex" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23161616'/%3E%3Ccircle cx='50' cy='50' r='24' fill='%23f6f2e6'/%3E%3Ctext x='50' y='59' font-size='28' font-family='sans-serif' font-weight='800' text-anchor='middle' fill='%23161616'%3E8%3C/text%3E%3C/svg%3E" />
+    <!--
+      The tab icon. The old one was a black-and-white eight ball drawn before the neon violet
+      identity existed, so the one piece of the game visible when it is not on screen looked
+      like a different product. Same ball, in the game's own colours, with the gold ring the
+      rest of the interface is built out of.
+    -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='%23150c1f'/%3E%3Ccircle cx='50' cy='50' r='40' fill='%233d2450'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='%23ffc531' stroke-width='6'/%3E%3Ccircle cx='50' cy='50' r='21' fill='%23f7ecff'/%3E%3Ctext x='50' y='60' font-size='27' font-family='Verdana,sans-serif' font-weight='700' text-anchor='middle' fill='%23150c1f'%3E8%3C/text%3E%3C/svg%3E" />
     <title>8-Ball Pool</title>
   </head>
   <body>
