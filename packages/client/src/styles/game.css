@@ -2347,3 +2347,129 @@
     display: none;
   }
 }
+
+/* ==========================================================================
+   The lobby's start area
+   ==========================================================================
+   Four ways to start a frame, which were four identical stacked buttons of the
+   same width and weight. The ordinary one — the one nearly everybody wants —
+   was the fourth of four and looked exactly like the other three, and what each
+   of the others actually did was hidden in a `title` attribute: invisible on a
+   phone, and on a half-second delay everywhere else.
+
+   One decision, then the alternatives. */
+
+/* Gold, matching the option blocks — "Shot clock" and "Match length" were already gold while
+   "Game mode" and "Rules" were grey, because the latter two carried an inline colour and the
+   former two did not. One label style for the whole lobby. */
+.lobby-card .lobby-heading {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--wood-deep);
+}
+
+/* The count is the changing part, so it reads brighter than the word in front of it. */
+.lobby-card .lobby-heading .lobby-count {
+  color: var(--paper);
+}
+
+.lobby-players-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lobby-start {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: min(100%, 560px);
+}
+
+/* --- The hero --- */
+.btn-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.85rem 1.4rem 0.95rem;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 2px var(--ink),
+    0 7px 0 var(--gold-dark),
+    0 15px 24px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(255, 197, 49, 0.22);
+}
+
+.btn-start-main {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* Says what is about to happen, so pressing the biggest button on the screen is not a guess. */
+.btn-start-sub {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: rgba(24, 13, 26, 0.68);
+}
+
+.btn-start:disabled {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3);
+}
+
+.btn-start:disabled .btn-start-sub {
+  color: var(--muted);
+}
+
+/* --- The alternatives --- */
+.lobby-formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.format-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem 0.7rem;
+  text-align: left;
+  border-radius: 13px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--paper);
+  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
+}
+
+.format-card b {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+/* What the `title` attribute used to say, said where it can be read. */
+.format-card small {
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  /* Single file rather than two cramped columns — these are sentences, not labels. */
+  .lobby-formats {
+    grid-template-columns: 1fr;
+  }
+}

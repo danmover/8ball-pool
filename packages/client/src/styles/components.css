@@ -2833,6 +2833,15 @@
 }
 
 .rule-card {
+  /*
+   * Explicit column flow. Without it the card inherits `inline-flex` from the base button rule
+   * and lays the rule's name *beside* its description — which is what it had been doing since
+   * it was written, so "Casual" sat on top of the sentence explaining it.
+   */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
   text-align: left;
   padding: 0.6rem 0.7rem;
   border-radius: 12px;
@@ -2851,6 +2860,10 @@
 .rule-card.active {
   background: linear-gradient(180deg, #ffe08a, var(--gold));
   box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--wood-dark);
+  /* The card goes gold when chosen, so its text has to go dark with it. It kept the light
+     colour it uses on violet, which left the selected rule set — the one you most need to
+     read — as pale type on a bright field. */
+  color: var(--ink);
 }
 
 .rule-name {
@@ -2866,8 +2879,10 @@
   margin-top: 0.15rem;
 }
 
+/* Gold on gold. The blurb of the *selected* rule set was the one line on this panel that could
+   not be read at all. */
 .rule-card.active .rule-blurb {
-  color: var(--wood-deep);
+  color: rgba(24, 13, 26, 0.72);
 }
 
 /* --- Call shot ---

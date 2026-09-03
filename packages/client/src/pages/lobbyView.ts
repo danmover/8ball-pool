@@ -68,6 +68,16 @@ export function renderLobby(
    */
   const tournamentEntrants = Math.max(2, Math.min(MAX_SEATS, filled));
 
+  /*
+   * Four ways to start, which used to be four identical stacked buttons of the same width and
+   * weight — so the ordinary one, the one nearly everybody wants, was the last of the four and
+   * looked exactly like the other three.
+   *
+   * One decision, then the alternatives. Start is the hero and says what it is starting; the
+   * formats sit under it as smaller choices, each carrying the line that says what it actually
+   * does. Those lines were title attributes, which is to say invisible on a phone and on a
+   * half-second delay everywhere else.
+   */
   container.innerHTML = `
     <div class="lobby">
       <div class="lobby-card hero">
@@ -82,7 +92,7 @@ export function renderLobby(
       </div>
 
       <div class="lobby-card">
-        <h2 style="margin:0 0 0.25rem; font-size:0.78rem; letter-spacing:0.1em; color:var(--muted)">GAME MODE</h2>
+        <h2 class="lobby-heading">Game mode</h2>
         <div class="mode-grid">
           ${allModes()
             .map(
@@ -98,7 +108,7 @@ export function renderLobby(
       </div>
 
       <div class="lobby-card">
-        <h2 style="margin:0 0 0.25rem; font-size:0.78rem; letter-spacing:0.1em; color:var(--muted)">RULES</h2>
+        <h2 class="lobby-heading">Rules</h2>
         <div class="rules-row">
           ${ruleSetOrder()
             .map((id) => {
@@ -154,9 +164,9 @@ export function renderLobby(
       </div>
 
       <div class="lobby-card">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap">
-          <h2 style="margin:0; font-size:0.78rem; letter-spacing:0.1em; color:var(--muted)">
-            PLAYERS &nbsp;<span style="color:var(--paper)">${filled}/${lobby.maxPlayers}</span>
+        <div class="lobby-players-head">
+          <h2 class="lobby-heading">
+            Players <span class="lobby-count">${filled}/${lobby.maxPlayers}</span>
           </h2>
           <div class="stepper">
             <button class="secondary" id="sizeDown" ${lobby.maxPlayers <= 2 ? 'disabled' : ''}>−</button>
@@ -228,23 +238,31 @@ export function renderLobby(
         </div>
       </div>
 
-      <button id="startKing" class="secondary" ${filled >= 2 ? '' : 'disabled'}
-              style="min-width:210px"
-              title="Winner stays on; everyone else queues. Empty places are filled by bots">
-        ${filled >= 2 ? `King of the Table · ${Math.max(3, tournamentEntrants)}` : 'King of the Table'}
-      </button>
-      <button id="passAndPlay" class="secondary" style="min-width:210px"
-              title="Everyone plays from this screen, taking turns — no phones needed">
-        Pass &amp; Play
-      </button>
-      <button id="startTournament" class="secondary" ${filled >= 2 ? '' : 'disabled'}
-              style="min-width:210px"
-              title="Seeded knockout across ${tournamentEntrants} entrants — empty places are filled by bots">
-        ${filled >= 2 ? `Tournament · ${tournamentEntrants} players` : 'Tournament'}
-      </button>
-      <button id="startGame" ${canStart ? '' : 'disabled'} style="min-width:220px">
-        ${canStart ? 'Start Game' : `Need ${descriptor.minPlayers}+ players`}
-      </button>
+      <div class="lobby-start">
+        <button class="btn-start" id="startGame" ${canStart ? '' : 'disabled'}>
+          <span class="btn-start-main">${canStart ? 'Start Game' : 'Waiting for players'}</span>
+          <span class="btn-start-sub">${
+            canStart
+              ? `${descriptor.name} · ${filled} at the table`
+              : `Needs ${descriptor.minPlayers}+ — add a bot or share the code`
+          }</span>
+        </button>
+
+        <div class="lobby-formats">
+          <button class="format-card" id="passAndPlay">
+            <b>Pass &amp; Play</b>
+            <small>Everyone takes turns on this screen — no phones needed</small>
+          </button>
+          <button class="format-card" id="startKing" ${filled >= 2 ? '' : 'disabled'}>
+            <b>King of the Table${filled >= 2 ? ` · ${Math.max(3, tournamentEntrants)}` : ''}</b>
+            <small>Winner stays on, everyone else queues</small>
+          </button>
+          <button class="format-card" id="startTournament" ${filled >= 2 ? '' : 'disabled'}>
+            <b>Tournament${filled >= 2 ? ` · ${tournamentEntrants}` : ''}</b>
+            <small>Seeded knockout — empty places filled by bots</small>
+          </button>
+        </div>
+      </div>
     </div>
   `;
 
