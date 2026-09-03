@@ -77,5 +77,24 @@
 
   --radius: 18px;
   --frame: 3px;
+
+  /*
+   * The keyboard focus ring.
+   *
+   * Cyan rather than any of the palette's own accents, because it has to read as *the browser
+   * telling you where you are* rather than as decoration — and because gold, pink and violet
+   * are all already load-bearing here (selected, hot, and panel). Two rings: a dark one that
+   * separates it from whatever it is drawn on, and the bright one on top. Every panel in the
+   * game already carries a `0 0 0 2px var(--ink)` outline, and the browser's own hairline ring
+   * was drawn straight on top of that and disappeared — which is why 120 buttons have had no
+   * visible focus at all.
+   *
+   * Drawn as an `outline` rather than a `box-shadow`, because almost every control here builds
+   * its pressed-sticker look out of stacked box-shadows and a focus ring must not compete for
+   * that property. The offset puts it clear of the ink edge each one already has.
+   */
+  --focus: #7df9ff;
+  --focus-offset: 3px;
+
   color-scheme: dark;
 }

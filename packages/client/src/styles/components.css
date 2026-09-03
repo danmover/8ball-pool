@@ -2890,6 +2890,13 @@
   box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--paper-3);
 }
 
+/* Same reasoning as `.mode-card`: selection is shown by the fill, so movement would compete
+   with it. */
+.rule-card:hover,
+.rule-card:active {
+  transform: none;
+}
+
 .rule-card.active {
   background: linear-gradient(180deg, #ffe08a, var(--gold));
   box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--wood-dark);

@@ -148,6 +148,23 @@ input:focus {
     inset 0 3px 6px rgba(0, 0, 0, 0.55);
 }
 
+/* --- Keyboard focus ---
+   The game had three `:focus` rules in nine thousand lines of CSS, all of them on inputs. So
+   120 buttons showed nothing at all when tabbed to: the browser's own hairline ring was being
+   drawn directly over the 2px ink edge every control here already has, and vanished into it.
+   Playing the whole game from the keyboard meant guessing where you were.
+
+   `:focus-visible` rather than `:focus`, so a clicked button does not wear a ring it did not
+   ask for. `:where()` on the subject list keeps this at the weight of a bare pseudo-class, so
+   a control with a better idea can still say so.
+
+   Inputs keep the gold treatment above — they had a working one already, and it also marks
+   the field you are typing into, which a ring that only appears for the keyboard would not. */
+:where(button, a[href], select, textarea, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: var(--focus-offset);
+}
+
 /* The low-effects setting and reduced-motion both drop the decorative layers. */
 body.fx-low .bn-fx i {
   display: none;
@@ -369,26 +386,33 @@ body.reduce-motion .icon-btn:hover .icon {
 
 /* --- Every ordinary button gets the home screen's feel ---
    Ninety-odd buttons across ten files were the base gold sticker or `.secondary`, and none of
-   them lifted on hover — pressing worked, pointing at them did nothing. Rather than adding a
-   class to all of them, the lift goes on `button` itself.
+   them lifted on hover — pressing worked, pointing at them did nothing. So the lift goes on
+   `button` itself rather than on a class added to all ninety.
 
-   The exclusion list is the price of that, and it is deliberate rather than defensive: each
-   of these owns its own hover already, and a bare `button:hover` outranks a single class
-   selector, so without naming them here this rule would quietly overwrite every one. */
-button:not(.icon-btn):not(.spin-preset):not(.token):not(.rack-plate):not(.mode-tile):not(.table-menu-item):not(.deck-keys):not(.rail-dot):not(.locker-tab):not(.settings-tab):not(.slot-tab):not(.item-card):not(.opponent-card):not(.challenge-card):not(.seat-x):not(.mode-card):not(.rule-card):not(.resume-strip):not(.cue-dial):hover:not(:disabled) {
+   This was written with an exclusion list — nineteen `:not()`s naming every component that
+   choreographs its own press, because a bare `button:hover` outranks a single class selector
+   and would otherwise overwrite each one. That list had to be repeated across two selectors,
+   silently broke any component somebody forgot to add, and had already rotted: `.rack-plate`
+   was in it and exists nowhere in the game.
+
+   `:where()` inverts it. It contributes nothing to specificity, so this whole rule weighs the
+   same as a bare `button` — and *any* component with its own hover simply wins, with no list
+   to keep in step. A component that means not to move says so in its own rule, next to its
+   own hover, where somebody working on it will see it. */
+button:where(:hover:not(:disabled)) {
   transform: translateY(-2px);
 }
 
-button:not(.icon-btn):not(.spin-preset):not(.token):not(.rack-plate):not(.mode-tile):not(.table-menu-item):not(.deck-keys):not(.rail-dot):not(.locker-tab):not(.settings-tab):not(.slot-tab):not(.item-card):not(.opponent-card):not(.challenge-card):not(.seat-x):not(.mode-card):not(.rule-card):not(.resume-strip):not(.cue-dial):active:not(:disabled) {
+button:where(:active:not(:disabled)) {
   transform: translateY(3px);
 }
 
 /* An icon inside a button leans in with it. */
-button:not(.icon-btn) > .icon {
+button:where(:not(.icon-btn)) > .icon {
   transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.35);
 }
 
-button:not(.icon-btn):hover:not(:disabled) > .icon {
+button:where(:not(.icon-btn):hover:not(:disabled)) > .icon {
   transform: scale(1.1) rotate(-6deg);
 }
 

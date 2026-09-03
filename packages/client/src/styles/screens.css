@@ -1937,6 +1937,13 @@
   gap: 0.15rem;
 }
 
+/* One of a tight row of choices, where the selected one is marked by its fill. A card that
+   rose under the pointer would read as the chosen one. */
+.mode-card:hover,
+.mode-card:active {
+  transform: none;
+}
+
 .mode-art svg,
 .mode-card-art svg {
   display: block;

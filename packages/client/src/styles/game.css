@@ -369,6 +369,9 @@
   transition: width 0.2s ease, background 0.2s ease;
 }
 
+/* A dot marks where you are; it is not a thing to press *at*. It stays put on both, which it
+   has to say for itself now that buttons lift by default. */
+.rail-dot:hover,
 .rail-dot:active {
   transform: none;
 }
@@ -590,6 +593,12 @@
   background: rgba(255, 92, 92, 0.18);
   color: var(--danger);
   box-shadow: inset 0 0 0 1px rgba(255, 92, 92, 0.35);
+}
+
+/* Sits in the corner of a card it is removing. Lifting it would drag it off that corner. */
+.seat-x:hover,
+.seat-x:active {
+  transform: none;
 }
 
 /* ---- Speed pool: a clock that counts up, and the penalty it has cost so far ---- */
