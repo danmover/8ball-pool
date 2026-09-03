@@ -472,6 +472,18 @@ export interface ClientToServerEvents {
   ) => void;
   /** Public tables, freshest first. */
   listTables: (cb: (tables: TableSummary[]) => void) => void;
+  /**
+   * Which of these tables still exist.
+   *
+   * Asked by the "you are still at table X" strip before it offers one. It used to work this
+   * out for itself, from a stored timestamp and a copy of the server's empty-room window — and
+   * got it wrong in both directions, because that window only starts running when the socket
+   * drops, which walking to another screen in the same tab never does. So a table you were
+   * sitting at looked reaped, and a table that really had been reaped looked fine.
+   *
+   * Only the server knows. This asks it.
+   */
+  tablesAlive: (payload: { codes: string[] }, cb: (alive: string[]) => void) => void;
   /** Straight into the best waiting table, or a new one if there isn't a good one. */
   quickPlay: (
     payload: { mode?: GameMode; ruleSet?: RuleSetId },

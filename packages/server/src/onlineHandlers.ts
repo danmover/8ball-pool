@@ -61,6 +61,29 @@ function rankTables(a: TableSummary, b: TableSummary): number {
   return b.createdAt - a.createdAt;
 }
 
+/** Nobody is at twelve tables, and this loops over whatever a caller sent. */
+const ALIVE_QUERY_MAX = 12;
+
+/**
+ * Of these codes, which are still tables.
+ *
+ * Answers the "you are still at table X" strip, which cannot work this out for itself: it used
+ * to compare a stored timestamp against its own copy of the empty-room window, and that window
+ * only starts running once the socket drops. Walking to another screen in the same tab never
+ * drops it, so the client wrote off rooms that were sitting right here.
+ *
+ * Says nothing but existence — not who is seated, not what is being played, not whether the
+ * asker belongs there. A code is four characters, so a richer answer would make this a lookup
+ * service for other people's tables.
+ */
+export function aliveCodes(rooms: RoomManager, codes: unknown): string[] {
+  if (!Array.isArray(codes)) return [];
+  return codes
+    .slice(0, ALIVE_QUERY_MAX)
+    .filter((code): code is string => typeof code === 'string')
+    .filter((code) => rooms.get(code.toUpperCase()) !== undefined);
+}
+
 export function publicTables(rooms: RoomManager): TableSummary[] {
   return rooms
     .all()
@@ -353,6 +376,19 @@ export function registerOnlineHandlers(
     });
     socket.on('listTables', (cb) => {
       cb(publicTables(rooms));
+    });
+
+    /*
+     * Answers the resume strip: of these codes, which are still tables?
+     *
+     * Deliberately says nothing else — not who is at them, not what is being played, not
+     * whether the asker belongs there. Existence is the one bit the strip needs, and it is
+     * the one bit that leaks nothing: a code is four characters, so anything richer would be
+     * a lookup service for tables you are not at.
+     */
+    socket.on('tablesAlive', (payload, cb) => {
+      if (typeof cb !== 'function') return;
+      cb(aliveCodes(rooms, payload?.codes));
     });
 
     socket.on('createTable', (payload, cb) => {

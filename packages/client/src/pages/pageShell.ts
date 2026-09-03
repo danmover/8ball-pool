@@ -1,6 +1,6 @@
 import { icon } from '../render/icons';
 import { backTarget, goBack, navigate } from '../router';
-import { activeTable } from '../net/activeTable';
+import { activeTable, forgetTable, isTableAlive, type ActiveTable } from '../net/activeTable';
 
 /**
  * The frame every menu screen sits in.
@@ -71,6 +71,23 @@ function resumeStripHtml(code: string): string {
 }
 
 /**
+ * Draws the strip now, and takes it back down if the table turns out to have ended.
+ *
+ * Drawn first and checked after, rather than the other way round, because the common case by
+ * far is a table that is still there and the strip should not fade in a beat late every time
+ * to cover a case that mostly does not happen. If the server says the table has gone, the
+ * strip removes itself and the session goes with it — which is the one place a table is
+ * forgotten on a real answer rather than a guess.
+ */
+function watchResumeStrip(strip: HTMLElement, table: ActiveTable): void {
+  void isTableAlive(table.code).then((alive) => {
+    if (alive) return;
+    forgetTable(table.code);
+    strip.remove();
+  });
+}
+
+/**
  * Puts the resume strip on a page that has not been converted to the shell yet.
  *
  * The strip is the fix for the thing that actually loses people, and it should not wait on
@@ -87,6 +104,7 @@ export function mountResumeStrip(root: HTMLElement): void {
   if (!strip) return;
   strip.addEventListener('click', () => navigate(table.path));
   host.prepend(strip);
+  watchResumeStrip(strip, table);
 }
 
 /** Wires the shell's buttons. Call once, after the markup is in the DOM. */
@@ -98,5 +116,6 @@ export function bindPageShell(root: HTMLElement, opts: PageShellOptions = { titl
     resume.addEventListener('click', () => {
       if (table) navigate(table.path);
     });
+    if (table) watchResumeStrip(resume, table);
   }
 }

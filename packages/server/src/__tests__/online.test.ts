@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ABANDON_GRACE_MS } from '@8ball/shared';
 import { Room } from '../room.js';
 import { EMPTY_ROOM_TTL_MS, RoomManager } from '../roomManager.js';
-import { bestWaitingTable, createOpenTable, publicTables } from '../onlineHandlers.js';
+import { aliveCodes, bestWaitingTable, createOpenTable, publicTables } from '../onlineHandlers.js';
 
 /**
  * Open tables have no host, which is exactly what makes them worth testing carefully: there is
@@ -356,5 +356,57 @@ describe('reaping empty rooms', () => {
     const room = table(rooms, io);
     room.addSpectator('watcher');
     expect(rooms.sweep(Date.now() + EMPTY_ROOM_TTL_MS + 1)).toEqual([]);
+  });
+});
+
+/**
+ * The question the resume strip asks before offering to take you back to a table.
+ *
+ * It exists because the client used to answer it itself, from a timestamp and a hardcoded copy
+ * of `EMPTY_ROOM_TTL_MS` — and that window only starts running when the socket drops, which
+ * walking from the table to the locker does not do. So the client discarded live tables, and
+ * going back was met with "this table wasn't created from this device".
+ */
+describe('which tables are still there', () => {
+  it('keeps the ones that exist and drops the ones that do not', () => {
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    expect(aliveCodes(rooms, [room.code, 'ZZZZ'])).toEqual([room.code]);
+  });
+
+  it('does not care about case, because a URL might not', () => {
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    expect(aliveCodes(rooms, [room.code.toLowerCase()])).toEqual([room.code.toLowerCase()]);
+  });
+
+  it('says nothing about an empty room that has not been swept yet', () => {
+    // Existence is the whole answer. A room with nobody in it is still a room you can walk
+    // back into, and that is exactly the case that was being got wrong.
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    expect(room.isOccupied()).toBe(false);
+    expect(aliveCodes(rooms, [room.code])).toEqual([room.code]);
+  });
+
+  it('forgets it once it really has been swept', () => {
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    rooms.sweep(Date.now() + EMPTY_ROOM_TTL_MS + 1);
+    expect(aliveCodes(rooms, [room.code])).toEqual([]);
+  });
+
+  it('refuses to be used as a scanner', () => {
+    const { rooms, io } = manager();
+    const room = table(rooms, io);
+    const flood = Array.from({ length: 500 }, (_, i) => `Q${String(i).padStart(3, '0')}`);
+    expect(aliveCodes(rooms, [...flood, room.code])).toEqual([]);
+  });
+
+  it('survives a client sending nonsense', () => {
+    const { rooms } = manager();
+    expect(aliveCodes(rooms, undefined)).toEqual([]);
+    expect(aliveCodes(rooms, 'ABCD')).toEqual([]);
+    expect(aliveCodes(rooms, [null, 42, { code: 'ABCD' }])).toEqual([]);
   });
 });

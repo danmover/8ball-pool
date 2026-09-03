@@ -54,9 +54,12 @@ export function saveSession(code: string, role: 'host' | 'player', session: Stor
 /**
  * Marks a session as still in use.
  *
- * The stamp has to mean "when you were last at this table", not "when the room was made" —
- * otherwise a frame you have been playing for ten minutes looks older than the three-minute
- * reaping window and the resume strip stops offering the table you are sitting at.
+ * The stamp orders tables — it decides which of several the resume strip offers — so it has to
+ * mean "when you were last at this table", not "when the room was made". Play a frame, start a
+ * second, come back and finish the first, and the first is the one you are at.
+ *
+ * It is only ever an ordering. It briefly doubled as an expiry, and doing that lost people
+ * their games: whether a table still exists is the server's to answer, and it does.
  */
 export function touchSession(code: string, role: 'host' | 'player'): void {
   const existing = loadSession(code, role);
