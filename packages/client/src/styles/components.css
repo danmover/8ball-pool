@@ -3275,3 +3275,146 @@
 .table-row:active {
   transform: translateY(2px);
 }
+
+/* ==========================================================================
+   States: busy, empty, loading
+   ==========================================================================
+   Three things the game had no way of saying, which is why several screens
+   read as broken:
+
+   - **Busy.** Nothing in the game showed a pending state. Tapping a career
+     opponent, Host a Table, Create table or Quick Play did nothing visible
+     until the navigation happened — on a slow connection, indistinguishable
+     from a dead button, so people pressed again.
+   - **Empty.** Six screens said nothing with a bare grey sentence, each
+     phrased and placed differently.
+   - **Loading.** One screen said "Loading the calendar…". The rest showed an
+     empty box that later filled in, which reads as "there is nothing here".
+   ========================================================================== */
+
+/* --- Busy ---
+   Keeps the label in flow so the button does not resize under the pointer, and
+   hides it with `transparent` rather than removing it so the width is exactly
+   what it was. `--busy-dot` is the one thing a variant has to say for itself,
+   since the spinner has to contrast with the button rather than the page. */
+button {
+  --busy-dot: var(--ink);
+}
+
+button.secondary,
+button.danger-btn {
+  --busy-dot: var(--paper);
+}
+
+button.is-busy {
+  color: transparent;
+  cursor: progress;
+  position: relative;
+}
+
+/* A busy button is disabled so it cannot be pressed twice, but it must not look
+   disabled — greyed out says "you may not", and the truth is "not yet". */
+button.is-busy:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+button.is-busy::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.15em;
+  height: 1.15em;
+  margin: -0.575em 0 0 -0.575em;
+  border-radius: 50%;
+  border: 2.5px solid rgba(0, 0, 0, 0.22);
+  border-top-color: var(--busy-dot);
+  animation: busySpin 0.7s linear infinite;
+}
+
+@keyframes busySpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Deliberately still turns under reduce-motion, only slower and smaller. A busy
+   indicator that does not move cannot say the thing it exists to say, and a
+   1em spinner is not what the setting is protecting anyone from. */
+body.reduce-motion button.is-busy::after {
+  width: 0.9em;
+  height: 0.9em;
+  margin: -0.45em 0 0 -0.45em;
+  animation-duration: 1.5s;
+}
+
+/* --- Empty ---
+   An empty screen should say what would put something on it. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 2.4rem 1.2rem;
+  text-align: center;
+}
+
+.empty-state .icon {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.empty-state h3 {
+  margin: 0;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--paper);
+}
+
+.empty-state p {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.empty-state button {
+  margin-top: 0.45rem;
+}
+
+/* --- Loading ---
+   Shaped like the thing that is coming, so the layout does not jump when it
+   arrives and the wait does not look like an empty list. */
+.skeleton {
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--panel-2) 0%,
+    var(--panel) 45%,
+    var(--panel-2) 90%
+  );
+  background-size: 220% 100%;
+  animation: skeletonSweep 1.3s ease-in-out infinite;
+}
+
+.skeleton-row {
+  height: 58px;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes skeletonSweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+body.reduce-motion .skeleton {
+  animation: none;
+  background: var(--panel-2);
+}

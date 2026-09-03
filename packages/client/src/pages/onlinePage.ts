@@ -290,7 +290,7 @@ export function renderOnlinePage(root: HTMLElement): () => void {
           }
         </section>
 
-        <div class="toast-stack" id="onlineToasts"></div>
+        <div class="toast-stack" id="onlineToasts" role="status" aria-live="polite"></div>
       </div>`;
 
     wire();

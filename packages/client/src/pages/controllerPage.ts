@@ -32,6 +32,7 @@ import { icon } from '../render/icons';
 import { confirmLeave, showToast } from '../render/dialogs';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+import { errorScreen } from './pageShell';
 import { createSpectatorView, type SpectatorView } from './spectatorView';
 import type { BettingRound } from '@8ball/shared';
 
@@ -73,14 +74,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   const STRIPE_IDS = [9, 10, 11, 12, 13, 14, 15];
 
   function showFatal(message: string): void {
-    root.innerHTML = `
-      <div class="overlay-center">
-        <div>
-          <p style="font-size:1.1rem; margin-bottom:1rem;">${message}</p>
-          <button id="goHome">Back to home</button>
-        </div>
-      </div>`;
-    root.querySelector('#goHome')!.addEventListener('click', () => navigate('/'));
+    errorScreen(root, message);
   }
 
   function showNameEntry(errorMsg?: string): void {
@@ -378,7 +372,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
           ${EMOTES.map((e) => `<button class="emote-btn" data-emote="${e}">${e}</button>`).join('')}
         </div>
       </div>
-      <div class="toast-stack" id="toastStack"></div>
+      <div class="toast-stack" id="toastStack" role="status" aria-live="polite"></div>
       <div class="ctrl-buttons">
         <button class="icon-btn" id="settingsBtn" title="Settings">${icon('settings')}</button>
         <button class="icon-btn danger" id="leaveBtn" title="Leave table">${icon('leave')}</button>

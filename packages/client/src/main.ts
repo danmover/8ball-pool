@@ -17,7 +17,7 @@ import './styles/components.css';
 import './styles/game.css';
 import './styles/screens.css';
 import './styles/cosmetics.css';
-import { startRouter, setCleanup } from './router';
+import { startRouter, setCleanup, replace } from './router';
 import { renderHomePage } from './pages/homePage';
 import { renderHostPage } from './pages/hostPage';
 import { renderControllerPage } from './pages/controllerPage';
@@ -133,6 +133,15 @@ startRouter(app, (path) => {
   } else if (path === '/challenges') {
     setCleanup(renderChallengesPage(app));
   } else {
+    /*
+     * Anything else is the menu. The URL is corrected to match rather than left saying
+     * `/nonsense` while the menu is on screen — otherwise the address bar disagrees with the
+     * page, and the bad path goes on to enter the navigation stack, so "back" walks through
+     * somewhere that was never really visited.
+     *
+     * `replace`, not `navigate`: a mistyped URL is not a place you were.
+     */
+    if (path !== '/') replace('/');
     setCleanup(renderHomePage(app));
   }
 });

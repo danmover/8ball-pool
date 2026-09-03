@@ -367,7 +367,7 @@ export function renderProfilePage(root: HTMLElement): () => void {
         </div>
 
         ${tab === 'items' ? itemsTab() : tab === 'collection' ? collectionTab() : kitsTab()}
-        <div class="toast-stack" id="lockerToasts"></div>
+        <div class="toast-stack" id="lockerToasts" role="status" aria-live="polite"></div>
       </div>`;
 
     wire();

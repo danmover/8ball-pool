@@ -8,6 +8,70 @@ import { icon, type IconName } from './icons';
  * the top, framed like the rest of the UI.
  */
 
+/**
+ * Makes a scrim behave like a dialog rather than like a div that happens to be on top.
+ *
+ * Three things, all of which were missing and all of which are the difference between a dialog
+ * and a trap: **Escape closes it** (the confirm dialog had no keyboard exit at all, so a
+ * keyboard user who opened "End the game?" could not decline it); **focus is held inside**, so
+ * Tab cannot wander onto the page behind and press something there; and **focus goes back**
+ * where it came from on close, rather than to the top of the document.
+ *
+ * @returns the `close` the caller should use — it undoes the listeners as well as the markup.
+ */
+function asDialog(scrim: HTMLElement, label: string): () => void {
+  const dialog = scrim.querySelector<HTMLElement>('.dialog')!;
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', label);
+
+  // Where to put focus back. Reading it now, before anything in here takes it.
+  const opener = document.activeElement as HTMLElement | null;
+
+  const focusable = (): HTMLElement[] =>
+    [...dialog.querySelectorAll<HTMLElement>('button, input, [href], [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => !el.hasAttribute('disabled'));
+
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const items = focusable();
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    // Wrap at both ends. Without this, Tab off the last control lands on the page behind.
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+  document.addEventListener('keydown', onKey, true);
+
+  let closed = false;
+  function close(): void {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKey, true);
+    scrim.classList.remove('open');
+    setTimeout(() => scrim.remove(), 200);
+    /*
+     * Only if there is still something to go back to. The usual ending is a navigation, and
+     * the next most common is an opener that has been hidden rather than removed — a menu item
+     * whose menu closed behind the dialog. `isConnected` says yes to both, and focusing a
+     * hidden element silently does nothing, which leaves the keyboard stranded on the body.
+     */
+    if (opener?.isConnected && opener.getClientRects().length > 0) opener.focus();
+  }
+  return close;
+}
+
 export function confirmLeave(
   title: string,
   message: string,
@@ -28,10 +92,9 @@ export function confirmLeave(
   document.body.appendChild(scrim);
   requestAnimationFrame(() => scrim.classList.add('open'));
 
-  const close = (): void => {
-    scrim.classList.remove('open');
-    setTimeout(() => scrim.remove(), 200);
-  };
+  const close = asDialog(scrim, title);
+  // Staying is the safe answer, so it is the one already under the finger.
+  scrim.querySelector<HTMLElement>('[data-act="cancel"]')!.focus();
 
   scrim.querySelector('[data-act="cancel"]')!.addEventListener('click', close);
   scrim.querySelector('[data-act="confirm"]')!.addEventListener('click', () => {
@@ -75,15 +138,13 @@ export function promptText(
   document.body.appendChild(scrim);
   requestAnimationFrame(() => scrim.classList.add('open'));
 
+  const close = asDialog(scrim, title);
+
   const input = scrim.querySelector<HTMLInputElement>('.dialog-input')!;
   input.value = value;
   input.focus();
   input.select();
 
-  const close = (): void => {
-    scrim.classList.remove('open');
-    setTimeout(() => scrim.remove(), 200);
-  };
   const submit = (): void => {
     const next = input.value.trim();
     close();
@@ -92,9 +153,10 @@ export function promptText(
 
   scrim.querySelector('[data-act="cancel"]')!.addEventListener('click', close);
   scrim.querySelector('[data-act="confirm"]')!.addEventListener('click', submit);
+  // Escape is handled by `asDialog` now, for the whole dialog rather than only while the input
+  // has focus — it used to stop working the moment you tabbed to a button.
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submit();
-    if (e.key === 'Escape') close();
   });
   scrim.addEventListener('click', (e) => {
     if (e.target === scrim) close();
@@ -119,10 +181,30 @@ export function showToast(
   kind: ToastKind = 'info',
   ms = 2600
 ): void {
+  /*
+   * Toasts carry the only account of what just happened — a foul, whose turn it is, a reward.
+   * None of it was reaching a screen reader, so the entire running commentary of the game was
+   * silent. Set on the stack rather than on each toast, because a live region has to be in the
+   * document *before* the thing it announces is put into it.
+   *
+   * A foul interrupts; everything else waits its turn. That distinction is the whole reason
+   * `assertive` exists, and getting it backwards is how a page starts talking over itself.
+   */
+  if (!stack.hasAttribute('role')) {
+    stack.setAttribute('role', 'status');
+    stack.setAttribute('aria-live', 'polite');
+  }
+  if (kind === 'foul') stack.setAttribute('aria-live', 'assertive');
+
   const el = document.createElement('div');
   el.className = `toast toast-${kind}`;
   el.innerHTML = `${icon(TOAST_ICONS[kind], { size: 18 })}<span>${message}</span>`;
   stack.appendChild(el);
+
+  // Back to polite once this one has been read, so an ordinary note does not interrupt.
+  if (kind === 'foul') {
+    setTimeout(() => stack.setAttribute('aria-live', 'polite'), 100);
+  }
 
   // Keep the stack short — a run of fouls shouldn't paper over the table.
   while (stack.children.length > 3) stack.firstElementChild?.remove();

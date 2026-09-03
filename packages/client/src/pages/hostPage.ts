@@ -72,6 +72,7 @@ import { applyRenderSettings } from '../settings/applySettings';
 import { renderLobby } from './lobbyView';
 import * as sfx from '../render/sfx';
 import { navigate } from '../router';
+import { errorScreen } from './pageShell';
 import { forgetTable } from '../net/activeTable';
 import { identify } from '../net/identity';
 
@@ -216,7 +217,7 @@ export function renderHostPage(
         <div id="callout"></div>
         <div id="callHud"></div>
       </div>
-      <div class="toast-stack" id="toastStack"></div>
+      <div class="toast-stack" id="toastStack" role="status" aria-live="polite"></div>
       <div class="challenge-hud" id="challengeHud" style="display:none"></div>
       <div id="bottomArea"></div>
     </div>
@@ -375,6 +376,10 @@ export function renderHostPage(
   const tableMenuBtn = root.querySelector<HTMLButtonElement>('#tableMenuBtn')!;
   const tableMenu = root.querySelector<HTMLElement>('#tableMenu')!;
   const setTableMenu = (open: boolean): void => {
+    // Closing while something inside still has focus strands it on a hidden element, which
+    // takes the keyboard out of the page entirely — and anything the item went on to open,
+    // like the leave dialog, then has nowhere to give focus back to.
+    if (!open && tableMenu.contains(document.activeElement)) tableMenuBtn.focus();
     tableMenu.hidden = !open;
     tableMenuBtn.setAttribute('aria-expanded', String(open));
     tableMenuBtn.classList.toggle('open', open);
@@ -428,14 +433,9 @@ export function renderHostPage(
   });
 
   function showFatalError(message: string): void {
-    root.innerHTML = `
-      <div class="overlay-center">
-        <div>
-          <p style="font-size:1.1rem; margin-bottom:1rem;">${message}</p>
-          <button id="goHome">Back to home</button>
-        </div>
-      </div>`;
-    root.querySelector('#goHome')!.addEventListener('click', () => navigate('/'));
+    // Back to wherever you came from, rather than always the main menu — failing to rejoin an
+    // online table used to throw you out of the lobby you had just walked in from.
+    errorScreen(root, message, online ? '/online' : '/');
   }
 
   if (online) {

@@ -1,4 +1,4 @@
-import { icon } from '../render/icons';
+import { icon, type IconName } from '../render/icons';
 import { backTarget, goBack, navigate } from '../router';
 import { activeTable, forgetTable, isTableAlive, type ActiveTable } from '../net/activeTable';
 
@@ -105,6 +105,61 @@ export function mountResumeStrip(root: HTMLElement): void {
   strip.addEventListener('click', () => navigate(table.path));
   host.prepend(strip);
   watchResumeStrip(strip, table);
+}
+
+/**
+ * What a screen says when it has nothing to show.
+ *
+ * Six screens each said this differently — a bare grey sentence, placed wherever the list would
+ * have been. An empty screen is a moment where somebody is most likely to leave, and the one
+ * thing it should carry is what would put something on it.
+ */
+export interface EmptyStateOptions {
+  icon: IconName;
+  title: string;
+  /** One sentence. What would fill this. */
+  body: string;
+  /** An id and label if there is a single obvious thing to do about it. */
+  action?: { id: string; label: string };
+}
+
+export function emptyStateHtml(o: EmptyStateOptions): string {
+  return `
+    <div class="empty-state">
+      ${icon(o.icon, { size: 34 })}
+      <h3>${o.title}</h3>
+      <p>${o.body}</p>
+      ${o.action ? `<button class="mini" id="${o.action.id}">${o.action.label}</button>` : ''}
+    </div>`;
+}
+
+/** Placeholder rows, shaped like the thing that is coming. */
+export function skeletonRowsHtml(count: number, className = ''): string {
+  return Array.from(
+    { length: count },
+    () => `<div class="skeleton skeleton-row ${className}"></div>`
+  ).join('');
+}
+
+/**
+ * The screen shown when a page cannot go on.
+ *
+ * Was hand-rolled identically in two places, both with inline styles and a bare button, and
+ * both hard-coding "Back to home" — so failing to rejoin a table from the online lobby threw
+ * you out to the main menu rather than back to the lobby you came from.
+ */
+export function errorScreen(root: HTMLElement, message: string, backFallback = '/'): void {
+  const where = routeName(backTarget(backFallback));
+  root.innerHTML = `
+    <div class="page error-page">
+      <div class="empty-state">
+        ${icon('close', { size: 34 })}
+        <h3>${message}</h3>
+        <p>Nothing is lost — everything else is where you left it.</p>
+        <button class="mini" id="errorBack">Back to ${where}</button>
+      </div>
+    </div>`;
+  root.querySelector('#errorBack')!.addEventListener('click', () => goBack(backFallback));
 }
 
 /** Wires the shell's buttons. Call once, after the markup is in the DOM. */

@@ -46,7 +46,7 @@ export function createSpectatorView(
       </header>
       <div class="spec-score" id="specScore"></div>
       <div class="spec-book" id="specBook"></div>
-      <div class="toast-stack" id="specToasts"></div>
+      <div class="toast-stack" id="specToasts" role="status" aria-live="polite"></div>
       <div class="ctrl-buttons">
         <button class="icon-btn danger" id="specLeave" title="Leave">${icon('leave')}</button>
       </div>
