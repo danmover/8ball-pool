@@ -325,16 +325,25 @@ body.reduce-motion .star.big.earned {
 
    Done with `:has` rather than a route class because there is no route class to hang it on,
    and inventing one to paint a background would be plumbing for a paint job. */
-#app:has(> .profile-page),
-#app:has(> .page),
-#app:has(> .career-page),
-#app:has(> .challenges-page),
-#app:has(> .progress-page),
-#app:has(> .landing) {
+/* --- The backdrop behind a menu ---
+   This was a list of six page-root classes, so every screen had to be named here or it
+   silently fell through to the green table surround underneath — which is exactly what
+   happened the moment the phone's join screen was renamed.
+
+   Inverted. Menus are the default and the table opts out, because the table is the one place
+   that genuinely wants the felt-green room behind it, and there are two of those against a
+   growing number of menus. */
+#app {
   background:
     radial-gradient(ellipse 62% 46% at 50% -4%, rgba(255, 61, 139, 0.14), transparent 62%),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.022) 0 14px, transparent 14px 28px),
     radial-gradient(ellipse 92% 76% at 50% 34%, #2b1740 0%, #1a0e28 56%, #0c0614 100%);
+}
+
+/* The table and the phone controls sit in the room, not in the menu. */
+#app:has(> .table-canvas),
+#app:has(> .controller-root) {
+  background: var(--surround);
 }
 
 @keyframes pageIn {

@@ -78,16 +78,43 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
   }
 
   function showNameEntry(errorMsg?: string): void {
+    /*
+     * Built for a portrait phone held in one hand.
+     *
+     * It used to be a centred card with two emoji headings in a game that has an icon set, and
+     * everything floated in the middle of the screen — the furthest place from a thumb. The
+     * code you had just scanned was shown as decoration with nothing saying what it was.
+     *
+     * The name goes at the top where you read it; the buttons go at the bottom where you press
+     * them.
+     */
     root.innerHTML = `
-      <div class="landing">
-        <h1>🎱 Join Table</h1>
-        <div class="room-code">${code}</div>
-        <div class="card">
-          <input id="nameInput" placeholder="Your name" maxlength="20" autocomplete="off"
-                 value="${getProfile().displayName.replace(/"/g, '&quot;')}" />
-          <button id="joinBtn">Join Game</button>
-          <button id="lockerBtn" class="secondary">🎡 Locker &amp; Wheel</button>
-          <p id="joinError" class="error">${errorMsg ?? ''}</p>
+      <div class="join-screen">
+        <header class="join-head">
+          <div class="join-title">
+            <h1>Join this table</h1>
+            <p class="tagline">Your phone is the cue — the table is on the big screen</p>
+          </div>
+          <span class="join-code" title="Table code">${code}</span>
+        </header>
+
+        <div class="join-body">
+          <label class="join-field" for="nameInput">
+            <span>Your name</span>
+            <input id="nameInput" placeholder="Player" maxlength="20" autocomplete="name"
+                   enterkeyhint="go" value="${getProfile().displayName.replace(/"/g, '&quot;')}" />
+          </label>
+          <p id="joinError" class="error" role="alert">${errorMsg ?? ''}</p>
+        </div>
+
+        <div class="join-actions">
+          <button class="btn-join" id="joinBtn">
+            <span class="btn-join-main">Join game</span>
+            <span class="btn-join-sub">Take a seat at table ${code}</span>
+          </button>
+          <button class="secondary" id="lockerBtn">
+            ${icon('locker', { size: 16 })} Locker &amp; wheel
+          </button>
         </div>
       </div>`;
     const nameInput = root.querySelector<HTMLInputElement>('#nameInput')!;
@@ -294,15 +321,29 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         : state.winner
           ? `${state.players[state.winner].name} wins`
           : 'Game over';
+    /*
+     * The result, on the phone.
+     *
+     * It was an emoji in an `<h2>`, a line of inline-styled grey text and a bare Rematch
+     * button — while the person at the big screen got a proper card. Whoever lost also got no
+     * way out except leaving the table.
+     */
     overlay.innerHTML = `
-      <div>
-        <h2>${iWon ? 'You win! 🎉' : otherWins}</h2>
-        ${state.lastFoulReason ? `<p style="color:var(--muted)">${state.lastFoulReason}</p>` : ''}
+      <div class="phone-result${iWon ? ' won' : ''}">
+        <span class="result-verdict">${iWon ? 'You win' : otherWins}</span>
+        ${state.lastFoulReason ? `<p class="result-why">${state.lastFoulReason}</p>` : ''}
         <div id="rewardSlot"></div>
-        <button id="rematchBtn">Rematch</button>
+        <div class="result-actions">
+          <button class="btn-join" id="rematchBtn">
+            <span class="btn-join-main">Rematch</span>
+            <span class="btn-join-sub">Same table, same seats</span>
+          </button>
+          <button class="secondary" id="resultLocker">${icon('locker', { size: 16 })} Locker</button>
+        </div>
       </div>`;
     root.appendChild(overlay);
     renderRewards(iWon, overlay.querySelector<HTMLElement>('#rewardSlot')!);
+    overlay.querySelector('#resultLocker')!.addEventListener('click', () => navigate('/profile'));
     overlay.querySelector('#rematchBtn')!.addEventListener('click', () => {
       socket.emit('requestRematch');
       rewardsShown = false;
@@ -359,12 +400,15 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
         </div>
         <div class="control-area" id="controlArea">
           <div class="turn-banner" id="turnBanner"></div>
-          <div class="power-hud" id="powerHud">
-            <div class="power-value" id="powerValue">0%</div>
-            <div class="power-tier" id="powerTier">DRAG TO AIM</div>
+          <div class="ctrl-stack">
+            <div class="power-hud" id="powerHud">
+              <div class="power-value" id="powerValue">0%</div>
+              <div class="power-tier" id="powerTier">DRAG TO AIM</div>
+            </div>
+            <div class="ctrl-bays" id="ctrlBays"></div>
+            <div class="hint" id="hint">Drag anywhere and pull back, then let go</div>
+            <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
           </div>
-          <div class="hint" id="hint">Drag anywhere &amp; pull back like a slingshot, release to shoot</div>
-          <div class="power-ring"><div class="power-fill" id="powerFill"></div></div>
         </div>
         <!-- Outside .control-area on purpose: that whole region is the aim drag surface,
              and its pointer capture swallows taps on anything nested inside it. -->
@@ -374,6 +418,10 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
       </div>
       <div class="toast-stack" id="toastStack" role="status" aria-live="polite"></div>
       <div class="ctrl-buttons">
+        <!-- The locker was reachable from the join screen and then not again, so changing your
+             cue meant leaving the table for good. A player session is stored under this code,
+             which is what the resume strip on the locker reads to offer the way back. -->
+        <button class="icon-btn" id="lockerLink" title="Locker">${icon('locker')}</button>
         <button class="icon-btn" id="settingsBtn" title="Settings">${icon('settings')}</button>
         <button class="icon-btn danger" id="leaveBtn" title="Leave table">${icon('leave')}</button>
       </div>
@@ -397,16 +445,22 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     celebrator = new PotCelebrator(root, () => renderer, settings);
     if (lastState) renderer.updateBalls(lastState.balls);
 
+    /*
+     * Both controls sit in the bays row and are laid out by it. They used to position
+     * themselves, from the same bottom edge as each other and as the hint — the cue lift at
+     * bottom:54px on the left, the spin pad at bottom:54px on the right, the hint at
+     * bottom:56px across the middle with `white-space: nowrap`, and the power readout floating
+     * over all three. On a 390px phone that is four things in one place.
+     */
+    const bays = root.querySelector<HTMLElement>('#ctrlBays')!;
     spinPad = createSpinPad(() => renderPreview(lastAimAngle));
-    Object.assign(spinPad.el.style, { position: 'absolute', bottom: '54px', right: '18px' });
-    controlArea.appendChild(spinPad.el);
-
     cueLift = createShotTypeControl(spinPad, (radians) => {
       renderer?.setCueElevation(radians);
       renderPreview(lastAimAngle);
     });
-    Object.assign(cueLift.el.style, { position: 'absolute', bottom: '54px', left: '18px' });
-    controlArea.appendChild(cueLift.el);
+    bays.append(cueLift.el, spinPad.el);
+
+    root.querySelector('#lockerLink')!.addEventListener('click', () => navigate('/profile'));
 
     root.querySelector('#leaveBtn')!.addEventListener('click', () => {
       confirmLeave('Leave this table?', 'Your seat opens up for whoever is waiting.', () => {

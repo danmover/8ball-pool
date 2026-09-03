@@ -182,14 +182,13 @@
   gap: 4px;
 }
 
+/* The drag-power bar under the phone's controls. A row in the stack now, rather than another
+   thing pinned to the bottom edge — it was one of the four that landed on top of each other. */
 .power-ring {
-  position: absolute;
-  bottom: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 88%;
+  position: relative;
+  width: 100%;
   max-width: 420px;
-  height: 22px;
+  height: 20px;
   background: rgba(0, 0, 0, 0.45);
   border-radius: 999px;
   overflow: hidden;
@@ -525,14 +524,25 @@
 
 /* --- Emotes --- */
 
+/* One row, always.
+   Eight 46px buttons do not fit across a 390px phone, so they wrapped to two rows — and those
+   two rows sat at the very bottom of the screen, which is the easiest place on a phone to
+   reach and the last place a reaction picker should be taking from the game. One scrolling
+   row instead: same eight, half the height, and no reflow between phone sizes. */
 .emote-bar {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
   justify-content: center;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.6rem calc(env(safe-area-inset-bottom, 8px) + 0.5rem);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.4rem 0.5rem calc(env(safe-area-inset-bottom, 8px) + 0.4rem);
   background: rgba(10, 12, 17, 0.7);
   flex: 0 0 auto;
+}
+
+.emote-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .emote-bar.cooling {
@@ -541,11 +551,13 @@
 }
 
 .emote-btn {
-  width: 46px;
-  height: 46px;
+  /* Shrinks to fit rather than wrapping, down to a size a thumb can still hit. */
+  flex: 0 1 42px;
+  min-width: 34px;
+  height: 42px;
   padding: 0;
-  font-size: 1.35rem;
-  border-radius: 12px;
+  font-size: 1.2rem;
+  border-radius: 11px;
   background: linear-gradient(180deg, var(--bg-2), #141822);
   box-shadow: inset 0 0 0 1px var(--stroke);
 }
@@ -2472,4 +2484,158 @@
   .lobby-formats {
     grid-template-columns: 1fr;
   }
+}
+
+/* ==========================================================================
+   The phone's join screen
+   ==========================================================================
+   Half the players in a party game only ever see this screen and the controls
+   below it, and it was the one part of the game that had never been restyled:
+   two emoji headings in a game with its own icon set, a bare gold button, and
+   everything floated in the middle of the display — the furthest place from a
+   thumb on a phone held in one hand.
+
+   Read at the top, press at the bottom. */
+.join-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 12px) + 1rem) 1.1rem
+    calc(env(safe-area-inset-bottom, 12px) + 1.1rem);
+  gap: 1rem;
+}
+
+.join-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.join-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.join-title .tagline {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* The code you have just scanned, said plainly rather than shown as decoration. */
+.join-code {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.14em;
+  padding: 0.35rem 0.6rem 0.35rem 0.74rem;
+  border-radius: 12px;
+  color: var(--gold);
+  background: var(--panel-3);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Takes the slack, so the actions stay pinned to the bottom at any height. */
+.join-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.join-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.join-field > span {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.join-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.btn-join {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.08rem;
+  padding: 0.85rem 1.2rem 0.95rem;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 62%, #e8ac1c 100%);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 2px var(--ink),
+    0 7px 0 var(--gold-dark),
+    0 15px 24px rgba(0, 0, 0, 0.45);
+}
+
+.btn-join-main {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.btn-join-sub {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: rgba(24, 13, 26, 0.68);
+}
+
+/* An empty error line should take no room at all — it used to hold a gap open under the
+   field whether or not anything had gone wrong. */
+.join-screen .error:empty {
+  display: none;
+}
+
+/* --- The result, on a phone ---
+   The big screen gets a full result card; the phone got an emoji in an `<h2>`, a line of
+   inline-styled grey text and a bare Rematch button. And whoever lost had no way off the
+   screen at all except leaving the table. */
+.phone-result {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.7rem;
+  width: min(100%, 340px);
+}
+
+.result-verdict {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  text-align: center;
+  color: var(--paper);
+}
+
+.phone-result.won .result-verdict {
+  color: var(--gold);
+  text-shadow: 0 0 26px rgba(255, 197, 49, 0.45);
+}
+
+.result-why {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }

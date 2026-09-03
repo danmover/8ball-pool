@@ -428,26 +428,61 @@
   touch-action: none;
 }
 
+/* --- The phone's shot controls ---
+   The whole area is the aim surface: you drag anywhere in it and pull back. What sits on top
+   of it used to position itself from the bottom edge — the cue lift at bottom:54px on the
+   left, the spin pad at bottom:54px on the right, the hint at bottom:56px across the middle
+   with `white-space: nowrap`, and the power readout floating over all three. On a 390px phone
+   that is four things drawn in one place.
+
+   Rows now, with the controls in the bottom third where a thumb actually reaches. */
 .control-area {
   flex: 1;
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* The stack is pushed to the bottom rather than centred: the top of this area is the part of
+     the drag surface you can see the table through. */
+  justify-content: flex-end;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35));
 }
 
+.ctrl-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0 0.7rem calc(env(safe-area-inset-bottom, 6px) + 0.55rem);
+}
+
+/* Cue lift on the left, spin on the right, with whatever room is left between them. */
+.ctrl-bays {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 420px;
+}
+
 .hint {
-  position: absolute;
-  bottom: 56px;
-  left: 50%;
-  transform: translateX(-50%);
   opacity: 0.5;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   text-align: center;
-  padding: 0 2rem;
-  white-space: nowrap;
+  line-height: 1.25;
+  /* Was `nowrap`, which on a phone simply ran off both edges. */
+  max-width: 30ch;
+}
+
+/* The readout sits above the controls rather than over them. `.power-hud` is absolutely
+   positioned for the host screen's deck, where it is the middle of a ring; here it is a row in
+   a stack and has to say so. */
+.control-area .power-hud {
+  position: relative;
+  inset: auto;
+  transform: none;
 }
 
 .overlay-center {
