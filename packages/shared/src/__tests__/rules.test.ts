@@ -27,6 +27,7 @@ function outcome(partial: Partial<ShotOutcome> = {}): ShotOutcome {
     firstBallContacted: partial.firstBallContacted === undefined ? 1 : partial.firstBallContacted,
     anyCushionAfterContact: partial.anyCushionAfterContact ?? true,
     cushionsBeforeContact: partial.cushionsBeforeContact ?? 0,
+    banked: partial.banked ?? [],
     objectBallsToRail: partial.objectBallsToRail ?? 4,
     collected: partial.collected ?? [],
     jumped: partial.jumped ?? false,

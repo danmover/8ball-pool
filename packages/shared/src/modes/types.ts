@@ -15,6 +15,8 @@ export interface ShotOutcome {
   objectBallsToRail: number;
   /** Which pocket each potted ball went into, so a called shot can be judged. */
   pottedIn: Record<number, number>;
+  /** Object balls that came off at least one rail on their way into the pocket — a bank. */
+  banked: number[];
   /** Power Pool orbs the cue ball rolled through. */
   collected: PowerId[];
   /** The cue ball left the cloth at some point. */

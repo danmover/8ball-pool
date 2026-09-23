@@ -5,6 +5,7 @@ import {
   nextMatch,
   recordFrameWin,
   roundName,
+  roundReached,
   seedOrder,
   type Tournament,
 } from '../tournament.js';
@@ -166,5 +167,18 @@ describe('playing it out', () => {
     // Seeding decides the path, not the result.
     const t = createTournament(seats(8));
     expect(playOut(t, (a, b) => (a === 'p8' || b === 'p8' ? 'p8' : b))).toBe('p8');
+  });
+});
+
+describe('standings', () => {
+  it('ranks by the round reached, champion first', () => {
+    const t = createTournament(seats(8));
+    // The lower-numbered seat always wins.
+    playOut(t, (a, b) => (Number(a.slice(1)) < Number(b.slice(1)) ? a : b));
+    const reached = roundReached(t);
+    expect(reached.get('p1')).toBe(4);
+    expect(reached.get('p2')).toBe(3);
+    expect([reached.get('p3'), reached.get('p4')]).toEqual([2, 2]);
+    for (const s of ['p5', 'p6', 'p7', 'p8']) expect(reached.get(s)).toBe(1);
   });
 });

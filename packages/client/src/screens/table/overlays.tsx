@@ -70,9 +70,12 @@ export function Intermission({ room }: { room: RoomView }): JSX.Element | null {
   }, []);
   const m = room.match;
   if (!m) return null;
-  const playing = room.tournament ? m.playing : m.playing;
+  const playing = m.playing;
   const top = [...playing].sort((a, b) => (m.wins[b] ?? 0) - (m.wins[a] ?? 0));
   const leader = room.seats[top[0]];
+  const leads = top.length > 1 && (m.wins[top[0]] ?? 0) > (m.wins[top[1]] ?? 0);
+  const fresh = playing.every((i) => !m.wins[i]);
+  const raceTo = room.tournament?.bracket.target ?? m.raceTo;
   const t = room.tournament;
   const tie = t?.current ? t.bracket.matches.find((x) => x.id === t.current) : null;
   return (
@@ -96,9 +99,10 @@ export function Intermission({ room }: { room: RoomView }): JSX.Element | null {
             {room.seats[room.king.holder]?.name} holds the table · {room.king.streak} in a row
           </div>
         ) : (
-          <div class="im-sub">{leader ? `${leader.name} leads` : ''}</div>
+          <div class="im-sub">{leads && leader ? `${leader.name} leads` : raceTo > 1 ? `First to ${raceTo}` : fresh ? 'One frame decides it' : 'All square'}</div>
         )}
-        <div class="im-next">Next frame in {left}…</div>
+        {t && <Bracket t={t.bracket} room={room} compact />}
+        <div class="im-next">{t && fresh ? 'Next tie' : 'Next frame'} in {left}…</div>
       </div>
     </div>
   );
@@ -246,7 +250,7 @@ export function Results({
           </div>
         ) : (
           <div class="res-standings">
-            {r.standings.slice(0, 8).map((s, k) => {
+            {r.standings.slice(0, room.tournament ? 4 : 8).map((s, k) => {
               const v = room.seats[s.seat];
               const won = r.winners.includes(s.seat) || r.champion === s.seat;
               return (

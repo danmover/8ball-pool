@@ -95,6 +95,9 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
   // Distinct balls, not rail hits: one ball rattling round a corner would otherwise satisfy the
   // break requirement on its own.
   const railed = new Set<number>();
+  // Rails each object ball has touched this shot, to tell a bank from a straight pot.
+  const rails = new Map<number, number>();
+  const banked: number[] = [];
 
   for (const ev of events) {
     if (ev.type === 'ballCollision') {
@@ -103,6 +106,7 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
         else if (ev.b === CUE_BALL_ID) firstBallContacted = ev.a;
       }
     } else if (ev.type === 'cushion') {
+      if (ev.ballId !== CUE_BALL_ID) rails.set(ev.ballId, (rails.get(ev.ballId) ?? 0) + 1);
       if (firstBallContacted !== null) {
         anyCushionAfterContact = true;
         if (ev.ballId !== CUE_BALL_ID) railed.add(ev.ballId);
@@ -112,6 +116,7 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
     } else if (ev.type === 'pot') {
       potted.push(ev.ballId);
       pottedIn[ev.ballId] = ev.pocketIndex;
+      if (ev.ballId !== CUE_BALL_ID && (rails.get(ev.ballId) ?? 0) > 0) banked.push(ev.ballId);
       if (ev.ballId === CUE_BALL_ID) cueBallPocketed = true;
       if (ev.ballId === EIGHT_BALL_ID) eightBallPocketed = true;
     } else if (ev.type === 'orb') {
@@ -124,6 +129,7 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
   return {
     potted,
     pottedIn,
+    banked,
     cueBallPocketed,
     eightBallPocketed,
     firstBallContacted,

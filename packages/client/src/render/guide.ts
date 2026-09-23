@@ -44,7 +44,8 @@ function ribbon(segments: TrajectorySegment[], width: number): THREE.BufferGeome
     const base = positions.length / 3;
     positions.push(ax + nx, y, az + nz, ax - nx, y, az - nz, bx + nx, y, bz + nz, bx - nx, y, bz - nz);
     uvs.push(run * 40, 0, run * 40, 1, (run + len) * 40, 0, (run + len) * 40, 1);
-    index.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+    // Counter-clockwise seen from above, so the faces point up at the camera and aren't culled.
+    index.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
     run += len;
   }
   const g = new THREE.BufferGeometry();

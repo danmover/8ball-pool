@@ -1,7 +1,7 @@
 import type { GameState } from '../types.js';
 import { CUE_BALL_ID } from '../constants.js';
 import { rackBalls } from '../rack.js';
-import { challengeBalls, challengeById, starsFor, type Challenge } from '../challenges.js';
+import { challengeBalls, challengeById, CHALLENGES, starsFor, type Challenge } from '../challenges.js';
 import { endGame, remainingBallIds } from './shared.js';
 import type { ModeDescriptor, ModeResult, ShotContext, ShotOutcome } from './types.js';
 
@@ -111,6 +111,8 @@ export function activeChallenge(state: GameState): Challenge | undefined {
 }
 
 function judge(challenge: Challenge, state: GameState, outcome: ShotOutcome): boolean {
+  // Nothing counts with the cue ball down a pocket.
+  if (outcome.cueBallPocketed) return false;
   const potted = outcome.potted.filter((id) => id !== CUE_BALL_ID);
   const goal = challenge.goal;
   const progress = state.trick!;
@@ -119,8 +121,25 @@ function judge(challenge: Challenge, state: GameState, outcome: ShotOutcome): bo
       return potted.length >= goal.count;
     case 'cleanPot':
       return potted.includes(goal.ballId) && outcome.firstBallContacted === goal.ballId;
-    case 'bankShot':
-      return potted.includes(goal.ballId) && outcome.cushionsBeforeContact >= goal.cushions;
+    case 'position': {
+      const cue = state.balls.find((b) => b.id === CUE_BALL_ID);
+      if (!cue || !potted.includes(goal.ballId) || outcome.firstBallContacted !== goal.ballId) return false;
+      const dx = cue.pos.x - goal.zone.x;
+      const dy = cue.pos.y - goal.zone.y;
+      return dx * dx + dy * dy <= goal.zone.r * goal.zone.r;
+    }
+    case 'kick':
+      return (
+        potted.includes(goal.ballId) &&
+        outcome.firstBallContacted === goal.ballId &&
+        outcome.cushionsBeforeContact >= goal.cushions
+      );
+    case 'bank':
+      return outcome.banked.includes(goal.ballId) && outcome.firstBallContacted === goal.ballId;
+    case 'combo':
+      return potted.includes(goal.ballId) && outcome.firstBallContacted === goal.via;
+    case 'jump':
+      return potted.includes(goal.ballId) && outcome.firstBallContacted === goal.ballId && outcome.jumped;
     case 'potOrder':
       return (
         progress.pottedOrder.length >= goal.order.length &&
@@ -130,6 +149,25 @@ function judge(challenge: Challenge, state: GameState, outcome: ShotOutcome): bo
       return remainingBallIds(state).length === 0;
     default:
       return false;
+  }
+}
+
+/** The ball a challenge wants hit first, if it names one. */
+export function challengeTarget(challenge: Challenge, pottedSoFar: number): number | null {
+  const goal = challenge.goal;
+  switch (goal.kind) {
+    case 'cleanPot':
+    case 'position':
+    case 'kick':
+    case 'bank':
+    case 'jump':
+      return goal.ballId;
+    case 'combo':
+      return goal.via;
+    case 'potOrder':
+      return goal.order[pottedSoFar] ?? null;
+    default:
+      return null;
   }
 }
 
@@ -147,24 +185,14 @@ export const trickShotMode: ModeDescriptor = {
   solo: true,
   supportsShotClock: false,
   usesRuleSet: false,
-  rack: () => challengeBalls(challengeById('ch.straight')!),
+  rack: () => challengeBalls(CHALLENGES[0]),
   assignSeats: () => {},
   legalTargetBallIds: (state) => {
     const challenge = activeChallenge(state);
     const live = remainingBallIds(state);
     if (!challenge) return live;
-    const goal = challenge.goal;
-    switch (goal.kind) {
-      case 'cleanPot':
-      case 'bankShot':
-        return live.filter((id) => id === goal.ballId);
-      case 'potOrder': {
-        const next = goal.order[state.trick?.pottedOrder.length ?? 0];
-        return next === undefined ? live : live.filter((id) => id === next);
-      }
-      default:
-        return live;
-    }
+    const target = challengeTarget(challenge, state.trick?.pottedOrder.length ?? 0);
+    return target === null ? live : live.filter((id) => id === target);
   },
   callRequirement: () => 'none',
   resolveShot: (state, outcome) => {

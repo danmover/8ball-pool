@@ -102,6 +102,14 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+/**
+ * Milliseconds for the thinking budget. Monotonic where available — a wall clock can jump (or, in
+ * a test with faked timers, stand still, which turns a 15ms budget into an exhaustive search).
+ */
+function clock(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
 function cloneState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
 }
@@ -356,8 +364,8 @@ export class BotBrain {
 
   async plan(): Promise<BotPlan> {
     const { state } = this.req;
-    this.deadline = Date.now() + (this.req.budgetMs ?? this.skill.searchMs);
-    this.lastYield = Date.now();
+    this.deadline = clock() + (this.req.budgetMs ?? this.skill.searchMs);
+    this.lastYield = clock();
     if (state.phase === 'ball_in_hand') return this.placeCueBall();
     if (state.phase === 'break') return this.breakShot();
     return this.chooseShot(state);
@@ -366,14 +374,14 @@ export class BotBrain {
   // ---------------------------------------------------------------- helpers
 
   private async breathe(): Promise<void> {
-    if (Date.now() - this.lastYield > 12) {
+    if (clock() - this.lastYield > 12) {
       await this.yieldFn();
-      this.lastYield = Date.now();
+      this.lastYield = clock();
     }
   }
 
   private outOfTime(): boolean {
-    return Date.now() > this.deadline;
+    return clock() > this.deadline;
   }
 
   private cue(state: GameState): Ball | undefined {

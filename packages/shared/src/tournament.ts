@@ -179,3 +179,21 @@ export function roundName(t: Tournament, round: number): string {
   if (fromEnd === 2) return 'Quarter-final';
   return `Round ${round}`;
 }
+
+/**
+ * How far each seat got: the last round it played in, plus one for the champion.
+ *
+ * This is what a knockout's final standings are sorted by. Frames won is not — a player knocked
+ * out in the semi-final always finishes above everyone who went out in the quarters, however
+ * those games went.
+ */
+export function roundReached(t: Tournament): Map<Seat, number> {
+  const reached = new Map<Seat, number>();
+  for (const m of t.matches) {
+    for (const s of [m.a, m.b]) {
+      if (s) reached.set(s, Math.max(reached.get(s) ?? 0, m.round));
+    }
+  }
+  if (t.champion) reached.set(t.champion, (reached.get(t.champion) ?? 0) + 1);
+  return reached;
+}

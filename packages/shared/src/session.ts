@@ -31,7 +31,7 @@ import {
 import { armPower, modeDescriptor, spendArmed } from './modes/index.js';
 import { physicsModsFor, type PowerId } from './powers.js';
 import { challengeBalls, challengeById, CHALLENGES } from './challenges.js';
-import { createTournament, nextMatch, recordFrameWin } from './tournament.js';
+import { createTournament, nextMatch, recordFrameWin, roundReached } from './tournament.js';
 import { cleanAvatar, resolveLoadout } from './cosmetics.js';
 import { botById, botLine, pickBot, TIER_ORDER, type BotLine } from './bots/roster.js';
 import type { BotPlan, BotPlanRequest } from './bots/brain.js';
@@ -875,6 +875,7 @@ export class TableSession {
       {
         potted: [],
         pottedIn: {},
+        banked: [],
         cueBallPocketed: false,
         eightBallPocketed: false,
         firstBallContacted: null,
@@ -1294,13 +1295,15 @@ export class TableSession {
   private finishMatch(winners: number[], champion: number | null): void {
     const match = this.match!;
     const everyone = this.tournament || this.king ? this.seats.map((_, i) => i) : match.playing;
+    const reached = this.tournament ? roundReached(this.tournament.bracket) : null;
+    const depth = (seat: number) => reached?.get(seatId(seat)) ?? 0;
     const standings = everyone
       .map((seat) => ({ seat, wins: match.wins[seat] ?? 0, stats: match.stats[seat] ?? emptyFrameStats() }))
       .sort((a, b) => {
         const aw = winners.includes(a.seat) ? 1 : 0;
         const bw = winners.includes(b.seat) ? 1 : 0;
         if (aw !== bw) return bw - aw;
-        return b.wins - a.wins || b.stats.pots - a.stats.pots;
+        return depth(b.seat) - depth(a.seat) || b.wins - a.wins || b.stats.pots - a.stats.pots;
       });
     this.result = { winners, champion, frames: match.frame, standings, solo: null };
     this.phase = 'results';
