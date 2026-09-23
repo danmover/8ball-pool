@@ -5,9 +5,12 @@
     "rootDir": "src",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker.ImportScripts"],
     "types": ["vite/client"],
-    "noEmit": true
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "noEmit": true,
+    "declaration": false
   },
   "include": ["src"]
 }

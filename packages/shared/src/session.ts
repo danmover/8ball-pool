@@ -2,6 +2,7 @@ import { Vec2 } from './vector.js';
 import {
   BALL_DIAMETER,
   BALL_RADIUS,
+  BREAK_BOOST,
   CUE_BALL_ID,
   EIGHT_BALL_ID,
   HEAD_STRING_X,
@@ -288,6 +289,7 @@ export class TableSession {
       result: this.result ? clone(this.result) : null,
       rematch: [...this.rematchVotes],
       table: hostMember?.loadout.table ?? 'table.club',
+      balls: hostMember?.loadout.balls ?? 'balls.classic',
     };
   }
 
@@ -978,7 +980,8 @@ export class TableSession {
     const armed = spendArmed(game);
     const pre = cloneBalls(game.balls);
     const orbsBefore = game.power ? clone(game.power.orbs) : null;
-    const strike = applyCueStrike(cue, input.angle, input.power, input.spin, this.rng, input.elevation);
+    const boost = game.phase === 'break' ? BREAK_BOOST : 1;
+    const strike = applyCueStrike(cue, input.angle, input.power, input.spin, this.rng, input.elevation, boost);
     const strikeState = readStrike(cue, strike.miscued);
     const run = runShot(game.balls, { mods: physicsModsFor(armed), orbs: game.power?.orbs });
     const outcome = summarizeShot(run.events);

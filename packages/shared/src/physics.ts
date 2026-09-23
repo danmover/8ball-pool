@@ -451,9 +451,11 @@ export function applyCueStrike(
   power: number,
   tip: { x: number; y: number } = { x: 0, y: 0 },
   rng: () => number = Math.random,
-  elevation = 0
+  elevation = 0,
+  /** Speed multiplier — the break is struck harder than anything else. */
+  boost = 1
 ): StrikeResult {
-  let speed = MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED);
+  let speed = (MIN_SHOT_SPEED + Math.max(0, Math.min(1, power)) * (MAX_SHOT_SPEED - MIN_SHOT_SPEED)) * boost;
   const lift = Math.max(0, Math.min(MAX_ELEVATION, elevation));
 
   let tx = tip.x;

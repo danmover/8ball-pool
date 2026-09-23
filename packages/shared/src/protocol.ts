@@ -145,6 +145,8 @@ export interface RoomView {
   rematch: number[];
   /** Table skin everyone sees — the host's. */
   table: string;
+  /** Ball set everyone sees — also the host's, so the balls never change mid-frame. */
+  balls: string;
 }
 
 /** One shot, everything every device needs to replay it identically. */

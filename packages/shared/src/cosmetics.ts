@@ -567,7 +567,7 @@ export function ballColor(set: BallSetStyle, id: number): string {
 export const AVATAR_ICONS = [
   '🎱', '🦈', '🐍', '🦊', '🐯', '🦁', '🐼', '🐸', '🐙', '🦄', '🐲', '🦅',
   '👑', '🔥', '⚡', '🌙', '⭐', '🍀', '🎯', '💎', '🚀', '👾', '🤖', '😎',
-  '🥷', '🧙', '🤠', '👻', '🐺', '🦉',
+  '🐻', '🧙', '🤠', '👻', '🐺', '🦉',
 ] as const;
 
 export const AVATAR_COLORS = [

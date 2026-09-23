@@ -184,6 +184,15 @@ export const ROLL_DECEL = MU_ROLL * GRAVITY;
 export const MAX_SHOT_SPEED = 4200; // tu/s at full power
 export const MIN_SHOT_SPEED = 150;
 
+/**
+ * Extra pace on the break.
+ *
+ * Players hit the break far harder than any other shot — around 8–10 m/s against 5 for a firm
+ * pot — and a break at ordinary power just nudges the rack apart. Boosting only the break keeps
+ * the power bar's feel for every other shot while letting a full-power break actually scatter.
+ */
+export const BREAK_BOOST = 1.5;
+
 export const SIM_HZ = 240; // physics substep rate
 
 /**

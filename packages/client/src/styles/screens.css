@@ -1,3846 +1,2020 @@
-/* ==========================================================================
-   Per-screen layout.
+/* ================================================================ common screen frame */
 
-   Only what is genuinely local to one screen. Anything two screens share belongs in
-   components.css, and if it is at a table it belongs in game.css.
-   ========================================================================== */
-
-.landing {
-  height: 100%;
+.screen {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  text-align: center;
+  overflow: hidden;
+  animation: fade-in 0.25s var(--ease-out);
 }
 
-.landing h1 {
-  font-size: clamp(2rem, 8vw, 3rem);
-  margin: 0;
-}
-
-/* Eight modes is three rows of cards, which on its own pushed the seats and the Start button
-   off the bottom of the screen. Capped to roughly two rows and scrolled inside, so the rest of
-   the lobby stays where you can see it. */
-.mode-grid {
+.center-screen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.6rem;
-  margin-top: 0.5rem;
-  max-height: min(46vh, 360px);
-  overflow-y: auto;
-  padding-right: 0.5rem;
-  /* Deliberately not `scrollbar-width: thin` — setting the standard property makes Chrome
-     ignore the ::-webkit-scrollbar rules that give this a drawn, always-visible bar, and an
-     overlay scrollbar that fades out is exactly what made the list look cut off. */
+  place-items: center;
 }
 
-.mode-card {
-  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
-  border-radius: 12px;
-  padding: 0.75rem;
-  text-align: left;
-  box-shadow: inset 0 0 0 1px var(--stroke);
-  color: var(--paper);
-  font-weight: 600;
-}
-
-.mode-card.active {
-  box-shadow:
-    inset 0 0 0 2px var(--gold),
-    0 0 20px rgba(255, 201, 77, 0.22);
-}
-
-.mode-card .mode-name {
-  font-weight: 800;
-  font-size: 0.95rem;
-  margin-bottom: 0.2rem;
-}
-
-.mode-card .mode-desc {
-  font-size: 0.74rem;
-  color: var(--muted);
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-/* --- The locker --- */
-
-.profile-page {
-  height: 100%;
-  overflow-y: auto;
-  padding: 1rem 1.2rem 3rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.profile-top {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-}
-
-.profile-top h1 {
-  font-size: 1.5rem;
-  margin: 0;
-  flex: 1;
-}
-
-.profile-hero {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  align-items: stretch;
-}
-
-.profile-hero .player-banner {
-  opacity: 1;
-}
-
-.hero-side {
-  flex: 1;
-  min-width: 260px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  justify-content: center;
-}
-
-.stat-row {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-.stat-row b {
-  color: var(--paper);
-  font-size: 1rem;
-}
-
-.slot-tabs {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.kit-strip {
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 0.35rem;
-}
-
-.kit-chip {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* --- Prize wheel --- */
-
-.wheel-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: rgba(4, 6, 10, 0.82);
-  backdrop-filter: blur(7px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.wheel-sub {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.wheel-stage {
-  position: relative;
-  width: min(320px, 74vw);
-  height: min(320px, 74vw);
-}
-
-.wheel-canvas {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
-}
-
-.wheel-pointer {
-  position: absolute;
-  top: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  z-index: 2;
-  border-left: 13px solid transparent;
-  border-right: 13px solid transparent;
-  border-top: 24px solid var(--gold);
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.7));
-}
-
-/* ==========================================================================
-   The arcade shell: home screen, mode tiles, shot clock, emotes and the
-   extra lobby controls.
-   ========================================================================== */
-
-.home {
-  position: relative;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* A live table runs behind the menu — pushed back with low opacity so it reads as
-   atmosphere rather than competing with the buttons. It is drawn at half resolution, which
-   softens it more than the `blur(1px)` filter that used to sit here — and that filter re-blurred
-   the entire window on every frame the table moved. */
-.home-backdrop {
-  position: fixed;
-  inset: -4% -4% -4% -4%;
-  z-index: 0;
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-/* Painted felt underneath the live table, so the menu always has a backdrop even when the
-   renderer can't start. The canvas sits on top of this when it does. */
-.home-backdrop.has-fallback {
-  background-image:
-    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(0, 0, 0, 0) 40%, rgba(6, 10, 8, 0.75) 100%),
-    repeating-linear-gradient(
-      45deg,
-      color-mix(in srgb, var(--theme-felt) 30%, transparent) 0 2px,
-      transparent 2px 14px
-    ),
-    linear-gradient(160deg, var(--theme-felt) 0%, var(--theme-felt-dark) 100%);
-}
-
-.home-backdrop canvas {
-  position: relative;
-  z-index: 1;
-}
-
-.home-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 0%, rgba(255, 61, 139, 0.16), transparent 62%),
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(20, 10, 32, 0.6), transparent 70%),
-    linear-gradient(180deg, rgba(20, 10, 32, 0.9) 0%, rgba(24, 12, 38, 0.82) 45%, rgba(12, 6, 20, 0.96) 100%);
-}
-
-.home-content {
+.topbar {
   position: relative;
   z-index: 2;
-  max-width: 1180px;
-  min-height: 100%;
-  margin: 0 auto;
-  padding: 1.3rem 1.2rem 1.4rem;
-  display: flex;
-  flex-direction: column;
-  /* `safe` matters: plain `center` in a scrolling column pushes the overflow off the *top*,
-     where no scrollbar can reach it. Centred while it fits, top-aligned once it does not —
-     which is the whole reason the bottom of this page was unreachable. */
-  justify-content: safe center;
-  gap: 1.15rem;
-}
-
-.home-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: 14px;
+  padding: calc(14px + var(--safe-top)) max(18px, var(--safe-right)) 12px max(18px, var(--safe-left));
 }
-
-.home-title {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.home-logo {
-  font-size: 2.6rem;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
-}
-
-.home-title h1 {
-  margin: 0;
-  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
-  letter-spacing: -0.01em;
-}
-
-.home-title .tagline {
-  margin: 0;
-  font-size: 0.86rem;
-}
-
-.home-player {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.home-player .player-banner {
-  opacity: 1;
-}
-
-/* ==========================================================================
-   The mode carousel.
-
-   Brought back after a spell as a poster-and-rack. The poster gave the page more hierarchy,
-   but it cost the modes the thing they were good at: every one showing its own art, blurb
-   and rules at once, so you can compare them instead of clicking through them one at a time.
-   The hierarchy is bought on the action row below instead, where it costs nothing.
-
-   The native scrollbar is what made this look cheap, so it is hidden and replaced with
-   arrows, page dots and edge fades. Snap is `proximity` rather than `mandatory` — mandatory
-   fights a drag and yanks the rail around mid-gesture.
-   ========================================================================== */
-
-.mode-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.mode-section .section-head h2 {
-  margin: 0;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-
-.mode-rail-wrap {
-  position: relative;
-}
-
-/*
- * The edge fade used to be a near-black overlay painted on top. Over the live table backdrop
- * that read as a dark band laid across the cards rather than the cards running out — the very
- * thing it was meant to avoid. Masking the rail fades the cards themselves to transparent,
- * which works over whatever happens to be behind them.
- */
-.mode-rail {
-  --fade-left: 42px;
-  --fade-right: 42px;
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent 0,
-    #000 var(--fade-left),
-    #000 calc(100% - var(--fade-right)),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    90deg,
-    transparent 0,
-    #000 var(--fade-left),
-    #000 calc(100% - var(--fade-right)),
-    transparent 100%
-  );
-}
-
-/* Fade only the end there is actually more to scroll toward. Fading a hard edge the rail
-   cannot move past just clips the first card and looks like a rendering fault. */
-.mode-rail-wrap.at-start .mode-rail {
-  --fade-left: 0px;
-}
-
-.mode-rail-wrap.at-end .mode-rail {
-  --fade-right: 0px;
-}
-
-.mode-rail {
-  display: flex;
-  gap: 0.75rem;
-  overflow-x: auto;
-  /* Room for the lift on hover and the lip underneath, so neither is clipped by the scroller. */
-  padding: 0.45rem 0.2rem 0.9rem;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  scroll-behavior: smooth;
-  cursor: grab;
-}
-
-.mode-rail::-webkit-scrollbar {
-  display: none;
-}
-
-.mode-rail-wrap.dragging .mode-rail {
-  cursor: grabbing;
-  scroll-behavior: auto; /* smooth scrolling fights a live drag */
-  scroll-snap-type: none;
-}
-
-/* A drag shouldn't select the tile text under the cursor. */
-.mode-rail-wrap.dragging .mode-tile {
-  pointer-events: none;
-  user-select: none;
-}
-
-/* --- The tile --- */
-
-.mode-tile {
-  position: relative;
-  overflow: hidden;
-  scroll-snap-align: center;
-  flex: 0 0 236px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  text-align: left;
-  /* Room at the top for the mode's colour bar. */
-  padding: 0.85rem 0.7rem 0.7rem;
-  border-radius: 16px;
-  color: var(--paper);
-  font-weight: 600;
-  background:
-    radial-gradient(ellipse 120% 60% at 50% 0%, color-mix(in srgb, var(--mode-accent, #fff) 16%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
-    0 0 0 2px var(--ink),
-    0 6px 0 var(--panel-3),
-    0 14px 26px rgba(0, 0, 0, 0.45);
-  transition:
-    transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2),
-    box-shadow 0.18s ease,
-    filter 0.18s ease;
-}
-
-/* The mode's own colour, across the top of its card. Ten cards in one violet made the rail a
-   wall you had to read your way through; this gives each mode a mark you learn by accident. */
-.mode-tile::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  background: var(--mode-accent, var(--gold));
-  box-shadow: 0 0 14px color-mix(in srgb, var(--mode-accent, #fff) 60%, transparent);
-}
-
-/* Unselected cards sit back a little, so the chosen one is the one in focus rather than one
-   of ten equally loud things. */
-.mode-tile:not(.active) {
-  filter: saturate(0.72) brightness(0.92);
-}
-
-.mode-tile:hover:not(.active) {
-  filter: saturate(1) brightness(1);
-  transform: translateY(-5px);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.24),
-    0 0 0 2px var(--ink),
-    0 11px 0 var(--panel-3),
-    0 20px 32px rgba(0, 0, 0, 0.5),
-    0 0 26px color-mix(in srgb, var(--mode-accent, #fff) 32%, transparent);
-}
-
-.mode-tile:active {
-  transform: translateY(4px);
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3), 0 5px 10px rgba(0, 0, 0, 0.4);
-}
-
-.mode-tile.active {
-  background:
-    radial-gradient(ellipse 120% 60% at 50% 0%, color-mix(in srgb, var(--mode-accent, #fff) 26%, transparent), transparent 72%),
-    linear-gradient(180deg, #4a2b60 0%, #2e1943 100%);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.28),
-    0 0 0 2px var(--ink),
-    0 0 0 4px var(--gold),
-    0 6px 0 var(--gold-dark),
-    0 0 34px rgba(255, 197, 49, 0.34),
-    0 14px 26px rgba(0, 0, 0, 0.45);
-}
-
-/* A slow sheen crossing the chosen card, so the rail is never completely still. */
-.mode-tile.active .mode-art::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(106deg, transparent 38%, rgba(255, 255, 255, 0.35) 50%, transparent 62%);
-  transform: translateX(-100%);
-  animation: tileSheen 4.5s ease-in-out 3;
-}
-
-/* A ribbon on the selected tile, because which mode is chosen decides what Play does and a
-   border alone was easy to miss across ten cards. */
-.mode-tile.active::after {
-  content: 'SELECTED';
-  position: absolute;
-  top: 13px;
-  right: -32px;
-  transform: rotate(38deg);
-  width: 124px;
-  text-align: center;
-  padding: 0.16rem 0;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.58rem;
-  letter-spacing: 0.12em;
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light), var(--gold));
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.mode-art {
-  position: relative;
-  display: block;
-  height: 88px;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.5);
-}
-
-.mode-art svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.25s ease;
-}
-
-/* The art leans in when you point at it. Small, but it makes the card feel like an object
-   rather than a printed panel. */
-.mode-tile:hover .mode-art svg {
-  transform: scale(1.06);
-}
-
-.mode-meta {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.66rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-weight: 600;
-  /* The mode's own colour again, so the card reads as one thing. */
-  color: var(--mode-accent, var(--accent));
-}
-
-.mode-title {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 1.02rem;
-  line-height: 1.1;
-}
-
-.mode-blurb {
-  font-size: 0.75rem;
-  color: var(--paper-2);
-  font-weight: 600;
-  line-height: 1.35;
-  min-height: 2.7em;
-}
-
-/* Rules stay visible on every tile — hiding them for all but the selected mode left the row
-   a patchwork of heights and made the unselected cards look empty. The reserved height keeps
-   every card identical whatever its blurb runs to. */
-.mode-rules {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-height: 5.4em;
-  font-size: 0.71rem;
-  color: var(--muted);
-  font-weight: 600;
-  line-height: 1.3;
-  border-top: 1.5px solid rgba(255, 236, 255, 0.12);
-  padding-top: 0.4rem;
-}
-
-.mode-rules span::before {
-  content: '• ';
-  color: var(--gold);
-}
-
-.mode-tile.active .mode-rules {
-  color: var(--paper-2);
-  border-top-color: rgba(255, 197, 49, 0.3);
-}
-
-/* ==========================================================================
-   The action row.
-
-   This is where the hierarchy the carousel gives up is bought back. Play is one big gold
-   button that names the mode it will start; the two ways to play with other people are a
-   quieter pair beside it; the code box is last, because typing a code is what you do when
-   somebody has already told you one.
-   ========================================================================== */
-
-.home-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0.6rem;
-}
-
-/* --- Play ---
-   The one button the whole page is pointing at, so it is the one thing allowed to move on
-   its own: a slow breathing glow while it waits, a shine that crosses it every few seconds,
-   and a cue that pulls back and strikes when you point at it. All of it stops dead under
-   reduce-motion — see the block at the end of this file. */
-
-.btn-play {
-  position: relative;
-  overflow: hidden;
-  flex: 1 1 250px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.7rem 1.15rem 0.8rem;
-  border-radius: var(--radius);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
-    0 0 0 2px var(--ink),
-    0 7px 0 var(--gold-dark),
-    0 15px 24px rgba(0, 0, 0, 0.45),
-    0 0 30px rgba(255, 197, 49, 0.36);
-  /* The glow used to breathe by animating this whole box-shadow — a repaint of the biggest
-     button on the page, every frame, for as long as the menu was open. It holds at the middle
-     of that breath now; the shine crossing it is what says "press me". */
-  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.15s ease;
-}
-
-/* The shine. Parked off the left edge for most of the cycle, then crosses quickly. */
-.btn-play::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  /* The slant is in the gradient rather than a rotate, so the one transform left is the slide
-     — which the compositor runs without repainting the button. */
-  background: linear-gradient(108deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
-  transform: translateX(-100%);
-  pointer-events: none;
-  animation: playShine 3.8s ease-in-out 3;
-}
-
-.btn-play:hover:not(:disabled) {
-  transform: translateY(-2px);
-  filter: brightness(1.05);
-}
-
-.btn-play:active:not(:disabled) {
-  transform: translateY(6px);
-  animation: none;
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
-    0 0 0 2px var(--ink),
-    0 1px 0 var(--gold-dark),
-    0 4px 8px rgba(0, 0, 0, 0.4);
-}
-
-.btn-play-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.05rem;
+.topbar-title {
+  flex: 1;
   min-width: 0;
 }
-
-.btn-play-main {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.btn-play-sub {
-  font-size: 0.72rem;
+.topbar-title h1 {
+  font-size: clamp(20px, 2.4vw, 26px);
   font-weight: 800;
-  color: rgba(24, 13, 26, 0.68);
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
-
-/* A cue and a ball, drawn in the button. On hover the cue pulls back and strikes, and the
-   ball rolls off — the button does the thing it is for. */
-.btn-play-cue {
-  position: relative;
-  flex: 0 0 auto;
-  width: 66px;
-  height: 34px;
-}
-
-/* `translate` rather than `transform`, so the strike animates *alongside* the cue's standing
-   rotation instead of overwriting it and snapping the cue flat mid-swing. */
-.btn-play:hover .cue-stick {
-  animation: cueStrike 0.62s cubic-bezier(0.3, 0, 0.2, 1);
-}
-
-/* The one place the cabinet's pink is spent: going online is the outward-facing action. */
-.btn-hot {
-  background: linear-gradient(180deg, #ff77b0 0%, var(--hot) 62%, #e01f6f 100%);
-  color: #fff2f7;
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--hot-dark),
-    0 10px 18px rgba(0, 0, 0, 0.4);
-}
-
-.btn-hot:active:not(:disabled) {
-  transform: translateY(4px);
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--hot-dark), 0 4px 8px rgba(0, 0, 0, 0.35);
-}
-
-.btn-quiet {
-  background: linear-gradient(180deg, #4d2f63 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--panel-3),
-    0 10px 18px rgba(0, 0, 0, 0.4);
-}
-
-.btn-quiet:active:not(:disabled) {
-  transform: translateY(4px);
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3), 0 4px 8px rgba(0, 0, 0, 0.35);
-}
-
-/* Sized to what it holds — four characters — rather than stretching to a black slab twice the
-   width of the text in it, which is what made it the heaviest thing in the row. */
-/* One control, not two.
-   A separate input and a separate button, each with its own outline and a gap between them,
-   read as two more things to weigh up on a row that already had three. Joined into a single
-   fused unit they read as what they are: one field with its own submit. */
-.join-box {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: stretch;
-  border-radius: 13px;
-  overflow: hidden;
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 3px 0 var(--paper-3);
-}
-
-.join-box input {
-  flex: 0 0 108px;
-  width: 108px;
-  text-align: center;
-  letter-spacing: 0.2em;
-  font-weight: 700;
-  font-family: 'Fredoka', sans-serif;
-  border-radius: 0;
-  box-shadow: none;
-  /* Placeholder was near-invisible against the panel it sits on. */
-  color: var(--paper);
-  background: var(--panel-3);
-}
-
-.join-box input::placeholder {
-  color: var(--muted);
-  opacity: 1;
-}
-
-.join-box input:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--gold);
-}
-
-.join-box button {
-  flex: 0 0 auto;
-  padding: 0.6rem 1.05rem;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.join-box button:hover:not(:disabled) {
-  transform: none;
-  filter: brightness(1.08);
-}
-
-.home-actions .error {
-  flex: 1 0 100%;
-  margin: -0.2rem 0 0;
-  min-height: 1em;
-  font-size: 0.76rem;
-}
-
-/* ==========================================================================
-   The shelf: struck tokens, and the daily as a ticket.
-
-   These six are side doors off the menu, not six more things to weigh against the modes
-   above — giving them the same card shape as a mode made the page read as fourteen equal
-   choices. A disc is smaller, obviously a different kind of object, and lets the whole row
-   sit on one line at any width the game is actually played at.
-   ========================================================================== */
-
-/*
- * The dock.
- *
- * The same machined plate the shot deck stands on at the table — cut corners, a bolt in each
- * one, a lit lip along the top — so the menu and the game are visibly the same machine. It was
- * a faint translucent strip before, the one part of the hub with no edge to it at all.
- *
- * The lip takes the page accent, so it changes colour with the chosen game along with the
- * rest of the room.
- */
-.home-shelf {
-  --lip: var(--page-accent, var(--gold));
-  position: relative;
+.topbar-sub {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
-  padding: 1rem 1.1rem 0.95rem 1.3rem;
-  border-radius: 24px;
-  corner-shape: bevel;
-  background:
-    linear-gradient(90deg, transparent 3%, var(--lip) 15%, color-mix(in srgb, var(--lip) 45%, #fff) 50%, var(--lip) 85%, transparent 97%) top center / 100% 2.5px no-repeat,
-    radial-gradient(ellipse 60% 100% at 50% 0%, color-mix(in srgb, var(--lip) 12%, transparent), transparent 70%),
-    radial-gradient(circle 3px at 19px 17px, rgba(255, 236, 255, 0.5), transparent 100%),
-    radial-gradient(circle 3px at calc(100% - 19px) 17px, rgba(255, 236, 255, 0.5), transparent 100%),
-    radial-gradient(circle 3px at 17px calc(100% - 15px), rgba(255, 236, 255, 0.3), transparent 100%),
-    radial-gradient(circle 3px at calc(100% - 17px) calc(100% - 15px), rgba(255, 236, 255, 0.3), transparent 100%),
-    linear-gradient(180deg, rgba(78, 47, 102, 0.9) 0%, rgba(32, 18, 47, 0.94) 100%);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1.5px rgba(255, 236, 255, 0.12),
-    0 0 34px -8px color-mix(in srgb, var(--lip) 45%, transparent),
-    0 7px 0 rgba(10, 5, 18, 0.8),
-    0 18px 30px rgba(0, 0, 0, 0.55);
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--text-3);
+  font-weight: 600;
 }
-
-/* The six spread themselves across whatever room the Today card leaves, so the shelf is
-   never a huddle on the left with a gap after it. */
-.shelf-nav {
-  flex: 1 1 auto;
-  min-width: 0;
+.topbar-right {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.5rem 0.35rem;
-}
-
-/*
- * A token is a gauge.
- *
- * The disc sits inside a ring in its own colour, filled to how far through that place you
- * are — the same conic ring as the power gauge on the shot deck. The face is drawn on top of
- * the ring as a `closest-side` circle, so the ring is whatever is left round its edge and
- * scales with the disc on every height tier without a second element.
- */
-.home-shelf .token-disc {
-  width: 60px;
-  height: 60px;
-  background:
-    radial-gradient(circle at 50% 22%, rgba(255, 236, 255, 0.16), transparent 42%),
-    radial-gradient(circle closest-side, transparent 0 calc(100% - 7.5px), rgba(0, 0, 0, 0.55) calc(100% - 7px) calc(100% - 5.5px), transparent calc(100% - 5px)),
-    radial-gradient(circle closest-side,
-      color-mix(in srgb, var(--tok, #fff) 14%, #2e1b40) 0,
-      #22132f calc(100% - 7.5px),
-      transparent calc(100% - 7px)),
-    conic-gradient(var(--tok, #fff) var(--ring, 0%), rgba(12, 6, 22, 0.75) 0);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1px rgba(255, 236, 255, 0.12),
-    0 5px 0 rgba(10, 5, 18, 0.85),
-    0 10px 16px rgba(0, 0, 0, 0.4);
-}
-
-.home-shelf .token:hover .token-disc {
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1px rgba(255, 236, 255, 0.2),
-    0 9px 0 rgba(10, 5, 18, 0.85),
-    0 16px 22px rgba(0, 0, 0, 0.45),
-    0 0 28px color-mix(in srgb, var(--tok, #fff) 55%, transparent);
-}
-
-.home-shelf .token:active .token-disc {
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 rgba(10, 5, 18, 0.85);
-}
-
-/* Something waiting: the whole ring lights gold and the disc keeps nudging until you look. */
-.home-shelf .token.has-reward .token-disc {
-  color: var(--ink);
-  background:
-    radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.5), transparent 45%),
-    radial-gradient(circle closest-side, var(--gold-light) 0, var(--gold) calc(100% - 7.5px), transparent calc(100% - 7px)),
-    conic-gradient(#fff4c2, var(--gold), #fff4c2);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--gold-dark),
-    0 0 26px rgba(255, 197, 49, 0.5);
-}
-
-.home-shelf .token-label {
-  font-size: 0.8rem;
-}
-
-/* Between the doors and the day's task: an engraved seam down the plate, the way the deck's
-   bays are separated. */
-.home-shelf .today-card {
-  position: relative;
-  margin-left: 0.3rem;
-}
-
-.home-shelf .today-card::after {
-  content: '';
-  position: absolute;
-  left: -1.05rem;
-  top: 8%;
-  bottom: 8%;
-  width: 2px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.6) 20%, rgba(0, 0, 0, 0.6) 80%, transparent);
-  box-shadow: 1.5px 0 0 rgba(255, 236, 255, 0.07);
-}
-
-/*
- * Today's task, as a readout set into the plate: a recessed screen rather than a second card
- * stacked on top of the first. Its gold bar across the top keeps it the day's one call to
- * action.
- */
-.home-shelf .today-card {
-  overflow: visible;
-  border-radius: 16px;
-  corner-shape: bevel;
-  background:
-    linear-gradient(90deg, transparent 5%, var(--gold) 22%, var(--gold-light) 50%, var(--gold) 78%, transparent 95%) top center / 100% 2px no-repeat,
-    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(255, 197, 49, 0.12), transparent 70%),
-    linear-gradient(180deg, rgba(8, 4, 14, 0.72), rgba(20, 10, 30, 0.72));
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1.5px rgba(255, 236, 255, 0.07),
-    inset 0 3px 10px rgba(0, 0, 0, 0.55);
-}
-
-.home-shelf .today-card::before {
-  content: none;
-}
-
-.home-shelf .today-card.done {
-  background:
-    linear-gradient(90deg, transparent 5%, var(--accent) 22%, #b8ffea 50%, var(--accent) 78%, transparent 95%) top center / 100% 2px no-repeat,
-    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(52, 226, 176, 0.12), transparent 70%),
-    linear-gradient(180deg, rgba(8, 4, 14, 0.72), rgba(20, 10, 30, 0.72));
-}
-
-/* --- Today's challenge ---
-   Was a gold pill sitting among the token discs: the wrong shape in the wrong colour. A pill
-   among circles reads as something that fell out of another design, and gold is already spoken
-   for — it means "this is the button to press", which the daily is not.
-
-   It is a card now, using the same shape the mode tiles use: violet face, ink outline, a lip
-   underneath and a coloured bar across the top. And it finally shows progress, which it always
-   knew and never said — so it reads as something you are part-way through rather than an
-   announcement. */
-
-.today-card {
-  position: relative;
-  overflow: hidden;
-  flex: 0 0 268px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.75rem 0.85rem 0.7rem;
-  border-radius: 14px;
-  color: var(--paper);
-  background:
-    radial-gradient(ellipse 120% 60% at 50% 0%, rgba(255, 197, 49, 0.16), transparent 70%),
-    linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--panel-3),
-    0 11px 18px rgba(0, 0, 0, 0.4);
-}
-
-.today-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: var(--gold);
-  box-shadow: 0 0 12px rgba(255, 197, 49, 0.6);
-}
-
-.today-card.done::before {
-  background: var(--accent);
-  box-shadow: 0 0 12px rgba(52, 226, 176, 0.5);
-}
-
-.today-head {
-  display: flex;
+  gap: 10px;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.dot.is-on {
+  background: var(--mint);
+  box-shadow: 0 0 10px var(--mint);
 }
 
-.today-eyebrow {
+.screen-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 6px max(18px, var(--safe-right)) calc(28px + var(--safe-bottom)) max(18px, var(--safe-left));
+}
+.screen-main > * {
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--muted);
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: rgba(12, 18, 28, 0.72);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  backdrop-filter: blur(12px);
 }
 
-.today-card.done .today-eyebrow {
-  color: var(--accent);
+.muted {
+  color: var(--text-3);
+}
+.small {
+  font-size: 13px;
+}
+.center {
+  text-align: center;
+}
+.gold {
+  color: var(--gold);
+}
+.mint {
+  color: var(--mint);
+}
+.warn {
+  color: var(--coral);
+}
+.link {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 13px;
+}
+.link:hover {
+  text-decoration: underline;
 }
 
-.today-card .rw-row {
-  margin-top: 0.45rem;
-}
+/* ================================================================ home */
 
-.today-reward {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.66rem;
-  font-variant-numeric: tabular-nums;
-  padding: 0.12rem 0.5rem;
-  border-radius: 999px;
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light), var(--gold));
-  box-shadow: 0 0 0 1.5px var(--ink);
+.home {
+  background: var(--bg-0);
 }
-
-.today-card.done .today-reward {
-  color: var(--paper);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 236, 255, 0.14);
+.attract {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
-
-.today-task {
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1.3;
-  text-wrap: pretty;
-}
-
-.today-bar {
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
-}
-
-.today-bar i {
-  display: block;
+.attract canvas,
+.table-host canvas,
+.locker-preview canvas {
+  width: 100%;
   height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--gold-light), var(--gold));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 10px rgba(255, 197, 49, 0.45);
-  transition: width 0.4s ease;
-}
-
-.today-card.done .today-bar i {
-  background: linear-gradient(90deg, #7cf2d3, var(--accent));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 10px rgba(52, 226, 176, 0.45);
-}
-
-.today-count {
-  font-size: 0.66rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
-/* --- Narrow: the shelf stacks, the action pair goes single file --- */
-@media (max-width: 880px) {
-  .home-shelf {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.85rem;
-  }
-
-  .shelf-nav {
-    justify-content: center;
-    gap: 0.6rem 0.4rem;
-  }
-
-  .token {
-    width: 72px;
-  }
-
-  /* Full width once it is on its own row — a 268px card centred in a phone looks stranded. */
-  .today-card {
-    flex-basis: auto;
-  }
-
-  /* Stacked, there is nothing beside it to be separated from. */
-  .home-shelf .today-card {
-    margin-left: 0;
-  }
-
-  .home-shelf .today-card::after {
-    content: none;
-  }
-
-  .action-pair {
-    grid-template-columns: 1fr;
-  }
-
-  .join-box {
-    flex: 1 1 auto;
-  }
-
-  .join-box input {
-    flex: 1 1 auto;
-    width: auto;
-  }
-}
-
-.mode-card-art {
   display: block;
-  height: 62px;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 0.35rem;
+}
+.home-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(4, 7, 12, 0.94) 0%, rgba(4, 7, 12, 0.78) 34%, rgba(4, 7, 12, 0.25) 62%, rgba(4, 7, 12, 0.55) 100%),
+    linear-gradient(0deg, rgba(4, 7, 12, 0.9) 0%, transparent 30%, transparent 80%, rgba(4, 7, 12, 0.7) 100%);
 }
 
-@media (max-width: 700px) {
-  .home-content {
-    padding: 1rem 0.9rem 2.5rem;
-  }
-
-  .mode-tile {
-    flex-basis: 190px;
-  }
-
-  .join-box {
-    flex: 1 1 100%;
-  }
-
-  .join-box input {
-    flex: 1;
-    width: auto;
-  }
+.home-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(16px + var(--safe-top)) max(22px, var(--safe-right)) 8px max(22px, var(--safe-left));
 }
-
-/* ---- Stats page ---- */
-.stats-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 1rem;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-
-.stat-grid {
+.brand-ball {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.7rem;
-  margin: 1rem 0 1.6rem;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #4a4a4a, #0d0d0d 60%, #000);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.6),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.08);
+  font-weight: 900;
+  font-size: 15px;
+  color: #111;
+  position: relative;
 }
-
-.stat-card {
+.brand-ball::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f6f1e4;
+}
+.brand-ball {
+  isolation: isolate;
+}
+.brand-ball::after {
+  content: '8';
+  position: absolute;
+  font-weight: 900;
+  font-size: 14px;
+  color: #111;
+}
+.brand-word {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+}
+.brand-word b {
+  color: var(--text);
+  font-weight: 900;
+}
+.home-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.coins-chip:hover,
+.profile-chip:hover {
+  background: rgba(24, 34, 50, 0.85);
+}
+.profile-chip {
+  padding: 0 14px 0 5px;
+}
+.pc-text {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.9rem 1rem;
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3);
-}
-
-.stat-value {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 1.9rem;
+  align-items: flex-start;
   line-height: 1.1;
-  font-variant-numeric: tabular-nums;
 }
-
-.stat-label {
+.pc-name {
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 14.5px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-level {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--gold);
+}
+.pc-bar {
+  width: 54px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.pc-bar span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
 }
 
-.stat-note {
-  font-size: 0.72rem;
+.home-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  padding: 10px max(22px, var(--safe-right)) calc(96px + var(--safe-bottom)) max(22px, var(--safe-left));
+}
+.home-hero {
+  width: min(600px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: rise-in 0.5s var(--ease-out);
+}
+.hero-title {
+  font-size: clamp(44px, 6.4vw, 84px);
+  line-height: 0.95;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  margin-top: clamp(8px, 4vh, 48px);
+  text-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+.hero-sub {
+  font-size: clamp(15px, 1.5vw, 18px);
+  color: var(--text-2);
+  max-width: 460px;
+  margin-bottom: 8px;
+}
+
+.resume-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  text-align: left;
+  color: var(--text);
+  background: linear-gradient(90deg, rgba(47, 227, 163, 0.18), rgba(47, 227, 163, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(47, 227, 163, 0.4);
+}
+.resume-banner span:nth-child(2) {
+  flex: 1;
+}
+.rb-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 12px var(--mint);
+  animation: pulse 1.4s infinite;
+}
+
+.quick-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border-radius: var(--r-xl);
+  text-align: left;
+  color: var(--gold-ink);
+  background: linear-gradient(135deg, #ffe7a3, var(--gold) 45%, var(--gold-lo));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -3px 0 rgba(120, 60, 0, 0.3),
+    0 18px 50px rgba(255, 160, 30, 0.3);
+  transition:
+    transform 0.2s var(--ease-out),
+    box-shadow 0.2s;
+  overflow: hidden;
+}
+.quick-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.45) 45%, transparent 60%);
+  background-size: 250% 100%;
+  animation: shimmer 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.quick-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -3px 0 rgba(120, 60, 0, 0.3),
+    0 24px 60px rgba(255, 160, 30, 0.42);
+}
+.quick-card:active {
+  transform: translateY(1px) scale(0.99);
+}
+.qc-art {
+  flex: none;
+  filter: drop-shadow(0 6px 12px rgba(80, 40, 0, 0.35));
+}
+.qc-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.qc-kicker {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.qc-title {
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.qc-sub {
+  font-weight: 700;
+  opacity: 0.75;
+  font-size: 14.5px;
+}
+.qc-go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: var(--gold);
+  background: #1a1000;
+  box-shadow: 0 6px 18px rgba(80, 40, 0, 0.4);
+  padding-left: 4px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.home-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  min-height: 118px;
+  border-radius: var(--r-lg);
+  text-align: left;
+  color: var(--text);
+  background: linear-gradient(160deg, rgba(30, 44, 64, 0.85), rgba(14, 21, 32, 0.9));
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    var(--shadow-1);
+  backdrop-filter: blur(14px);
+  transition:
+    transform 0.2s var(--ease-out),
+    box-shadow 0.2s;
+  overflow: hidden;
+}
+.home-tile::before {
+  content: '';
+  position: absolute;
+  right: -30px;
+  top: -30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--tile, var(--sky));
+  opacity: 0.16;
+  filter: blur(20px);
+}
+.home-tile .icon {
+  color: var(--tile, var(--sky));
+  margin-bottom: 6px;
+}
+.home-tile:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px var(--line-3),
+    var(--shadow-2);
+}
+.tile-friends {
+  --tile: var(--mint);
+}
+.tile-bots {
+  --tile: var(--sky);
+}
+.tile-cups {
+  --tile: var(--gold);
+}
+.tile-solo {
+  --tile: var(--pink);
+}
+.ht-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+.ht-sub {
+  font-size: 13px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.join-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--r-md);
+  background: rgba(10, 15, 24, 0.75);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text-3);
+  backdrop-filter: blur(10px);
+}
+.join-input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+.join-input::placeholder {
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.home-side {
+  margin-left: auto;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: clamp(8px, 4vh, 48px);
+  animation: rise-in 0.6s var(--ease-out);
+}
+.side-card {
+  padding: 16px;
+  text-align: left;
+  color: var(--text);
+}
+.mission-mini {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mission-mini li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.mission-mini .progress {
+  grid-column: 1;
+  height: 6px;
+}
+.mm-count {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-weight: 800;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.mission-mini li.is-done .mm-count {
+  color: var(--mint);
+}
+.mission-mini li.is-claimed {
+  opacity: 0.5;
+}
+.locker-card {
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-out);
+}
+.locker-card:hover {
+  transform: translateY(-2px);
+}
+.lc-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-2);
+}
+.lc-body .icon {
+  color: var(--violet);
+}
+
+.bottom-nav {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(14px + var(--safe-bottom));
+  transform: translateX(-50%);
+  display: none;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 22px;
+  background: rgba(10, 15, 24, 0.86);
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    var(--shadow-2);
+  backdrop-filter: blur(16px);
+}
+.bottom-nav button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 72px;
+  padding: 8px 10px 6px;
+  border-radius: 16px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.bottom-nav button.is-on {
+  color: var(--gold);
+  background: rgba(255, 196, 68, 0.1);
+}
+.bottom-nav .badge {
+  top: 2px;
+  right: 14px;
+}
+
+@media (max-width: 980px) {
+  .home-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .home-side {
+    width: auto;
+    margin: 0;
+    max-width: 600px;
+  }
+  .home-shade {
+    background: linear-gradient(0deg, rgba(4, 7, 12, 0.96) 0%, rgba(4, 7, 12, 0.82) 55%, rgba(4, 7, 12, 0.5) 100%);
+  }
+  .bottom-nav {
+    display: flex;
+  }
+  .locker-card {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .brand-word {
+    display: none;
+  }
+  .profile-chip .pc-text {
+    display: none;
+  }
+  .profile-chip {
+    padding: 0 5px;
+  }
+  .home-grid {
+    gap: 10px;
+  }
+  .home-tile {
+    min-height: 104px;
+    padding: 14px;
+  }
+  .ht-title {
+    font-size: 16px;
+  }
+  .ht-sub {
+    font-size: 12px;
+  }
+  .qc-go {
+    width: 48px;
+    height: 48px;
+  }
+  .quick-card {
+    padding: 14px;
+    gap: 12px;
+  }
+  .qc-art svg {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+/* welcome & daily */
+
+.welcome-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+}
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.avatar-grid button {
+  aspect-ratio: 1;
+  border-radius: 14px;
+  font-size: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  transition: transform 0.15s var(--spring);
+}
+.avatar-grid button:hover {
+  transform: scale(1.08);
+}
+.avatar-grid button.is-on {
+  background: rgba(255, 196, 68, 0.18);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.color-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s var(--spring);
+}
+.swatch.is-on {
+  transform: scale(1.12);
+  box-shadow:
+    0 0 0 3px var(--bg-0),
+    0 0 0 5px #fff;
+}
+.daily-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin: 10px 0 16px;
+}
+.daily-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 2px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.daily-day.is-past {
+  opacity: 0.45;
+}
+.daily-day.is-today {
+  background: rgba(255, 196, 68, 0.14);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.dd-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.daily-day .coins-sm {
+  flex-direction: column;
+  font-size: 12px;
+}
+
+/* ================================================================ closed / connecting */
+
+.closed-card {
+  z-index: 1;
+  width: min(92vw, 420px);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.closed-card h2 {
+  font-size: 24px;
+  font-weight: 800;
+}
+.closed-card p {
+  color: var(--text-2);
+}
+
+/* ================================================================ mode tiles, bots */
+
+.mode-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.mode-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px 12px;
+  border-radius: var(--r-md);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition:
+    transform 0.15s var(--ease-out),
+    box-shadow 0.2s,
+    background 0.2s;
+  text-align: center;
+}
+.mode-tile:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+}
+.mode-tile.is-on {
+  background: rgba(255, 196, 68, 0.1);
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 8px 22px rgba(255, 170, 40, 0.15);
+}
+.mode-tile:disabled {
+  opacity: 0.4;
+}
+.mt-name {
+  font-weight: 800;
+  font-size: 15px;
+}
+.mt-players {
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 700;
+}
+.mt-blurb {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.mode-tiles.is-large .mode-tile {
+  padding: 18px 12px 16px;
+}
+.mode-blurb {
+  margin: 12px 2px 4px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.bot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 14px 0;
+}
+.bot-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border-radius: var(--r-md);
+  text-align: center;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition:
+    transform 0.15s var(--ease-out),
+    box-shadow 0.2s,
+    background 0.2s;
+}
+.bot-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  transform: translateY(-2px);
+}
+.bot-card.is-on {
+  background: rgba(255, 196, 68, 0.1);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.bc-name {
+  font-weight: 800;
+  font-size: 16px;
+}
+.bc-bio {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.bc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .mode-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .bot-grid {
+    grid-template-columns: 1fr;
+  }
+  .bot-card {
+    flex-direction: row;
+    text-align: left;
+    flex-wrap: wrap;
+  }
+  .bot-card .bc-name {
+    flex: 1;
+  }
+  .bot-card .bc-bio,
+  .bot-card .bc-tags {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* ================================================================ settings rows */
+
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setting.inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.setting-label {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.setting-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+  color: var(--text-3);
+  opacity: 0.85;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 20px;
+  margin-top: 18px;
+}
+@media (max-width: 720px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-tabs {
+  margin-bottom: 12px;
+}
+.settings-group {
+  padding: 4px 2px;
+}
+.row-inline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.input-sm {
+  width: 220px;
+  height: 38px;
+  font-size: 14px;
+}
+.import-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+@media (max-width: 560px) {
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .slider {
+    width: 140px;
+  }
+  .input-sm {
+    width: 100%;
+  }
+}
+
+/* ================================================================ lobby */
+
+.lobby-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 4px max(18px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(18px, var(--safe-left));
+  align-content: start;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+}
+.lobby-left,
+.lobby-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.lobby-invite {
+  padding: 20px;
+}
+.invite-help {
+  margin-top: 12px;
+  color: var(--text-3);
+  font-size: 13.5px;
+}
+.lobby-seats,
+.lobby-settings {
+  padding: 18px;
+}
+.lobby-connecting {
+  position: relative;
+  z-index: 1;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-2);
+}
+.seats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.seats.is-many {
+  grid-template-columns: 1fr 1fr;
+}
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--seat) 14%, transparent), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--seat) 35%, transparent);
+  animation: rise-in 0.3s var(--ease-out);
+}
+.seat.is-me {
+  box-shadow: inset 0 0 0 2px var(--seat);
+}
+.seat.is-empty {
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border: 1px dashed transparent;
+}
+.seat.is-away {
   opacity: 0.6;
 }
+.seat-empty-ring {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  color: var(--text-3);
+  border: 2px dashed var(--line-3);
+}
+.seat-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.seat-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-you {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  color: var(--bg-0);
+  background: var(--seat);
+}
+.seat-meta {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-team {
+  color: var(--seat);
+  font-weight: 800;
+  font-size: 12px;
+}
+.seat-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.icon-btn-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.spectators {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--text-3);
+}
+.lobby-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 -6px;
+  padding: 18px 6px calc(6px + var(--safe-bottom));
+  background: linear-gradient(180deg, transparent, var(--bg-0) 38%);
+}
+.lobby-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--r-lg);
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.guest-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 900px) {
+  .lobby-main {
+    grid-template-columns: 1fr;
+  }
+  .seats.is-many {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .guest-row {
+    grid-template-columns: 1fr;
+  }
+}
 
-/* --- Rivals ---
-   Was a `<table>`, which is honest about the data and hopeless about the width: four columns
-   squeezed below about 600px into a stack of wrapped words. Each rival is one record with four
-   labelled fields, which reads at any width — the labels sit with their values rather than in a
-   header row a phone cannot keep on screen. */
-.rivals-list {
+/* invite */
+
+.invite {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.invite-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.invite-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.invite-code {
+  display: flex;
+  gap: 8px;
+}
+.invite-code span {
+  display: grid;
+  place-items: center;
+  width: clamp(46px, 5vw, 62px);
+  height: clamp(58px, 6vw, 76px);
+  border-radius: 14px;
+  font-size: clamp(30px, 3.4vw, 44px);
+  font-weight: 900;
+  color: var(--gold);
+  background: linear-gradient(180deg, rgba(255, 196, 68, 0.14), rgba(255, 196, 68, 0.04));
+  box-shadow: inset 0 0 0 1.5px rgba(255, 196, 68, 0.45);
+  text-shadow: 0 0 18px rgba(255, 196, 68, 0.45);
+}
+.invite-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-qr {
+  flex: none;
+  width: clamp(116px, 12vw, 150px);
+  height: clamp(116px, 12vw, 150px);
+  border-radius: 14px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+}
+.invite.is-compact .invite-code span {
+  width: 42px;
+  height: 52px;
+  font-size: 28px;
+}
+.invite.is-compact .invite-qr {
+  width: 104px;
+  height: 104px;
+}
+.invite.is-compact {
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+@media (max-width: 420px) {
+  .invite-qr {
+    display: none;
+  }
+}
+
+/* ================================================================ play */
+
+.play-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.play-section {
+  padding: 18px;
+}
+.play-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ================================================================ friends */
+
+.friends-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.friends-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.friends-card h2 {
+  font-size: 24px;
+  font-weight: 800;
+}
+.friends-card p {
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+.fc-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  color: var(--mint);
+  background: rgba(47, 227, 163, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(47, 227, 163, 0.3);
+}
+.join-card .fc-icon {
+  color: var(--sky);
+  background: rgba(91, 182, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(91, 182, 255, 0.3);
+}
+.tv-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  text-align: left;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.tv-option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.tv-option span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.tv-option small {
+  color: var(--text-3);
+  font-weight: 600;
+}
+.tv-option:disabled {
+  opacity: 0.5;
+}
+.code-boxes {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+  cursor: text;
+}
+.code-box {
+  display: grid;
+  place-items: center;
+  height: 72px;
+  border-radius: 16px;
+  font-size: 38px;
+  font-weight: 900;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 0 1.5px var(--line-2);
+}
+.code-box.is-active {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.code-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  font-size: 16px;
+  width: 100%;
+}
+.public-rooms {
+  padding: 18px;
+}
+.pr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 24px;
+  color: var(--text-2);
+  text-align: center;
+}
+.pr-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.035);
+}
+.pr-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.offline-note {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  color: var(--coral);
+}
+.offline-note div {
+  flex: 1;
+  color: var(--text-2);
+}
+.offline-note b {
+  color: var(--text);
+}
+@media (max-width: 800px) {
+  .friends-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ================================================================ cups */
+
+.cup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cup-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  overflow: hidden;
+  animation: rise-in 0.4s var(--ease-out) both;
+  animation-delay: calc(var(--i) * 0.06s);
+}
+.cup-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(400px 200px at 0% 50%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.cup-card.is-locked {
+  filter: saturate(0.4);
+  opacity: 0.7;
+}
+.cup-icon {
+  position: relative;
+  font-size: 54px;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--accent) 16%, rgba(0, 0, 0, 0.3));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent);
+  flex: none;
+}
+.cup-text {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.cup-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.cup-head h2 {
+  font-size: 22px;
+  font-weight: 800;
+}
+.cup-text p {
+  color: var(--text-2);
+  margin: 4px 0 10px;
+}
+.cup-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.cup-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cup-prize {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: none;
+}
+.cup-item {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--rarity-legendary);
+}
+@media (max-width: 720px) {
+  .cup-card {
+    flex-wrap: wrap;
+  }
+  .cup-icon {
+    width: 64px;
+    height: 64px;
+    font-size: 40px;
+  }
+  .cup-prize {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* ================================================================ solo & tricks */
+
+.solo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.solo-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 300px;
+  padding: 26px;
+  overflow: hidden;
+  text-align: left;
+  color: var(--text);
+  transition: transform 0.2s var(--ease-out);
+}
+.solo-card:hover {
+  transform: translateY(-3px);
+}
+.solo-card::before {
+  content: '';
+  position: absolute;
+  right: -60px;
+  bottom: -60px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: var(--glow, var(--mint));
+  opacity: 0.12;
+  filter: blur(30px);
+}
+.solo-card .mode-art {
+  width: 84px;
+  height: 84px;
+}
+.solo-card h2 {
+  margin-top: 8px;
+}
+.solo-intro {
+  margin: 0 auto 18px;
+  color: var(--text-2);
+  font-size: 15px;
+}
+.solo-card h2 {
+  font-size: 22px;
+  font-weight: 800;
+}
+.solo-card p {
+  color: var(--text-2);
+  flex: 1;
+}
+.solo-go,
+.solo-meta {
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 14px;
+}
+@media (max-width: 820px) {
+  .solo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.trick-set {
+  margin-bottom: 22px;
+}
+.trick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+.trick-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px;
+  text-align: left;
+  color: var(--text);
+  transition: transform 0.2s var(--ease-out);
+}
+.trick-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.trick-card.is-locked {
+  opacity: 0.45;
+}
+.tc-name {
+  font-weight: 800;
+  font-size: 16px;
+}
+.tc-brief {
+  font-size: 13px;
+  color: var(--text-2);
+  flex: 1;
+}
+.tc-stars {
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.15);
+}
+.tc-stars .is-on {
+  color: var(--gold);
+  text-shadow: 0 0 12px rgba(255, 196, 68, 0.5);
+}
+
+/* ================================================================ progress */
+
+.progress-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.level-card {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+.lc-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lc-name {
+  font-size: 22px;
+  font-weight: 800;
+}
+.lc-level {
+  font-weight: 800;
+  color: var(--gold);
+}
+.daily-card,
+.missions-card,
+.stats-card,
+.road-card {
+  padding: 18px;
+}
+.missions {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 10px;
 }
-
-.rival-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 1.1rem;
-  padding: 0.6rem 0.85rem;
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--paper-3);
+.mission {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.035);
 }
-
-.rival-name {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 700;
-  font-size: 0.98rem;
-  /* Takes the whole first line on a phone, so the figures wrap underneath it as a group. */
-  flex: 1 1 8rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.mission.is-ready {
+  background: rgba(47, 227, 163, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(47, 227, 163, 0.35);
 }
-
-.rival-cell {
+.mission.is-claimed {
+  opacity: 0.5;
+}
+.m-text {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
-  font-variant-numeric: tabular-nums;
+  gap: 8px;
 }
-
-.rival-cell i {
-  font-style: normal;
-  font-size: 0.62rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--muted);
-}
-
-.rival-cell b {
-  font-size: 0.88rem;
+.m-count {
   font-weight: 800;
+  color: var(--text-2);
 }
-
-/* Ahead and behind, said in colour on the record itself. Targeted by class rather than by
-   position: `:nth-of-type` counts spans, and the name is a span too, so a positional selector
-   here silently matches nothing. */
-.rival-ahead .rival-record b {
-  color: #6ee7a0;
+.m-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
-
-.rival-behind .rival-record b {
-  color: #f08b7e;
+.mission-bonus {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  background: rgba(255, 196, 68, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 68, 0.2);
 }
-
-/* --- Stat cards arrive in order ---
-   A grid of eight cards appearing at once reads as a flash; dealt out left to right, it reads
-   as a hand. Capped so the last card is never a noticeable wait. */
-.stat-card {
-  animation: statIn 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
-  animation-delay: calc(min(var(--stagger, 0), 8) * 45ms);
+.mission-bonus span {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
-
-@keyframes statIn {
-  from {
-    opacity: 0;
-    transform: translateY(9px);
+.mission-bonus .icon {
+  color: var(--gold);
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.035);
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 900;
+}
+.stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.mode-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.mode-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.road {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.road li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.035);
+}
+.road li.is-got {
+  background: rgba(47, 227, 163, 0.07);
+}
+.road-level {
+  font-weight: 900;
+  color: var(--gold);
+  width: 52px;
+}
+.road-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 860px) {
+  .progress-layout {
+    grid-template-columns: 1fr;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .mission {
+    grid-template-columns: 1fr auto;
+  }
+  .m-reward {
+    grid-column: 1;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
   }
 }
 
-body.reduce-motion .stat-card {
-  animation: none;
+/* ================================================================ locker */
+
+.locker-tabs {
+  margin-bottom: 14px;
 }
-
-/* A value that is words rather than a number needs to be set smaller to fit its card. */
-.stat-value.text {
-  font-size: 1.15rem;
-  line-height: 1.25;
+.locker-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
-
-/* ================= Case opening ================= */
-/* ==========================================================================
-   Opening a case.
-
-   Four beats, and the root element carries which one we are on: `.phase-crate`,
-   `.phase-bursting`, `.phase-spinning`, `.phase-revealed`. Keeping the state in one class
-   rather than in a dozen toggled elements is what makes the choreography readable — every
-   rule below is "at this beat, this element is here".
-
-   `--rc` is the rarity colour of the prize, set on the shell the moment it is known, and it
-   drives the lip, the seam glow, the rays and the frame. One custom property is the whole
-   reason a mystic feels different from a common rather than merely being labelled differently.
-
-   The second draft is bigger and plainer about what matters. The reel was a strip of small
-   cards lost in the middle of a dark box, read through a 116px "window" of two hairlines that
-   visibly failed to line up with the cards sliding under it; now the cards are larger, the
-   marker is one lit line down the centre, and when it lands everything that did not win goes
-   dark. The overlay also stopped blurring the page behind it — a full-screen `backdrop-filter`
-   under a reel that moves every frame is re-blurred every frame, to show a page that sits
-   under a 94%-opaque scrim anyway.
-   ========================================================================== */
-
-.case-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background:
-    radial-gradient(ellipse 55% 50% at 50% 40%, rgba(106, 63, 143, 0.2), transparent 70%),
-    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(20, 10, 32, 0.9), rgba(3, 2, 6, 0.96));
-  opacity: 0;
-  transition: opacity 0.18s ease;
+.locker-stage {
+  overflow: hidden;
+  position: sticky;
+  top: 0;
 }
-
-.case-overlay.open {
-  opacity: 1;
-}
-
-.case-shell {
-  --rc: #7d8aa0;
+.locker-preview {
   position: relative;
+  height: clamp(220px, 34vw, 380px);
+  background: #05080c;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  overflow: hidden;
+}
+.stage-info {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 20px;
+}
+.si-head h2 {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+.si-head p {
+  color: var(--text-2);
+  max-width: 380px;
+}
+.si-action {
   display: flex;
   flex-direction: column;
-  width: min(860px, 96vw);
-  padding: 1rem 1.1rem 1.1rem;
-  border-radius: 26px;
-  corner-shape: bevel;
-  color: var(--paper);
-  background:
-    linear-gradient(90deg, transparent 3%, var(--rc) 16%, color-mix(in srgb, var(--rc) 45%, #fff) 50%, var(--rc) 84%, transparent 97%) top center / 100% 3px no-repeat,
-    radial-gradient(ellipse 60% 40% at 50% 0%, color-mix(in srgb, var(--rc) 16%, transparent), transparent 70%),
-    radial-gradient(circle 3px at 20px 18px, rgba(255, 236, 255, 0.5), transparent 100%),
-    radial-gradient(circle 3px at calc(100% - 20px) 18px, rgba(255, 236, 255, 0.5), transparent 100%),
-    radial-gradient(circle 3px at 18px calc(100% - 16px), rgba(255, 236, 255, 0.3), transparent 100%),
-    radial-gradient(circle 3px at calc(100% - 18px) calc(100% - 16px), rgba(255, 236, 255, 0.3), transparent 100%),
-    linear-gradient(180deg, #4b2d63 0%, #1f112e 100%);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1.5px rgba(255, 236, 255, 0.1),
-    0 0 60px -10px color-mix(in srgb, var(--rc) 55%, transparent),
-    0 8px 0 rgba(10, 5, 18, 0.85),
-    0 30px 70px rgba(0, 0, 0, 0.65);
-  transform: scale(0.92);
-  transition:
-    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.5s ease;
-}
-
-.case-overlay.open .case-shell {
-  transform: none;
-}
-
-/* ---- Head ---- */
-
-.case-head {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  margin: 0 0.4rem 0.85rem;
-}
-
-.case-kicker {
-  display: block;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.case-title h2 {
-  margin: 0;
-  font-size: 1.55rem;
-  line-height: 1;
-  color: #fff6ff;
-  text-shadow: 0 0 16px color-mix(in srgb, var(--rc) 50%, transparent), 0 3px 0 var(--ink);
-}
-
-/* Keys, not "spins": there is a case on screen, and the thing that opens a case is a key. */
-.case-spins {
-  margin-left: auto;
-  padding: 0.35rem 0.8rem;
-  border-radius: 11px;
-  corner-shape: bevel;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light), var(--gold));
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
-    0 0 16px rgba(255, 197, 49, 0.4);
-}
-
-.case-spins.empty {
-  color: var(--paper-2);
-  background: var(--panel-3);
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.case-x {
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
   flex: none;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border-radius: 12px;
-  corner-shape: bevel;
-  font-size: 1.2rem;
-  line-height: 1;
+  max-width: 50%;
 }
-
-/* ---- The stage: crate, reel and reveal all live here, one at a time ---- */
-
-/*
- * The stage.
- *
- * Sized by `min-height` with `height: auto`, and the reveal sits in normal flow inside it —
- * *not* pinned with `inset: 0` like the crate and the reel are. An absolutely-positioned
- * reveal is the height of the stage no matter how tall its contents are, so a long blurb or a
- * big frame simply ran off the top. Letting the prize define the box removes the whole class
- * of bug rather than picking a number that happens to fit the prizes I looked at.
- *
- * A recessed well in the plate, lit from its floor in the prize's colour.
- */
-.case-stage {
-  position: relative;
-  min-height: 312px;
-  border-radius: 18px;
-  corner-shape: bevel;
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse 60% 45% at 50% 100%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 72%),
-    radial-gradient(ellipse 80% 100% at 50% 55%, #1d1430 0%, #0b0714 100%);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1.5px rgba(255, 236, 255, 0.06),
-    inset 0 4px 18px rgba(0, 0, 0, 0.7);
-  transition: min-height 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.case-overlay.phase-revealed .case-stage {
-  min-height: 380px;
-}
-
-/* Rays in the prize's colour: evenly spaced spokes, turning slowly behind the prize. */
-.case-rays {
-  position: absolute;
-  left: 50%;
-  top: 44%;
-  width: 150%;
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  background: repeating-conic-gradient(
-    from 0deg,
-    color-mix(in srgb, var(--rc) 50%, transparent) 0deg 4deg,
-    transparent 4deg 18deg
-  );
-  opacity: 0.32;
-  pointer-events: none;
-  animation: caseRays 30s linear infinite, raysIn 0.7s ease-out both;
-  -webkit-mask-image: radial-gradient(circle, #000 8%, transparent 52%);
-  mask-image: radial-gradient(circle, #000 8%, transparent 52%);
-}
-
-@keyframes raysIn {
-  from { opacity: 0; }
-  to { opacity: 0.32; }
-}
-
-@keyframes caseRays {
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-/* ---- Beat 1: the closed case ---- */
-
-.crate {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.case-overlay.phase-crate .crate,
-.case-overlay.phase-bursting .crate {
-  opacity: 1;
-}
-
-/* A pool of light on the floor of the well, so the case stands somewhere. */
-.crate::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 6%;
-  width: 380px;
-  height: 90px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(255, 213, 105, 0.22), transparent 70%);
-  pointer-events: none;
-}
-
-.crate-svg {
-  width: 330px;
-  max-width: 80%;
-  overflow: visible;
-  filter: drop-shadow(0 0 34px color-mix(in srgb, var(--rc) 45%, transparent));
-  animation: crateFloat 3.6s ease-in-out infinite;
-}
-
-@keyframes crateFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
-}
-
-.crate-shadow {
-  fill: #000;
-  opacity: 0.45;
-}
-
-/* The seam. This is the case telling you there is something in it, and it is the only thing
-   moving before you press anything — so it has to be plainly visible. */
-.crate-glow {
-  fill: #ffd569;
-  transform-origin: 110px 76px;
-  filter: blur(6px);
-  opacity: 0.55;
-  animation: crateBreathe 2.4s ease-in-out infinite;
-}
-
-@keyframes crateBreathe {
-  0%, 100% { opacity: 0.4; transform: scaleY(0.7); }
-  50% { opacity: 0.95; transform: scaleY(1.35); }
-}
-
-.crate-lid {
-  transform-origin: 110px 80px;
-  transition: transform 0.3s cubic-bezier(0.5, -0.4, 0.7, 0.2);
-}
-
-/* Rattling, right before it goes. */
-.case-overlay.shaking .crate-svg {
-  animation: crateShake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-}
-
-.case-overlay.shaking .crate-glow {
-  animation: crateCharge 0.62s ease-in both;
-}
-
-@keyframes crateShake {
-  0% { transform: translate(0, 0) rotate(0); }
-  15% { transform: translate(-5px, 1px) rotate(-2deg); }
-  30% { transform: translate(5px, -2px) rotate(2.5deg); }
-  45% { transform: translate(-6px, 2px) rotate(-3deg); }
-  60% { transform: translate(6px, -3px) rotate(3deg); }
-  78% { transform: translate(-4px, 1px) rotate(-2deg); }
-  100% { transform: translate(0, -4px) rotate(0); }
-}
-
-@keyframes crateCharge {
-  0% { opacity: 0.3; transform: scaleY(0.9); }
-  100% { opacity: 1; transform: scaleY(2.6); }
-}
-
-/* The lid leaves, and a flash covers the swap to the reel. */
-.case-overlay.phase-bursting .crate-lid {
-  transform: translateY(-150px) rotate(-26deg);
-  opacity: 0;
-}
-
-.case-overlay.phase-bursting .crate-body {
-  animation: crateSink 0.38s ease-in both;
-}
-
-@keyframes crateSink {
-  to { transform: translateY(24px) scale(0.9); opacity: 0; }
-}
-
-.case-overlay.phase-bursting .case-stage::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  background: radial-gradient(circle at 50% 55%, #fff 0%, var(--rc) 30%, transparent 68%);
-  animation: caseFlash 0.38s ease-out both;
-  pointer-events: none;
-}
-
-@keyframes caseFlash {
-  0% { opacity: 0; transform: scale(0.3); }
-  35% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.5); }
-}
-
-/* ---- Beat 3: the strip ---- */
-
-/*
- * The strip fades out at both ends through a mask rather than two painted overlays: the
- * overlays were hard-coded to one shade of the well, so the moment the well took on the
- * prize's colour they showed up as two dark bars.
- */
-.reel-stage {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 204px;
-  transform: translateY(-50%) scaleY(0.72);
-  opacity: 0;
-  transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-  overflow: hidden;
-  pointer-events: none;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 17%, #000 83%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 17%, #000 83%, transparent 100%);
-}
-
-.case-overlay.phase-spinning .reel-stage,
-.case-overlay.phase-revealed .reel-stage {
-  opacity: 1;
-  transform: translateY(-50%) scaleY(1);
-}
-
-.case-overlay.phase-revealed .reel-stage {
-  /* Still there behind the reveal, dimmed — the prize rises out of the strip it landed on
-     rather than replacing it, which is what ties the two halves of the animation together. */
-  opacity: 0.25;
-  filter: saturate(0.5);
-}
-
-.reel-fade {
-  display: none;
-}
-
-/* Cell 136px + gap 12px = CELL (148) in caseReel.ts. The offset centres cell 0 on the marker. */
-.reel-track {
-  display: flex;
-  gap: 12px;
-  padding: 18px 0;
-  padding-left: calc(50% - 68px);
-  will-change: transform;
-}
-
-.reel-cell {
-  flex: 0 0 136px;
-  height: 168px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border-radius: 14px;
-  corner-shape: bevel;
-  /* The rarity reads as a wash up the card and a lit edge along its foot, not just a bar —
-     at speed a bar was a row of dashes and a legendary looked like a common going past. */
-  background:
-    linear-gradient(90deg, transparent 8%, var(--rc, #7d8aa0) 25%, var(--rc, #7d8aa0) 75%, transparent 92%) bottom center / 100% 3px no-repeat,
-    radial-gradient(ellipse 80% 60% at 50% 100%, color-mix(in srgb, var(--rc, #7d8aa0) 38%, transparent), transparent 75%),
-    linear-gradient(180deg, #2c2140 0%, #191226 100%);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.07);
-  transition: opacity 0.35s ease, filter 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.reel-art {
-  display: grid;
-  place-items: center;
-  height: 84px;
-}
-
-.reel-name {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
-  text-align: center;
-  line-height: 1.1;
-  padding: 0 0.4rem;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/*
- * The marker: one lit line down the centre, notched top and bottom.
- *
- * It was a 116px window drawn with two hairlines, which put two thin lines across every card
- * that passed and never lined up with the cards themselves while they moved. A single line says
- * exactly one thing: whatever it is on when it stops is yours.
- */
-.reel-marker {
-  position: absolute;
-  left: 50%;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  transform: translateX(-50%);
-  z-index: 3;
-  pointer-events: none;
-  border-radius: 3px;
-  /* Solid where it meets the notches, a faint thread where it crosses the card — a line drawn
-     at full strength straight through the prize's art and name was covering the very thing
-     it was pointing at. */
-  background: linear-gradient(
-    180deg,
-    var(--gold-light) 0%,
-    var(--gold) 12%,
-    rgba(255, 244, 214, 0.38) 22%,
-    rgba(255, 244, 214, 0.38) 78%,
-    var(--gold) 88%,
-    var(--gold-light) 100%
-  );
-  box-shadow: 0 0 12px rgba(255, 213, 105, 0.55);
-}
-
-.reel-marker i {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 11px solid transparent;
-  filter: drop-shadow(0 0 8px rgba(255, 197, 49, 0.9));
-}
-
-.reel-marker i:first-child {
-  top: -6px;
-  border-top-color: var(--gold-light);
-}
-
-.reel-marker i:last-child {
-  bottom: -6px;
-  border-bottom-color: var(--gold-light);
-}
-
-/* The tease: something better is sliding past right now. */
-.reel-stage.teasing .reel-marker {
-  background: #fff;
-  box-shadow: 0 0 0 1.5px rgba(18, 10, 26, 0.7), 0 0 22px #fff, 0 0 40px rgba(255, 255, 255, 0.6);
-}
-
-.reel-stage.teasing .reel-marker i:first-child { border-top-color: #fff; }
-.reel-stage.teasing .reel-marker i:last-child { border-bottom-color: #fff; }
-
-/* Landed: everything that did not win goes dark, and the one that did steps forward. */
-.reel-stage.landed .reel-cell:not(.is-winner) {
-  opacity: 0.32;
-  filter: saturate(0.4);
-}
-
-.reel-cell.is-winner {
-  transform: scale(1.08);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 0 0 4.5px var(--rc),
-    0 0 36px var(--rc);
-}
-
-/* ---- Beat 4: the reveal ---- */
-
-.case-reveal {
-  position: relative;
-  z-index: 6;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  text-align: center;
-  padding: 1.2rem 1rem 1.2rem;
-  /* Its own scrim. The reel stays visible behind — the prize rises out of the strip it landed
-     on — but a dimmed reel is still a row of bright cards, and prize text laid straight over it
-     was unreadable. */
-  background: radial-gradient(ellipse 70% 72% at 50% 46%, rgba(11, 7, 20, 0.94) 38%, rgba(11, 7, 20, 0.7) 100%);
-}
-
-/* In flow, so it sets the stage's height — and stretched to the full width so its scrim still
-   covers the reel it is laid over. */
-.case-overlay.phase-revealed .case-reveal {
-  display: flex;
-  width: 100%;
-  min-height: 380px;
-}
-
-.reveal-halo {
-  position: absolute;
-  left: 50%;
-  top: 36%;
-  width: 380px;
-  height: 380px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--rc) 45%, transparent) 0%, transparent 62%);
-  pointer-events: none;
-  animation: haloIn 0.5s ease-out both;
-}
-
-@keyframes haloIn {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-/* The prize rises out of the strip rather than being pasted over it. */
-.reveal-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  animation: revealRise 0.5s cubic-bezier(0.22, 1.2, 0.36, 1) both;
-}
-
-@keyframes revealRise {
-  from { opacity: 0; transform: translateY(40px) scale(0.8); }
-  to { opacity: 1; transform: none; }
-}
-
-/*
- * The frame grows to fit what is in it.
- *
- * It was a fixed 132px square that clipped whatever did not fit, and a banner preview is
- * nearly twice as wide as it is tall — so winning a banner showed you its left two-thirds,
- * shoved against the frame's edge. Width follows the art now, with a square as the minimum.
- */
-.reveal-frame {
-  display: grid;
-  place-items: center;
-  min-width: 172px;
-  height: 172px;
-  padding: 0 20px;
-  margin-bottom: 0.55rem;
-  border-radius: 24px;
-  corner-shape: bevel;
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 100%, color-mix(in srgb, var(--rc) 40%, transparent), transparent 75%),
-    linear-gradient(180deg, #241c33, #120c1c);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 0 0 5px var(--rc),
-    0 0 44px color-mix(in srgb, var(--rc) 60%, transparent),
-    inset 0 0 30px color-mix(in srgb, var(--rc) 22%, transparent);
-}
-
-.reveal-tier {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: var(--rc);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--rc) 70%, transparent);
-}
-
-.reveal-name {
-  margin: 0.05rem 0 0;
-  font-size: 1.8rem;
-  line-height: 1.1;
-  color: #fff6ff;
-  text-shadow: 0 3px 0 var(--ink), 0 0 20px color-mix(in srgb, var(--rc) 40%, transparent);
-}
-
-.reveal-slot {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.reveal-blurb {
-  margin: 0.35rem 0 0;
-  max-width: 38ch;
-  font-size: 0.85rem;
-  color: var(--paper-2);
-}
-
-.reveal-status {
-  margin-top: 0.55rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.reveal-status.new {
-  color: var(--accent);
-}
-
-.reveal-status.dupe {
-  color: var(--paper-2);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.reveal-chalk {
-  padding: 0.14rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  color: var(--ink);
-  background: linear-gradient(180deg, #bfe3ff, #6fb6ea);
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.reveal-actions {
-  display: flex;
-  gap: 0.6rem;
-  justify-content: center;
-  margin-top: 1rem;
-}
-
-.reveal-actions .secondary {
-  corner-shape: bevel;
-}
-
-/* ---- Foot ---- */
-
-.case-foot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.95rem;
-}
-
-/* One big obvious action. The old pair of equal buttons made "Close" look like half the point
-   of a dialog whose entire purpose is the other one. */
-.case-open {
-  position: relative;
-  overflow: hidden;
-  min-width: 240px;
-  padding: 0.8rem 1.8rem;
-  border-radius: 16px;
-  corner-shape: bevel;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.08rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light), var(--gold));
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 2px 0 rgba(255, 255, 255, 0.55),
-    0 6px 0 var(--gold-dark),
-    0 0 26px rgba(255, 197, 49, 0.35);
-}
-
-.case-open:not(:disabled)::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 0.6) 50%, transparent 60%);
-  transform: translateX(-100%);
-  animation: caseGlint 3.2s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.case-open:disabled {
-  color: var(--paper-2);
-  background: var(--panel-3);
-  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3);
-}
-
-.case-overlay.phase-spinning .case-foot,
-.case-overlay.phase-bursting .case-foot {
-  opacity: 0.25;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-/* The reveal carries its own "Open another", so the footer's button would be the same offer
-   made twice, six inches apart. The odds stay — they are reference, not an action. */
-.case-overlay.phase-revealed .case-foot .case-open {
-  display: none;
-}
-
-@keyframes caseGlint {
-  0%, 62% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-/* ---- The odds, as a bar ---- */
-
-.case-odds {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.odds-bar {
-  display: flex;
-  gap: 2px;
-  height: 8px;
-  padding: 2px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(8, 4, 14, 0.7);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-.odds-seg {
-  display: block;
-  border-radius: 999px;
-  background: var(--c);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--c) 60%, transparent);
-}
-
-.odds-keys {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem 0.9rem;
-  justify-content: center;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.odds-key {
+.si-action .btn-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 8px;
 }
-
-.odds-key::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--c);
-  box-shadow: 0 0 6px var(--c);
-}
-
-.odds-key b {
-  color: var(--paper);
-}
-
-/* ---- Confetti ---- */
-
-.case-burst {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9;
-  overflow: hidden;
-}
-
-.case-burst i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 9px;
-  height: 14px;
-  background: var(--c);
-  border-radius: 2px;
-  animation: confetti var(--d) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
-}
-
-/* ---- Reduce motion: the information, none of the theatre ---- */
-
-body.reduce-motion .crate-svg,
-body.reduce-motion .crate-glow,
-body.reduce-motion .case-rays,
-body.reduce-motion .reveal-halo,
-body.reduce-motion .reveal-card,
-body.reduce-motion .case-open::after {
-  animation: none;
-}
-
-body.reduce-motion .case-shell,
-body.reduce-motion .reel-stage,
-body.reduce-motion .reel-cell,
-body.reduce-motion .crate-lid {
-  transition: none;
-}
-
-@media (max-width: 560px) {
-  .case-shell {
-    padding: 0.75rem 0.7rem 0.8rem;
-  }
-
-  .case-stage {
-    min-height: 260px;
-  }
-
-  .reveal-frame {
-    min-width: 128px;
-    height: 128px;
-  }
-
-  .reveal-name {
-    font-size: 1.35rem;
-  }
-
-  .case-open {
-    min-width: 0;
-    width: 100%;
-  }
-}
-
-/* ================= Locker ================= */
-.locker-tabs {
+.si-locked {
   display: flex;
-  gap: 0.4rem;
-  margin: 0.8rem 0 0.6rem;
-}
-
-.slot-tab.complete .slot-count {
-  opacity: 1;
-  color: #6ee7a0;
-}
-
-/* ---- Filter bar ---- */
-.filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.7rem;
-}
-
-.filter-search {
-  flex: 1 1 180px;
-  min-width: 140px;
-  padding: 0.4rem 0.7rem;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: inherit;
-  font-size: 0.85rem;
-}
-
-.filter-select {
-  padding: 0.4rem 0.6rem;
-  border-radius: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: inherit;
-  font-size: 0.8rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
   font-weight: 700;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.05);
+  min-width: 200px;
 }
-
-.filter-count {
-  margin-left: auto;
-  font-size: 0.72rem;
-  opacity: 0.55;
-  font-variant-numeric: tabular-nums;
+.si-locked .progress {
+  width: 100%;
 }
-
-.empty-grid {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 2rem 0;
-}
-
-/* ---- Collection ---- */
-.collection-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.collection-head h2 { margin: 0; }
-
-.collection-head p { margin: 0.15rem 0 0; }
-
-.collection-ring {
-  flex: 0 0 auto;
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
+.locker-grid {
   display: grid;
-  place-items: center;
-  background: conic-gradient(#ffd569 calc(var(--p) * 1%), rgba(255, 255, 255, 0.1) 0);
-  box-shadow: 0 0 0 2px var(--ink);
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
-
-.collection-ring span {
-  display: grid;
-  place-items: center;
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: var(--bg-1, #1a1520);
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 1.1rem;
-}
-
-.shelf-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 1.4rem;
-}
-
-.shelf-row {
-  display: grid;
-  grid-template-columns: 7rem 1fr 3.2rem;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.82rem;
-}
-
-.shelf-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-
-.shelf-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #7d8aa0, #ffd569);
-}
-
-.shelf-row.complete .shelf-fill { background: #6ee7a0; }
-
-.shelf-count {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-}
-
-.set-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 0.7rem;
-}
-
-.set-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.8rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
-}
-
-.set-card.complete {
-  box-shadow: inset 0 0 0 2px #ffd569;
-}
-
-.set-card.claimed {
-  opacity: 0.55;
-}
-
-.set-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.set-count {
-  font-size: 0.75rem;
-  opacity: 0.65;
-  font-variant-numeric: tabular-nums;
-}
-
-.set-blurb {
-  margin: 0;
-  font-size: 0.74rem;
-  opacity: 0.65;
-}
-
-.set-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.set-piece {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.28);
-  /* Banner previews are wide rather than square, and spilled over the tile beside them. */
-  overflow: hidden;
-  /* Pieces you don't own are dimmed rather than hidden — the gap is the point. */
-  opacity: 0.3;
-  filter: grayscale(1);
-}
-
-.set-piece > *,
-.preset-piece > * {
-  max-width: 100%;
-  max-height: 100%;
-}
-
-.set-piece.have {
-  opacity: 1;
-  filter: none;
-  box-shadow: inset 0 0 0 2px rgba(255, 213, 105, 0.5);
-}
-
-.set-reward {
-  font-size: 0.72rem;
-  opacity: 0.8;
-}
-
-.set-missing {
-  font-size: 0.72rem;
-}
-
-/* ---- Kits ---- */
-.kit-save {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
-  flex-wrap: wrap;
-}
-
-.kit-save input {
-  flex: 1 1 200px;
-  padding: 0.45rem 0.8rem;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: inherit;
-}
-
-.preset-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.7rem;
-  margin-bottom: 1.4rem;
-}
-
-.preset-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.7rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
-}
-
-.preset-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.preset-pieces {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.preset-piece {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-}
-
-.preset-pieces.wearing .preset-piece {
-  width: 46px;
-  height: 46px;
-}
-
-/* ================= Online lobby ================= */
-.online-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 1rem;
-}
-
-.quick-play {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin: 1rem 0 1.6rem;
-}
-
-.table-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin: 0.6rem 0 1.6rem;
-}
-
-.table-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 3rem 1fr auto;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.8rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 0.85rem;
-}
-
-/* A game already running is joinable only as a spectator, and should read that way. */
-.table-row.in-play {
-  opacity: 0.7;
-}
-
-.empty-tables {
-  padding: 1.4rem 0;
-  text-align: center;
-}
-
-/* ---- Ranked ---- */
-.rank-badge {
-  margin-left: auto;
-  padding: 0.25rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  font-size: 0.75rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-/* A ranked search in progress — a slow pulse, so it reads as working rather than stuck. */
-.play-btn.searching {
-  animation: searchPulse 1.6s ease-in-out infinite;
-}
-
-.event-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.6rem 0.8rem;
-  margin-top: 0.35rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-/* Doors open — the one you can act on right now. */
-.event-row.open {
-  background: linear-gradient(180deg, #ffe9a8 0%, #ffd569 100%);
-  color: #14141a;
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.event-main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.event-main small {
-  font-size: 0.72rem;
-  opacity: 0.7;
-}
-
-.event-when {
-  font-size: 0.75rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.event-soon,
-.event-note {
-  font-size: 0.72rem;
-}
-
-.event-note {
-  margin-top: 0.4rem;
-}
-
-/* ---- Online lobby corrections ----
-   The global `input` rule sets width:100% and a big padding, which turned these checkboxes into
-   what looked like sliders. And .play-btn is sized for the home screen's two hero buttons,
-   which is far too tall for a page that also has a list, a form and a ladder on it. */
-/* `.play-btn` carries `flex: 1 1 240px` for the home screen's side-by-side hero row. This
-   column stacks them, and in a column flex-basis is the *height* — which is why these were
-   240px tall boxes with a line of text at the bottom. */
-.online-page .quick-play .play-btn {
-  flex: 0 0 auto;
-  padding: 0.85rem 1.2rem;
-}
-
-/* Bigger, and painted like an actual ball rather than a plain white pip — it is a picture of
-   the cue ball, and at 20px flat it read as a bullet point. */
-.preset-ball {
-  position: relative;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 68% 72%, rgba(20, 10, 30, 0.32) 0%, transparent 62%),
-    radial-gradient(circle at 32% 26%, #fff 0 20%, #f6f2e6 48%, #d5cebd 100%);
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.preset-ball i {
-  position: absolute;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  margin: -4px 0 0 -4px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #7fe6ff, var(--accent-2) 70%);
-  box-shadow: 0 0 0 1.5px var(--ink);
-  transition: top 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.4);
-}
-
-.preset-name {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.74rem;
-  line-height: 1.05;
-}
-
-.preset-after {
-  font-size: 0.56rem;
-  font-weight: 700;
-  line-height: 1.05;
-  opacity: 0.6;
-  white-space: nowrap;
-}
-
-/* --- Kept for the online lobby and the locker ---
-   .play-btn and .section-head were defined with the home carousel that the cabinet
-   replaced, but onlinePage and profilePage still use both. Left here rather than in the
-   deleted block so it is obvious they belong to those pages now, not to the home screen. */
-
-.play-btn {
+.item-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.1rem;
-  padding: 0.75rem 1.15rem 0.85rem;
-  border-radius: var(--radius);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
-    0 0 0 2px var(--ink),
-    0 6px 0 var(--gold-dark),
-    0 13px 22px rgba(0, 0, 0, 0.42);
-}
-
-.play-btn:active:not(:disabled) {
-  transform: translateY(5px);
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--gold-dark), 0 4px 8px rgba(0, 0, 0, 0.35);
-}
-
-.play-btn.secondary-play {
-  background: linear-gradient(180deg, #4d2f63 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
-    0 0 0 2px var(--ink),
-    0 6px 0 var(--panel-3),
-    0 13px 22px rgba(0, 0, 0, 0.42);
-}
-
-.play-btn.secondary-play:active:not(:disabled) {
-  transform: translateY(5px);
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3), 0 4px 8px rgba(0, 0, 0, 0.35);
-}
-
-/* ==========================================================================
-   Getting back to your game.
-
-   The game already stored everything needed to walk back into a frame and nothing ever looked
-   for it, so leaving a table meant remembering four characters. This is the sign that a frame
-   is still going — a strip along the top of every menu screen rather than a toast, because it
-   is a state you are in until you do something about it, not something that just happened.
-   ========================================================================== */
-
-.resume-strip {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.5rem 0.9rem;
-  margin-bottom: 0.9rem;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-family: inherit;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--r-md);
   text-align: left;
-  color: var(--paper);
-  background: linear-gradient(180deg, rgba(78, 47, 102, 0.95), rgba(32, 18, 47, 0.95));
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.18),
-    inset 0 0 0 1.5px rgba(255, 197, 49, 0.4),
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--panel-3),
-    0 10px 18px rgba(0, 0, 0, 0.45);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(28, 40, 58, 0.8), rgba(14, 21, 32, 0.85));
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition:
+    transform 0.15s var(--ease-out),
+    box-shadow 0.2s;
 }
-
-.resume-strip:hover {
+.item-card:hover {
   transform: translateY(-2px);
+}
+.item-card.is-on {
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 236, 255, 0.22),
-    inset 0 0 0 1.5px var(--gold),
-    0 0 0 2px var(--ink),
-    0 8px 0 var(--panel-3),
-    0 14px 22px rgba(0, 0, 0, 0.5),
-    0 0 24px rgba(255, 197, 49, 0.28);
+    inset 0 0 0 2px var(--gold),
+    0 8px 22px rgba(255, 170, 40, 0.15);
 }
-
-.resume-strip:active {
-  transform: translateY(3px);
-  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 var(--panel-3);
+.rarity-border-rare {
+  border-top: 3px solid var(--rarity-rare);
 }
-
-/* A live indicator, because "still" is the whole point of the message. */
-.resume-dot {
-  flex: 0 0 auto;
-  width: 9px;
+.rarity-border-epic {
+  border-top: 3px solid var(--rarity-epic);
+}
+.rarity-border-legendary {
+  border-top: 3px solid var(--rarity-legendary);
+}
+.rarity-border-standard {
+  border-top: 3px solid var(--rarity-standard);
+}
+.ic-name {
+  font-weight: 800;
+  font-size: 15px;
+}
+.ic-foot {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.ic-eq {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mint);
+}
+.ic-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+}
+.swatch-table {
+  display: block;
+  width: 100%;
+  height: 58px;
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--rail);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 0 18px var(--neon);
+}
+.swatch-table span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--cloth) 80%, white), var(--cloth) 60%, color-mix(in srgb, var(--cloth) 70%, black));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--trim) 70%, transparent);
+}
+.swatch-balls {
+  display: flex;
+  gap: 5px;
+  height: 58px;
+  align-items: center;
+}
+.swatch-balls span {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow:
+    inset -4px -5px 8px rgba(0, 0, 0, 0.35),
+    inset 3px 3px 6px rgba(255, 255, 255, 0.35);
+}
+.swatch-cue {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 58px;
+}
+.swatch-cue span {
+  display: block;
+  width: 100%;
   height: 9px;
-  border-radius: 50%;
-  background: var(--felt);
-  box-shadow: 0 0 0 2px var(--ink), 0 0 10px var(--felt);
-  animation: resumePulse 1.8s ease-in-out 5;
-}
-
-@keyframes resumePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-.resume-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.resume-text b {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--gold);
-}
-
-.resume-go {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.72rem;
-  color: var(--gold);
-}
-
-/* The arrow points the way you are going, not the way back. */
-.resume-go .icon {
-  transform: scaleX(-1);
-  transition: transform 0.16s ease;
-}
-
-.resume-strip:hover .resume-go .icon {
-  transform: scaleX(-1) translateX(-3px);
-}
-
-/* A drawn scrollbar for the mode list, so the fact that it scrolls is visible — a hidden one
-   here would just look like the list had been cut off again. */
-.mode-grid::-webkit-scrollbar {
-  width: 10px;
-}
-
-.mode-grid::-webkit-scrollbar-track {
-  background: var(--panel-3);
-  border-radius: 999px;
-}
-
-.mode-grid::-webkit-scrollbar-thumb {
-  background: var(--wood);
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1.5px var(--ink);
-}
-
-.mode-grid::-webkit-scrollbar-thumb:hover {
-  background: var(--gold);
-}
-
-.mode-card {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  border-radius: 14px;
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 4px 0 var(--paper-3);
-  /* Explicit column flow — as a plain block the art span collapsed to a sliver and the
-     name ended up sitting inline beside the description. */
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.15rem;
-}
-
-/* One of a tight row of choices, where the selected one is marked by its fill. A card that
-   rose under the pointer would read as the chosen one. */
-.mode-card:hover,
-.mode-card:active {
-  transform: none;
-}
-
-.mode-art svg,
-.mode-card-art svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.mode-card-art {
-  width: 100%;
-}
-
-.mode-card.active {
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 0 0 5px var(--gold),
-    0 4px 0 var(--gold-dark);
-}
-
-.mode-card .mode-desc {
-  color: var(--muted);
-}
-
-/* --- Home screen on the cream theme --- */
-
-.home-title h1 {
-  color: var(--paper);
-  text-shadow:
-    0 0 0 var(--ink),
-    0 3px 0 rgba(0, 0, 0, 0.5);
-  -webkit-text-stroke: 3px var(--ink);
-  paint-order: stroke fill;
-}
-
-.home-title .tagline {
-  color: rgba(253, 243, 221, 0.8);
-}
-
-.mode-tile,
-.tile-btn {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3),
-    0 12px 26px rgba(0, 0, 0, 0.4);
-}
-
-.mode-tile.active {
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 0 0 5px var(--gold),
-    0 5px 0 var(--gold-dark),
-    0 12px 26px rgba(0, 0, 0, 0.4);
-}
-
-.mode-blurb,
-.mode-rules,
-.tile-sub {
-  color: var(--muted);
-}
-
-.mode-meta {
-  color: var(--accent);
-}
-
-.mode-art,
-.mode-card-art {
-  box-shadow: inset 0 0 0 2px rgba(26, 20, 16, 0.5);
-}
-
-.play-btn.secondary-play {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3),
-    0 12px 26px rgba(0, 0, 0, 0.4);
-}
-
-.join-box input {
-  background: linear-gradient(180deg, #0d0714, #060309);
-  color: var(--accent-2);
-  text-shadow: 0 0 12px rgba(34, 211, 238, 0.7);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 3px 8px rgba(0, 0, 0, 0.85);
-}
-
-/* --- Locker --- */
-
-.profile-top h1 {
-  color: var(--paper);
-  -webkit-text-stroke: 3px var(--ink);
-  paint-order: stroke fill;
-}
-
-
-.stat-row {
-  color: var(--paper);
-}
-
-.stat-row b {
-  color: var(--gold);
-}
-
-/* --- Wheel --- */
-
-.wheel-card h2 {
-  color: var(--wood-deep);
-}
-
-.wheel-sub {
-  color: var(--muted);
-}
-
-.wheel-pointer {
-  border-top-color: var(--gold);
-  filter: drop-shadow(0 0 2px var(--ink));
-}
-
-/* --- Trick shots --- */
-
-.challenges-page .challenges-intro {
-  color: rgba(253, 243, 221, 0.8);
-  margin: 0;
-  max-width: 60ch;
-}
-
-.challenge-set h2 {
-  font-size: 1.05rem;
-  color: var(--paper);
-  margin: 0 0 0.6rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-}
-
-.set-lock {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-/* Same reasoning as the career ladder: the heading dims, the cards say it themselves. */
-.challenge-set.locked > h2 {
-  opacity: 0.75;
-}
-
-.challenge-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 0.7rem;
-  margin-bottom: 1.2rem;
-}
-
-.challenge-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.35rem;
-  padding: 0.8rem 0.9rem;
-  text-align: left;
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3);
-}
-
-.challenge-card.cleared {
-  box-shadow:
-    0 0 0 2px var(--ink),
-    inset 0 0 0 3px var(--felt),
-    0 5px 0 var(--paper-3);
-}
-
-.challenge-card.locked {
-  cursor: not-allowed;
-  /* Same as the career cards: drained rather than faded, and not stacking with `:disabled`. */
-  opacity: 1;
-  filter: brightness(0.82) saturate(0.35);
-}
-
-.challenge-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.challenge-name {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 800;
-  font-size: 1rem;
-}
-
-.challenge-brief {
-  font-size: 0.8rem;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.challenge-meta {
-  display: flex;
-  gap: 0.8rem;
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: var(--wood-dark);
-}
-
-.challenge-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.challenge-lock {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  color: var(--muted);
-}
-
-/* --- Objective HUD, over the table --- */
-
-.challenge-hud {
-  position: fixed;
-  left: 50%;
-  top: 92px;
-  transform: translateX(-50%);
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.6rem 1.1rem;
-  border-radius: 16px;
-  text-align: center;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    0 0 0 2px var(--ink),
-    0 5px 0 var(--paper-3),
-    0 12px 24px rgba(0, 0, 0, 0.45);
-  max-width: min(520px, 92vw);
-}
-
-.challenge-hud .challenge-name {
-  font-size: 1.05rem;
-}
-
-.challenge-objective {
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.challenge-shots {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.76rem;
-  font-weight: 800;
-  color: var(--felt-dark);
-}
-
-.challenge-shots.critical {
-  color: var(--danger);
-}
-
-.challenge-star-hint {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.challenge-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: var(--muted);
-  max-width: 46ch;
-}
-
-/* --- Result --- */
-
-.challenge-result {
-  padding: 1.6rem 1.8rem;
-  border-radius: var(--radius);
-  text-align: center;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow:
-    inset 0 0 0 var(--frame) var(--wood),
-    inset 0 0 0 calc(var(--frame) + 2px) var(--wood-dark),
-    0 0 0 2px var(--ink),
-    0 20px 50px rgba(0, 0, 0, 0.55);
-}
-
-.challenge-result h2 {
-  margin: 0 0 0.6rem;
-  color: var(--wood-deep);
-}
-
-.challenge-result p {
-  color: var(--muted);
-  margin: 0.4rem 0 1rem;
-}
-
-@keyframes starPop {
-  from {
-    transform: scale(0.2) rotate(-40deg);
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-
-/* --- Career ladder ---
-   Chapters stack down the page, opponents run across. Locked chapters stay visible but dimmed,
-   because seeing what's ahead is most of why a ladder works. */
-
-.career-page {
-  min-height: 100%;
-  padding: 1.2rem clamp(1rem, 4vw, 3rem) 3rem;
-  overflow-y: auto;
-}
-
-.career-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.2rem;
-}
-
-.career-head h1 {
-  margin: 0;
-  font-size: 2rem;
-}
-
-.career-head .tagline {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.career-progress {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  gap: 0.2rem;
-  padding: 0.5rem 0.9rem;
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
-}
-
-.career-progress b {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.6rem;
-}
-
-.career-progress span {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.career-chapter {
-  margin-bottom: 1.5rem;
-}
-
-/* The chapter heading dims; the cards inside say it for themselves. Dimming the whole section
-   stacked with the cards' own disabled state and with `button:disabled`. */
-.career-chapter.locked .chapter-head {
-  opacity: 0.75;
-}
-
-.chapter-head h2 {
-  margin: 0;
-  font-size: 1.2rem;
-  color: var(--paper);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.career-chapter.cleared .chapter-head h2 {
-  color: var(--gold);
-}
-
-.chapter-head p {
-  margin: 0 0 0.6rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.opponent-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 0.7rem;
-}
-
-.opponent-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  text-align: left;
-  padding: 0.8rem 0.9rem;
-  border-radius: 16px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3), 0 12px 22px rgba(0, 0, 0, 0.35);
-}
-
-/*
- * A locked opponent, still readable.
- *
- * Three separate dimmings were stacking on the same card: `button:disabled` at 0.45 opacity
- * from the base sheet, the chapter's own locked opacity, and this filter. They multiply, so
- * the name and rules of everyone you have not reached yet came out at about a third strength —
- * and the whole point of showing a locked opponent is that you can see who is coming.
- *
- * The card says unavailable through *colour* now — drained and darkened — rather than by being
- * faded towards the background, and the base `:disabled` opacity is cancelled here.
- */
-.opponent-card:disabled {
-  cursor: not-allowed;
-  opacity: 1;
-  filter: brightness(0.82) saturate(0.35);
-}
-
-.opponent-card.beaten {
-  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--wood-dark), 0 12px 22px rgba(0, 0, 0, 0.35);
-  background: linear-gradient(180deg, #ffeec0 0%, var(--panel-2) 100%);
-}
-
-.opponent-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.opponent-name {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 1.05rem;
-}
-
-.opponent-done {
-  color: var(--wood-deep);
-}
-
-.opponent-taunt {
-  margin: 0;
-  font-size: 0.76rem;
-  font-style: italic;
-  color: var(--muted);
-  min-height: 2.4em;
-}
-
-.opponent-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.opponent-meta span {
-  padding: 0.15rem 0.4rem;
   border-radius: 6px;
-  background: var(--panel-3);
+  transform: rotate(-12deg);
 }
-
-.opponent-meta .rules-chip {
-  background: var(--wood);
-  color: var(--paper);
+.swatch-fx {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 58px;
+  color: var(--text-3);
 }
-
-.opponent-reward {
+.fx-streak {
+  display: block;
+  width: 85%;
+  height: 10px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, transparent, var(--c2), var(--c1));
+  box-shadow: 0 0 16px var(--c1);
+}
+.fx-party {
+  background: linear-gradient(90deg, #ff4f9a, #ffc444, #2fe3a3, #5bb6ff, #b28cff);
+}
+.fx-void {
+  background: linear-gradient(90deg, transparent, #1a0633, var(--c1));
+}
+.fx-bolt {
+  height: 4px;
+}
+.profile-editor {
+  padding: 20px;
+  max-width: 720px;
+}
+.pe-top {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.2rem;
-  padding-top: 0.5rem;
-  border-top: 2px dashed rgba(26, 20, 16, 0.14);
+  gap: 20px;
+  margin-bottom: 20px;
 }
-
-/* --- Progress page ---
-   Achievements, weekly missions and the season track. All three were awarding before this
-   screen existed, which meant rewards arrived with no explanation attached. */
-
-.progress-page {
-  min-height: 100%;
-  padding: 1.2rem clamp(1rem, 4vw, 3rem) 3rem;
-  overflow-y: auto;
-}
-
-.progress-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.progress-head h1 {
-  margin: 0;
-  font-size: 2rem;
-}
-
-.progress-rating {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  padding: 0.45rem 0.9rem;
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
-}
-
-.progress-rating b {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.4rem;
-}
-
-.progress-rating span {
-  font-size: 0.66rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* --- Missions --- */
-
-.mission-list {
+.pe-name {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 6px;
 }
-
-.mission-card {
-  display: grid;
-  /* An icon column, so a mission is identifiable before it is read. */
-  grid-template-columns: auto 1fr minmax(140px, 220px) auto;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.7rem 0.9rem;
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  color: var(--paper);
-  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--paper-3);
-}
-
-.mission-card.ready {
-  box-shadow: 0 0 0 2px var(--ink), 0 4px 0 var(--wood-dark), 0 0 22px rgba(255, 203, 82, 0.4);
-}
-
-.mission-card.claimed {
-  filter: brightness(0.92) saturate(0.6);
-}
-
-.mission-icon {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  color: var(--gold);
-  background: var(--panel-3);
-  box-shadow: inset 0 0 0 2px var(--ink);
-}
-
-.mission-card.ready .mission-icon {
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-light), var(--gold));
-}
-
-.mission-text b {
-  display: block;
-  font-size: 0.95rem;
-}
-
-/* A mission that is ready shouldn't be shy about it. */
-.mission-card.ready .claimable {
-  animation: missionPulse 1.4s ease-in-out 5;
-}
-
-@keyframes missionPulse {
-  0%, 100% { transform: none; }
-  50% { transform: scale(1.05); }
-}
-
-body.reduce-motion .mission-card.ready .claimable {
-  animation: none;
-}
-
-@media (max-width: 640px) {
-  .mission-card {
-    grid-template-columns: auto 1fr;
-    row-gap: 0.5rem;
-  }
-
-  .mission-bar,
-  .mission-card > button {
-    grid-column: 1 / -1;
-  }
-}
-
-.mission-bar {
-  position: relative;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--panel-3);
-  box-shadow: inset 0 0 0 2px var(--ink);
-  overflow: hidden;
-}
-
-.mission-bar div {
-  height: 100%;
-  background: linear-gradient(90deg, var(--felt), var(--gold));
-}
-
-.mission-bar span {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-@media (max-width: 640px) {
-  .mission-card {
+@media (max-width: 860px) {
+  .locker-layout {
     grid-template-columns: 1fr;
-    gap: 0.4rem;
+  }
+  .locker-stage {
+    position: relative;
+  }
+  .stage-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .si-action {
+    align-items: stretch;
+    max-width: none;
+    text-align: left;
+  }
+  .si-locked {
+    align-items: stretch;
   }
 }
 
-.tier-num {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-}
+/* ================================================================ table menu */
 
-.tier-art {
-  height: 48px;
-  display: grid;
-  place-items: center;
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-
-.tier-label {
-  font-size: 0.76rem;
-  font-weight: 800;
+.menu-keys {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-3);
   text-align: center;
 }
-
-.tier-xp {
-  font-size: 0.64rem;
-  color: var(--muted);
-}
-
-/* ==========================================================================
-   PHASE 2 — The shared chrome.
-
-   The home screen got a button vocabulary and nothing else did: `btn-play`, `btn-hot`,
-   `btn-quiet` and the token discs appeared in exactly one file, while the other ninety-odd
-   buttons across ten files were the base gold sticker or `.secondary`. And four pages each
-   hand-rolled the same header with a different class name.
-
-   This is the part they share. Everything below is deliberately generic — a page header, a
-   press, a lift — so a screen can be converted by changing which class it asks for rather
-   than by being redesigned.
-   ========================================================================== */
-
-/* --- The page header ---
-   `.page-head` was the stats page's alone; `.career-head`, `.progress-head` and
-   `.profile-top` were the same thing under three other names. They are one look now. */
-.page-head,
-.career-head,
-.progress-head,
-.profile-top,
-.challenges-page .profile-top {
+.rules-view ul {
+  margin: 12px 0;
+  padding-left: 20px;
   display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1.1rem;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-2);
 }
-
-.page-head h1,
-.career-head h1,
-.progress-head h1,
-.profile-top h1 {
-  margin: 0;
-  font-size: clamp(1.4rem, 3.4vw, 2rem);
-  line-height: 1.1;
+.rules-blurb {
+  font-size: 17px;
+  font-weight: 700;
 }
-
-.page-title {
-  min-width: 0;
+.rules-set {
+  margin-bottom: 14px;
+  color: var(--text-2);
 }
-
-.page-title .tagline,
-.career-head .tagline {
-  margin: 0.1rem 0 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-/* Anything the page wants at the far end — a wallet, a rating, a count. */
-.page-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* --- Pages arrive rather than appearing ---
-   The same rise the shot deck uses, so moving between screens feels like one product.
-
-   This was a list of six page-root classes and had already fallen behind the game: the home
-   screen, the phone's join screen and the phone's controls were not in it, so three of the
-   screens people see most simply blinked into existence while the rest rose.
-
-   Inverted, like the backdrop above it. Every screen arrives; the two that hold a live table
-   do not, because sliding a rendering canvas is both pointless and visibly janky. */
-#app > * {
-  animation: pageIn 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.1);
-}
-
-/* The two screens holding a live table do not slide: moving a rendering canvas is pointless
-   and visibly janky.
-
-   Written as an override rather than folded into the rule above as `:not(:has(…)):not(:has(…))`
-   because specificity has to stack in a workable order. That form weighs (1,2,0), which
-   outranks `body.reduce-motion #app > *` at (1,1,1) — so reduce-motion silently lost, and the
-   entrance played for people who had asked for no animation. This way the base is (1,0,0),
-   this override (1,1,0), and reduce-motion (1,1,1) sits above both. */
-#app:has(> .table-canvas) > *,
-#app:has(> .controller-root) > * {
-  animation: none;
-}
-
-
-/* ==========================================================================
-   The hub on a short window.
-
-   Measured rather than guessed: at 1440x805 the hub came to 916px, so the shelf — six nav
-   tokens and the day's objective — was clipped off the bottom with no scrollbar reachable
-   above it. That is 111px to find, and the honest place to find it is *only on the screens
-   that need it*: a 1440x1200 monitor has the room, and squeezing it there to fix a laptop
-   would be trading one problem for a worse one.
-
-   So the generous spacing is the base, and this is the same page with its margins pulled in.
-   Nothing is hidden and nothing is dropped — every element that was on the page is still on
-   it, which is the difference between fitting a layout and truncating one.
-   ========================================================================== */
-
-@media (max-height: 920px) {
-  .home-content {
-    gap: 0.85rem;
-    padding: 0.9rem 1.2rem 1rem;
-  }
-
-  .home-logo {
-    font-size: 2rem;
-  }
-
-  .home-logo svg {
-    width: 44px;
-    height: 44px;
-  }
-
-  .home-title h1 {
-    font-size: clamp(1.5rem, 3.4vw, 2rem);
-  }
-
-  .home-title .tagline {
-    font-size: 0.78rem;
-  }
-
-  .mode-tile {
-    padding: 0.6rem 0.6rem 0.55rem;
-  }
-
-  .mode-art {
-    height: 74px;
-  }
-
-  .mode-blurb {
-    min-height: 2.4em;
-    line-height: 1.28;
-  }
-
-  .mode-rules {
-    min-height: 4.6em;
-    gap: 0.1rem;
-    line-height: 1.24;
-    padding-top: 0.3rem;
-  }
-
-  .home-shelf {
-    padding: 0.6rem 0.9rem;
-  }
-
-  .token-disc {
-    width: 44px;
-    height: 44px;
-  }
-}
-
-/* The resume strip is an *occasional* row — it only exists while you have a table to go back
-   to — and it is tall enough to put the page back over the edge on its own. Tightening the
-   whole layout to reserve room for something usually absent would make the common case worse
-   to fix the rarer one, so the extra squeeze is scoped to the pages that actually have it. */
-@media (max-height: 920px) {
-  .home-content:has(#homeResume .resume-strip) {
-    gap: 0.7rem;
-  }
-
-  .home-content:has(#homeResume .resume-strip) .mode-art {
-    height: 62px;
-  }
-
-  .home-content:has(#homeResume .resume-strip) .mode-tile {
-    gap: 0.25rem;
-  }
-
-  .home-content:has(#homeResume .resume-strip) .mode-blurb {
-    min-height: 2.1em;
-  }
-
-  .home-content:has(#homeResume .resume-strip) .mode-rules {
-    min-height: 3.4em;
-    /* Capped as well as floored: a four-bullet mode is what pushed the page over, and the
-       cards must stay the same height as each other whichever mode is longest. */
-    max-height: 5.2em;
-    overflow: hidden;
-  }
-
-  /* Decoration goes before content does. The rule is a nice line under the sign; the rules
-     list on a mode card is what the card is for, and this tier is already clipping it. */
-  .home-content:has(#homeResume .resume-strip) .marquee-rule {
-    display: none;
-  }
-
-  .home-content:has(#homeResume .resume-strip) .token-disc {
-    width: 38px;
-    height: 38px;
-  }
-
-  .home-content:has(#homeResume .resume-strip) .home-shelf {
-    padding: 0.45rem 0.9rem;
-  }
-}
-
-/* Shorter still — a small laptop, or a browser with a lot of chrome. The rules list is the
-   first thing to go here: it is reference material you read once per mode, where the art and
-   the name are what you navigate by every time. */
-@media (max-height: 760px) {
-  .mode-rules,
-  .marquee-rule {
-    display: none;
-  }
-
-  .mode-art {
-    height: 66px;
-  }
-
-  .home-content {
-    gap: 0.7rem;
-  }
-}
-
-/* ==========================================================================
-   The hub, lit.
-
-   Everything below is one idea: the menu is the front of a cabinet, and a cabinet is a thing
-   with a sign on it, light coming off it, and depth behind the glass. What was here was a
-   correct layout painted flat — a white heading, a still backdrop, and ten cards where the
-   chosen one was marked by a ring and nothing else.
-
-   One custom property carries it. `--page-accent` is set from the selected mode and drives
-   the marquee, the rule under it, the glow over the table, the section heading and the page
-   dots, so choosing a game changes the colour of the room rather than moving a ring.
-   ========================================================================== */
-
-/*
- * Registered, so it interpolates. An unregistered custom property inside a gradient snaps
- * from one colour to the next; a registered `<color>` transitions, which is the difference
- * between the room changing and the room flickering.
- */
-@property --page-accent {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: #ffc531;
-}
-
-.home {
-  --page-accent: var(--gold);
-  transition: --page-accent 0.5s ease;
-}
-
-/* --- The marquee ---------------------------------------------------------- */
-
-.home-logo {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  isolation: isolate;
-}
-
-/* The sign's own light, spilling off the ball. */
-.home-logo::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: -22%;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--page-accent) 50%, transparent) 0%,
-    transparent 68%
-  );
-  animation: logoHalo 1.4s ease-out 0.2s both;
-}
-
-.home-wordmark h1 {
-  margin: 0;
-  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
-  letter-spacing: -0.01em;
-  color: #fff6ff;
-  text-shadow:
-    0 0 5px rgba(255, 255, 255, 0.75),
-    0 0 16px color-mix(in srgb, var(--page-accent) 85%, transparent),
-    0 0 40px color-mix(in srgb, var(--page-accent) 55%, transparent),
-    0 4px 0 var(--ink);
-  animation: neonHum 1.2s linear 0.25s both;
-}
-
-/* The 8 keeps its own colour whatever the room is doing — it is the mark, not the lighting. */
-.home-wordmark h1 i {
-  font-style: normal;
-  color: var(--gold-light);
-  text-shadow:
-    0 0 6px rgba(255, 255, 255, 0.8),
-    0 0 20px rgba(255, 197, 49, 0.9),
-    0 4px 0 var(--ink);
-}
-
-.home-wordmark .tagline {
-  margin: 0;
-  font-size: 0.86rem;
-}
-
-/* The tube under the sign. Brightest in the middle, gone at both ends, so it reads as a lit
-   strip rather than as a border round the header. */
-.marquee-rule {
-  /* `flex: none` is load-bearing. `.home-content` is a column flex container whose content
-     overflows, so a 2px item with the default `flex-shrink: 1` is shrunk to nothing — the
-     rule was in the DOM, styled, and exactly zero pixels tall. */
-  flex: none;
-  height: 2px;
-  margin: -0.5rem 0 -0.3rem;
-  border-radius: 2px;
-  opacity: 0.8;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--page-accent) 55%, transparent) 22%,
-    var(--page-accent) 50%,
-    color-mix(in srgb, var(--page-accent) 55%, transparent) 78%,
-    transparent 100%
-  );
-  box-shadow: 0 0 18px color-mix(in srgb, var(--page-accent) 55%, transparent);
-}
-
-/* The ball's light comes up with the sign, and then holds. */
-@keyframes logoHalo {
-  from { opacity: 0; transform: scale(0.7); }
-  to { opacity: 0.85; transform: scale(1); }
-}
-
-/*
- * The sign strikes: a stutter as the tube catches, and then it holds steady.
- *
- * It used to hum on a seven-second loop for as long as the menu was open, stuttering for about
- * a twentieth of each cycle. The stutter was the part anyone saw, and it was paid for with a
- * never-ending animation — which keeps the compositor redrawing the whole screen at the full
- * refresh rate even through the 95% of the loop where nothing changes. Played once on arrival,
- * it is the same moment and costs nothing afterwards.
- */
-@keyframes neonHum {
-  0% { opacity: 0.15; }
-  8% { opacity: 1; }
-  14% { opacity: 0.35; }
-  22% { opacity: 1; }
-  30% { opacity: 0.6; }
-  36%, 100% { opacity: 1; }
-}
-
-/* --- The room ------------------------------------------------------------- */
-
-/* The glow over the table takes the accent, so the light above the cloth is the colour of the
-   game you are about to play. */
-.home-scrim {
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 0%, color-mix(in srgb, var(--page-accent) 20%, transparent), transparent 62%),
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(20, 10, 32, 0.6), transparent 70%),
-    linear-gradient(180deg, rgba(20, 10, 32, 0.9) 0%, rgba(24, 12, 38, 0.82) 45%, rgba(12, 6, 20, 0.96) 100%);
-}
-
-/*
- * Depth. The table behind the menu leans with the pointer — a couple of dozen pixels, which
- * is enough to separate it from the buttons in front of it and not enough to be noticed as
- * an effect. The extra scale covers the corners the lean would otherwise pull into view.
- *
- * `--px` / `--py` come from one rAF in homePage.ts; the transition is what smooths a value
- * written once a frame into something that reads as weight rather than as tracking.
- */
-.home-backdrop {
-  transform: translate3d(calc(var(--px, 0) * 30px), calc(var(--py, 0) * 20px), 0) scale(1.05);
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-
-/* --- The rail ------------------------------------------------------------- */
-
-/*
- * No `transition` here on purpose. `--page-accent` is a registered property and is already
- * transitioning on `.home`, so everything that reads it interpolates for free. Transitioning
- * `color` on top of that sets a second animation chasing a value that is itself moving, and
- * it never catches up — the heading was still the old mode's colour a full second after the
- * room had finished changing.
- */
-.mode-section .section-head h2 {
-  color: var(--page-accent);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--page-accent) 45%, transparent);
-}
-
-/*
- * A light that travels across the card you are pointing at.
- *
- * Both pseudo-elements on `.mode-tile` are spoken for — the accent bar across the top and the
- * SELECTED ribbon — so this is a real element. It is painted under the card's content and
- * over its background, which is what makes it read as light on the surface rather than as a
- * coloured shape drawn on it.
- */
-.tile-glint {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.28s ease;
-  background: radial-gradient(
-    260px circle at var(--mx, 50%) var(--my, 0px),
-    color-mix(in srgb, var(--mode-accent, #fff) 34%, transparent) 0%,
-    transparent 62%
-  );
-}
-
-.mode-tile.lit .tile-glint {
-  opacity: 1;
-}
-
-/* Everything the card actually says stands above the light. */
-.mode-tile > :not(.tile-glint) {
-  position: relative;
-  z-index: 1;
-}
-
-.rail-dot.active {
-  background: var(--page-accent);
-  box-shadow: 0 0 0 2px var(--ink), 0 0 12px color-mix(in srgb, var(--page-accent) 70%, transparent);
-}
-
-/* --- Arrival -------------------------------------------------------------- */
-
-/*
- * The hub used to appear all at once, fully formed, which is the one thing a cabinet never
- * does. Each band rises a beat after the one above it — sign, rule, games, buttons, shelf —
- * so the page assembles in the order you would read it.
- */
-.home-content > * {
-  animation: homeRise 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.12) backwards;
-}
-
-.home-content > *:nth-child(1) { animation-delay: 0.02s; }
-.home-content > *:nth-child(2) { animation-delay: 0.08s; }
-.home-content > *:nth-child(3) { animation-delay: 0.13s; }
-.home-content > *:nth-child(4) { animation-delay: 0.18s; }
-.home-content > *:nth-child(5) { animation-delay: 0.24s; }
-.home-content > *:nth-child(6) { animation-delay: 0.3s; }
-.home-content > *:nth-child(n + 7) { animation-delay: 0.34s; }
-
-@keyframes homeRise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
-}
-
-/* --- Reduce motion --------------------------------------------------------
-   The room stops moving and the sign stops humming. Both keep their colour, and the accent
-   still changes with the mode — losing the animation costs nothing you were reading. */
-
-body.reduce-motion .home-wordmark h1,
-body.reduce-motion .home-logo::before,
-body.reduce-motion .home-content > * {
-  animation: none;
-}
-
-body.reduce-motion .home-logo::before {
-  opacity: 0.8;
-}
-
-body.reduce-motion .home-backdrop {
-  transform: none;
-  transition: none;
-}
-
-body.reduce-motion .tile-glint {
-  display: none;
+.leave-copy {
+  color: var(--text-2);
+  margin-bottom: 4px;
 }

@@ -1,100 +1,68 @@
-/* ==========================================================================
-   Every custom property the game has, in one place.
-
-   They used to be spread through the stylesheet that happened to need them first, which is how
-   a back-compat alias (`--panel: var(--paper)`) came to sit further down the same :root and
-   silently undo the neon panel colour.
-   ========================================================================== */
-
+/*
+ * Design tokens. The look is a pool hall at night: near-black blue, glass panels, one warm gold
+ * for the thing you should press, and felt green for anything good happening.
+ */
 :root {
-  /*
-   * Arcade cabinet: neon on deep violet, everything ink-outlined, everything sitting on a
-   * hard offset shadow it drops into when pressed.
-   *
-   * The names are the ones the whole stylesheet already speaks, so they are kept and retuned
-   * rather than replaced — but two of them changed *meaning*, and it matters:
-   *
-   *   --paper   is now the light TYPE colour only. Panels are dark here.
-   *   --panel*  is the panel face, which is what --paper used to be.
-   *   --wood*   is no longer maple; it is the lit edge running round a panel.
-   *
-   * The table itself is untouched by any of this: cloth, rails, pockets and balls come from
-   * the renderer's own theme, and nothing in here reaches them.
-   */
-  --ink: #120a1a;
-  --ink-soft: rgba(18, 10, 26, 0.55);
+  --bg-0: #04070c;
+  --bg-1: #080d15;
+  --bg-2: #0d1520;
+  --panel: rgba(16, 24, 36, 0.78);
+  --panel-solid: #101926;
+  --panel-2: rgba(28, 40, 58, 0.72);
+  --panel-3: rgba(40, 55, 78, 0.6);
+  --line: rgba(255, 255, 255, 0.075);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --line-3: rgba(255, 255, 255, 0.24);
 
-  /* Type, in three steps of emphasis. Light, because everything behind it is dark. */
-  --paper: #f7ecff;
-  --paper-2: #cbb2e4;
-  /* Was the pale lip under a cream panel; now the dark lip under a violet one. */
-  --paper-3: #1b0f28;
+  --text: #eef3fb;
+  --text-2: #a8b5c8;
+  --text-3: #6c7a90;
 
-  /* The panel face: violet, lit from the top edge. */
-  --panel: #3d2450;
-  --panel-2: #281539;
-  --panel-3: #1b0f28;
+  --gold: #ffc444;
+  --gold-hi: #ffe08a;
+  --gold-lo: #f29a17;
+  --gold-ink: #2b1900;
+  --mint: #2fe3a3;
+  --mint-lo: #13a372;
+  --coral: #ff6352;
+  --sky: #5bb6ff;
+  --violet: #b28cff;
+  --pink: #ff5fa2;
 
-  /* The edge round a panel, replacing the maple frame it used to draw. */
-  --wood: #6a3f8f;
-  --wood-dark: #3a1f56;
-  --wood-deep: #ffd76b;
+  --rarity-standard: #98a6ba;
+  --rarity-rare: #52a8ff;
+  --rarity-epic: #b67cff;
+  --rarity-legendary: #ffb23f;
 
-  --felt: #2fd07a;
-  --felt-dark: #16a057;
-  --felt-deep: #0a6b3a;
+  --p1: #5bb6ff;
+  --p2: #ff7a59;
+  --p3: #2fe3a3;
+  --p4: #ffc444;
+  --p5: #b28cff;
+  --p6: #ff5fa2;
+  --p7: #2ed3d3;
+  --p8: #ff9444;
 
-  --gold: #ffc531;
-  --gold-light: #ffe66d;
-  --gold-dark: #b57c07;
-  --accent: #34e2b0;
-  --accent-2: #22d3ee;
-  --plum: #a855f7;
-  --danger: #ff4d6d;
-  --muted: #a68bc4;
+  --r-xs: 8px;
+  --r-sm: 11px;
+  --r-md: 15px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
 
-  /* The two neon accents the cabinet is lit by. */
-  --hot: #ff3d8b;
-  --hot-dark: #b3195a;
+  --shadow-1: 0 6px 18px rgba(0, 0, 0, 0.32);
+  --shadow-2: 0 16px 40px rgba(0, 0, 0, 0.48);
+  --shadow-3: 0 30px 80px rgba(0, 0, 0, 0.6);
+  --glow-gold: 0 0 0 1px rgba(255, 196, 68, 0.5), 0 8px 30px rgba(255, 170, 40, 0.28);
 
-  /* Set per table theme by applyTableThemeToPage; these are the Classic Green fallbacks. */
-  --surround: radial-gradient(ellipse 90% 70% at 50% 40%, #2a3a2f 0%, #131a17 60%, #0a0d0c 100%);
-  --theme-accent: #ffc94d;
-  --theme-felt: #5fd88a;
-  --theme-felt-dark: #28a85c;
-  --theme-wood: #c99a63;
-  --theme-wood-dark: #7d5533;
+  --font: 'Outfit Variable', 'Outfit', ui-rounded, 'Segoe UI', system-ui, -apple-system, sans-serif;
 
-  /*
-   * Back-compat aliases so older rules keep working. `--panel` used to alias `--paper` here,
-   * which quietly won over the real definition above — the whole restyle rendered cream until
-   * this line went.
-   */
-  --bg-0: #150c1f;
-  --bg-1: #21112f;
-  --bg-2: #2f1a42;
-  --stroke: rgba(255, 236, 255, 0.14);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  --radius: 18px;
-  --frame: 3px;
-
-  /*
-   * The keyboard focus ring.
-   *
-   * Cyan rather than any of the palette's own accents, because it has to read as *the browser
-   * telling you where you are* rather than as decoration — and because gold, pink and violet
-   * are all already load-bearing here (selected, hot, and panel). Two rings: a dark one that
-   * separates it from whatever it is drawn on, and the bright one on top. Every panel in the
-   * game already carries a `0 0 0 2px var(--ink)` outline, and the browser's own hairline ring
-   * was drawn straight on top of that and disappeared — which is why 120 buttons have had no
-   * visible focus at all.
-   *
-   * Drawn as an `outline` rather than a `box-shadow`, because almost every control here builds
-   * its pressed-sticker look out of stacked box-shadows and a focus ring must not compete for
-   * that property. The offset puts it clear of the ink edge each one already has.
-   */
-  --focus: #7df9ff;
-  --focus-offset: 3px;
-
-  color-scheme: dark;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
