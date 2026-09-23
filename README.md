@@ -18,6 +18,53 @@ sync.
   ghost ball + predicted object-ball path) — plus sound, vibration, colorblind ball patterns, and a
   left-handed layout toggle.
 
+## Tables
+
+A table theme is the whole venue, not a felt colour: cloth, rail stock, pocket leather, the metal
+the sights and bezels are plated in, the lamp hanging over it, and the room it stands in — which
+comes with its own drawn set, its own synthesized score and its own ambient bed.
+
+Eleven ship, from the Classic Green pub table to the Velvet Room and the Emerald Vault. All of
+them are assembled from the material catalogues in `render/cosmetics/materials.ts`, and so is
+anything you build yourself: **Settings → Table → Design your own table** opens the Theme Studio,
+where the same five choices are yours to make. Saved tables sit in the picker alongside the
+shipped ones and are stored per-browser.
+
+The materials are real rather than decorative. Cloth carries a thread pitch and a nap, so worsted
+tournament cloth is visibly tighter than napped bar cloth; wood carries figure, pore and varnish,
+so ebony comes out closed and mirror-finished where weathered teak comes out open and dry; metal
+carries a highlight ramp, which is what makes chrome read as chrome next to brass. The cloth and
+rail textures are generated per theme from those numbers (`render/surfaces.ts`) and cached, and
+the picker's swatches and the Studio's live preview are the same table drawn small
+(`render/tablePreview.ts`), so what you design is what you sit down at.
+
+Behind the table there is no room at all — just graded darkness, a pool of light thrown down over
+the table and the penumbra it casts past the rails (`render/cosmetics/scenes.ts`). Drawn rooms
+came first and were the wrong idea: every chair and rug was another object competing with the one
+thing a player actually reads. The backdrop is generated from the theme's own lamp and cloth, so a
+table built in the Studio gets a backdrop that is genuinely its own.
+
+Over that sits a moving layer — dust turning in the beam, snow and an aurora on Ice, embers under
+a candle, a beam sweeping under a cold spot (`render/ambientFx.ts`), chosen by the theme's lamp.
+It is drawn behind the table so it can never obscure a shot, and it is the first thing
+**Reduce motion** switches off.
+
+Potted balls go into a ball rack down the right-hand side: a board with fifteen turned cups, so
+the gaps in it tell you how much of the frame is left.
+
+## Cases
+
+Keys open cases in the locker. The sequence is four beats — a closed case breathing light through
+its seam, a shake and a burst, a reel of real items scrolling past a marker, then the prize rising
+out of the strip it landed on (`profile/caseReel.ts`). Each beat is a class on the overlay, so the
+CSS owns the choreography and the TypeScript owns the timing.
+
+The prize itself is decided up front by `spendSpin`, before any of that runs — see
+`shared/src/reel.ts` for why keeping the animation and the odds apart is load-bearing. The strip
+you watch is drawn at the real rarity weights, and the cell just before the winner is deliberately
+loaded with something better, which costs nothing and changes nothing about what you get. The odds
+are stated permanently on the dialog as a weighted bar.
+
 ## Project layout
 
 ```

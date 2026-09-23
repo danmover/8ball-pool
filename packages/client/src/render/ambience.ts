@@ -91,6 +91,38 @@ const ROOMS: Record<string, AmbienceRecipe> = {
     ],
     sparkle: { everyMin: 12, everyMax: 30, lowHz: 600, highHz: 1100, level: 0.016 },
   },
+
+  // Velvet and heavy drapes: a room that has had the top end taken out of it.
+  royale: {
+    voices: [
+      { band: 140, q: 0.8, level: 0.06, drift: 0.04, driftDepth: 22 },
+      { band: 620, q: 1.2, level: 0.009, drift: 0.05, driftDepth: 60 },
+    ],
+    sparkle: { everyMin: 10, everyMax: 28, lowHz: 1400, highHz: 2400, level: 0.014 },
+  },
+  // A vault: air handling, and the sense of a lot of stone.
+  obsidian: {
+    voices: [
+      { band: 60, q: 1.4, level: 0.075, drift: 0.02, driftDepth: 8 },
+      { band: 1700, q: 0.25, level: 0.006, drift: 0.04, driftDepth: 260 },
+    ],
+  },
+  // Bright and hard-surfaced — marble gives everything back.
+  champagne: {
+    voices: [
+      { band: 240, q: 0.5, level: 0.042, drift: 0.08, driftDepth: 44 },
+      { band: 2100, q: 0.4, level: 0.011, drift: 0.12, driftDepth: 260 },
+    ],
+    sparkle: { everyMin: 4, everyMax: 12, lowHz: 2400, highHz: 4200, level: 0.02 },
+  },
+  // Behind a heavy door: the club is out there somewhere, muffled.
+  emerald: {
+    voices: [
+      { band: 190, q: 0.7, level: 0.055, drift: 0.06, driftDepth: 30 },
+      { band: 800, q: 0.8, level: 0.011, drift: 0.09, driftDepth: 90 },
+    ],
+    sparkle: { everyMin: 9, everyMax: 22, lowHz: 900, highHz: 1600, level: 0.015 },
+  },
 };
 
 /** Two seconds of looping noise. Generated once and shared by every voice. */

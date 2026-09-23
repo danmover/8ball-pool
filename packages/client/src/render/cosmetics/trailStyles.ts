@@ -4,7 +4,22 @@ import { DEFAULT_LOADOUT } from '@8ball/shared';
  * Trail styles feed `TableRenderer.updateTrail`. `ramp` is sampled by normalised speed, so
  * a style can go hot with pace (the classic heat trail) or stay one colour throughout.
  */
-export type TrailShape = 'ribbon' | 'comet' | 'sparkle' | 'fire';
+/**
+ * What the trail *is*, as opposed to what colour it is.
+ *
+ * There were four of these across thirteen styles — five of which were plain `ribbon` — so the
+ * locker showed the same swoosh over and over with the palette swapped. Seven shapes over
+ * seventeen trails is roughly two apiece, which is enough that no two cards next to each other
+ * read as the same object.
+ */
+export type TrailShape =
+  | 'ribbon'
+  | 'comet'
+  | 'sparkle'
+  | 'fire'
+  | 'bubbles'
+  | 'bolt'
+  | 'smoke';
 
 export interface TrailStyle {
   /** Colour stops sampled left-to-right as speed rises. At least two entries. */
@@ -29,7 +44,7 @@ const STYLES: Record<string, TrailStyle> = {
   },
   'trail.ice': {
     ramp: [0xf2fbff, 0x9fd8ff, 0x4aa8ff],
-    shape: 'ribbon',
+    shape: 'sparkle',
     width: 0.8,
     alpha: 0.95,
     length: 1.05,
@@ -52,7 +67,7 @@ const STYLES: Record<string, TrailStyle> = {
   },
   'trail.toxic': {
     ramp: [0xdfffa8, 0x8bff3a, 0x25c04a],
-    shape: 'ribbon',
+    shape: 'bubbles',
     width: 1.2,
     alpha: 1,
     length: 1.25,
@@ -68,7 +83,7 @@ const STYLES: Record<string, TrailStyle> = {
   },
   'trail.void': {
     ramp: [0x6a5aff, 0x2a1a6a, 0x08040f],
-    shape: 'comet',
+    shape: 'smoke',
     width: 1.3,
     alpha: 1,
     length: 1.45,
@@ -76,14 +91,14 @@ const STYLES: Record<string, TrailStyle> = {
   },
   'trail.smoke': {
     ramp: [0xe8e8ea, 0xa8a8b0, 0x6a6a74],
-    shape: 'ribbon',
+    shape: 'smoke',
     width: 1.15,
     alpha: 0.7,
     length: 1.3,
   },
   'trail.bubble': {
     ramp: [0xffffff, 0xc4ecff, 0x7fc4e8],
-    shape: 'sparkle',
+    shape: 'bubbles',
     width: 0.9,
     alpha: 0.85,
     length: 1.15,
@@ -99,7 +114,7 @@ const STYLES: Record<string, TrailStyle> = {
   },
   'trail.electric': {
     ramp: [0xffffff, 0xc9e6ff, 0x4a8aff],
-    shape: 'sparkle',
+    shape: 'bolt',
     width: 1.1,
     alpha: 1,
     length: 1.3,
@@ -113,6 +128,40 @@ const STYLES: Record<string, TrailStyle> = {
     length: 1.45,
     glow: true,
   },
+  /*
+   * These four are in the catalogue and had no style, so every one of them fell back to the
+   * default — four separately-named trails that drew the same streak in the same colours.
+   */
+  'trail.aurora': {
+    ramp: [0xdefff5, 0x7cf5d4, 0x9fb8ff, 0xd28cff],
+    shape: 'ribbon',
+    width: 1.25,
+    alpha: 0.85,
+    length: 1.3,
+    glow: true,
+  },
+  'trail.chalkline': {
+    ramp: [0xf2f6ff, 0x9fd0ff, 0x3f7fd8],
+    shape: 'smoke',
+    width: 0.75,
+    alpha: 0.7,
+    length: 0.9,
+  },
+  'trail.petals': {
+    ramp: [0xffe3f0, 0xff9ec4, 0xd8477f],
+    shape: 'bubbles',
+    width: 0.95,
+    alpha: 0.9,
+    length: 1.05,
+  },
+  'trail.ripple': {
+    ramp: [0xdff4ff, 0x7fd8ff, 0x2f7fb8],
+    shape: 'bubbles',
+    width: 1.05,
+    alpha: 0.8,
+    length: 1.15,
+  },
+
   'trail.timerift': {
     ramp: [0xffffff, 0xb98cff, 0x2a0a5a, 0x000000],
     shape: 'comet',

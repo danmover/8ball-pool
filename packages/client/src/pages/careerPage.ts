@@ -13,6 +13,7 @@ import { icon } from '../render/icons';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
 import { loadSettings, saveSession, saveSettings } from '../settings/settingsStore';
 import { bindPageShell, pageShellHtml } from './pageShell';
+import { sectionStyle } from '../ui/sections';
 import { runBusyWithTimeout } from '../ui/busy';
 import { showToast } from '../render/dialogs';
 
@@ -36,8 +37,9 @@ export function renderCareerPage(root: HTMLElement): () => void {
     const next = careerNext(profile.careerBeaten ?? []);
 
     root.innerHTML = `
-      <div class="career-page">
+      <div class="career-page menu-page" style="${sectionStyle('career')}">
         ${pageShellHtml({
+          section: 'career',
           title: 'Career',
           subtitle: next
             ? `Next up: ${next.name} at the ${next.venue} table`

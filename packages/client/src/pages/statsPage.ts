@@ -2,6 +2,7 @@ import { modeDescriptor, topRivals, framesAgainst, type GameMode } from '@8ball/
 import { getProfile } from '../profile/profile';
 import { navigate } from '../router';
 import { bindPageShell, emptyStateHtml, pageShellHtml } from './pageShell';
+import { sectionStyle } from '../ui/sections';
 
 /**
  * The numbers, honestly.
@@ -117,8 +118,8 @@ export function renderStatsPage(root: HTMLElement): () => void {
         : 'Nothing recorded yet — play a frame and this fills in';
 
     root.innerHTML = `
-      <div class="page stats-page">
-        ${pageShellHtml({ title: 'Your numbers', subtitle })}
+      <div class="page stats-page menu-page" style="${sectionStyle('stats')}">
+        ${pageShellHtml({ title: 'Your numbers', subtitle, section: 'stats' })}
 
         <div class="stat-grid">
           ${cards

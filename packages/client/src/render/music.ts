@@ -156,6 +156,58 @@ const TRACKS: Record<string, Track> = {
       line([null, 4, null, null, 5, null, 4, null, null, 4, null, null, 6, null, 5, null], DORIAN, 'pluck', 0.45, 0.18, 1)
     ),
   },
+
+  // Velvet room: a slow, expensive waltz-ish sway. Nothing hurries in here.
+  royale: {
+    bpm: 68,
+    root: 9,
+    drums: '....h.......h...',
+    drumKit: 'soft',
+    pattern: merge(
+      line([0, null, null, null, null, null, 4, null, 2, null, null, null, null, null, 5, null], MINOR, 'pad', 3.4, 0.2, -1),
+      line([null, null, 7, null, null, 9, null, null, null, null, 6, null, null, 7, null, null], MINOR, 'bell', 2, 0.16, 1),
+      line([null, null, null, null, 11, null, null, null, null, null, null, null, 9, null, null, null], MINOR, 'bell', 1.6, 0.1, 2)
+    ),
+  },
+
+  // Obsidian: almost nothing. One low note and the room around it — the quiet is the point.
+  obsidian: {
+    bpm: 58,
+    root: 1,
+    drums: '................',
+    drumKit: 'none',
+    pattern: merge(
+      line([0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null], MINOR, 'bass', 5.5, 0.4, -2),
+      line([null, null, null, null, null, null, 4, null, null, null, null, null, null, null, null, null], MINOR, 'pad', 4.5, 0.12, 0),
+      line([null, null, null, null, null, null, null, null, null, null, null, 7, null, null, null, null], MINOR, 'bell', 2.4, 0.09, 2)
+    ),
+  },
+
+  // Champagne room: light, bright, a little bit pleased with itself.
+  champagne: {
+    bpm: 92,
+    root: 5,
+    drums: '..h...h...h...h.',
+    drumKit: 'brush',
+    pattern: merge(
+      line([0, null, null, 4, null, null, 2, null, null, 5, null, null, 4, null, null, null], MAJOR, 'pluck', 0.7, 0.24, 0),
+      line([null, 7, null, null, 9, null, null, 7, null, null, 11, null, null, 9, null, 7], MAJOR, 'bell', 1.1, 0.13, 2),
+      line([0, null, null, null, null, null, null, null, 4, null, null, null, null, null, null, null], MAJOR, 'bass', 2.6, 0.34, -1)
+    ),
+  },
+
+  // Emerald vault: a warm, unhurried lounge groove behind a heavy door.
+  emerald: {
+    bpm: 80,
+    root: 4,
+    drums: 'h..s..h.h..s..h.',
+    drumKit: 'brush',
+    pattern: merge(
+      line([0, null, null, 2, null, null, 4, null, 3, null, null, 2, null, null, 0, null], DORIAN, 'bass', 0.8, 0.42, -1),
+      line([null, null, 6, null, null, null, 7, null, null, null, 5, null, null, null, 4, null], DORIAN, 'pad', 2.2, 0.15, 0),
+      line([null, null, null, null, 9, null, null, null, null, 11, null, null, null, null, null, null], DORIAN, 'bell', 1.4, 0.12, 1)
+    ),
+  },
 };
 
 // ---- Synthesis ----

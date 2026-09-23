@@ -137,13 +137,36 @@ describe('the ease', () => {
     }
   });
 
+  it('never speeds up — the reel only ever slows down', () => {
+    // The regression this pins: the ease used to be two curves stitched together, and the
+    // second one started at several cells a second from a near-stop. Every case slowed to a
+    // halt, lurched two items forward, and stopped again.
+    for (const rarity of ['common', 'rare', 'epic', 'legendary', 'mystic'] as const) {
+      const { durationMs, settleMs } = reelTiming(rarity);
+      const settle = settleMs / durationMs;
+      const dt = 0.001;
+      let lastSpeed = Infinity;
+      for (let t = 0; t < 1 - dt; t += dt) {
+        const speed = (reelEase(t + dt, settle) - reelEase(t, settle)) / dt;
+        expect(speed, `${rarity} at t=${t.toFixed(3)}`).toBeLessThanOrEqual(lastSpeed + 1e-9);
+        lastSpeed = speed;
+      }
+    }
+  });
+
   it('spends the last stretch of time on the last sliver of distance', () => {
-    // This is the whole point: fast, then slow, then agonising. A plain ease-out would be
-    // smooth, which is exactly wrong.
-    const settle = 0.25;
-    const atCrossover = reelEase(1 - settle, settle);
-    expect(atCrossover).toBeGreaterThan(0.94);
-    expect(atCrossover).toBeLessThan(0.97);
+    // Fast, then slow, then agonising: the final quarter of the run covers about one percent
+    // of the strip — on a 54-cell strip, well under a cell.
+    const { durationMs, settleMs } = reelTiming('common');
+    const remaining = 1 - reelEase(0.75, settleMs / durationMs);
+    expect(remaining).toBeGreaterThan(0.004);
+    expect(remaining).toBeLessThan(0.02);
+  });
+
+  it('comes to rest rather than stopping dead', () => {
+    // Speed at the very end is zero, so the prize is arrived at, not slammed into.
+    const speedAtEnd = (reelEase(1, 0.2) - reelEase(0.999, 0.2)) / 0.001;
+    expect(speedAtEnd).toBeLessThan(0.001);
   });
 
   it('clamps input outside the run', () => {

@@ -4,6 +4,7 @@ import {
   careerNext,
   careerProgress,
   clampPlayerCount,
+  collectionProgress,
   levelProgress,
   type GameMode,
 } from '@8ball/shared';
@@ -20,9 +21,11 @@ import { applyRenderSettings } from '../settings/applySettings';
 import { icon } from '../render/icons';
 import { promptText } from '../render/dialogs';
 import { challengeForToday, challengeProgress } from '../profile/dailyChallenge';
+import { rewardChips } from '../profile/rewards';
 import { navigate } from '../router';
 import * as sfx from '../render/sfx';
 import { mountResumeStrip } from './pageShell';
+import { SECTIONS } from '../ui/sections';
 
 /** The game's mark: a cartoon 8-ball, drawn rather than borrowed from the emoji font. */
 function eightBallLogo(): string {
@@ -50,20 +53,27 @@ export function renderHomePage(root: HTMLElement): () => void {
   let disposed = false;
 
   root.innerHTML = `
-    <div class="home">
+    <div class="home" id="homeRoot">
       <div class="home-backdrop" id="homeBackdrop"></div>
       <div class="home-scrim"></div>
       <div class="home-content">
+        <!--
+          A marquee rather than a heading. The hub is the front of a cabinet and the title was
+          plain white text on it — the one thing in the room that was not lit. The wordmark is
+          a neon tube now, humming in whatever colour the chosen mode is, over a lit rule that
+          separates the sign from the machine underneath it.
+        -->
         <header class="home-head">
           <div class="home-title">
             <span class="home-logo">${eightBallLogo()}</span>
-            <div>
-              <h1>8-Ball Pool</h1>
+            <div class="home-wordmark">
+              <h1><i>8</i>-Ball Pool</h1>
               <p class="tagline">Play online from anywhere, or host on the big screen.</p>
             </div>
           </div>
           <div class="home-player" id="homePlayer"></div>
         </header>
+        <div class="marquee-rule" aria-hidden="true"></div>
 
         <div id="homeResume"></div>
 
@@ -146,34 +156,34 @@ export function renderHomePage(root: HTMLElement): () => void {
           the button to press". It is a card now, in the same violet-with-an-accent-bar shape
           the mode tiles use, and it shows how far along you are, which it never did.
         -->
-        <section class="home-shelf">
+        <section class="home-shelf" aria-label="More">
           <div class="shelf-nav">
-          <button class="token" id="lockerBtn" style="--tok: #ffc531">
+          <button class="token" id="lockerBtn" style="--tok: ${SECTIONS.locker.accent}">
             <span class="token-disc">${icon('locker', { size: 24 })}</span>
             <span class="token-label">Locker</span>
             <span class="token-sub" id="lockerSub"></span>
           </button>
-          <button class="token" id="careerBtn" style="--tok: #ff8a1f">
+          <button class="token" id="careerBtn" style="--tok: ${SECTIONS.career.accent}">
             <span class="token-disc">${icon('trophy', { size: 24 })}</span>
             <span class="token-label">Career</span>
             <span class="token-sub" id="careerSub"></span>
           </button>
-          <button class="token" id="trickShotsBtn" style="--tok: #ff3d8b">
+          <button class="token" id="trickShotsBtn" style="--tok: ${SECTIONS.challenges.accent}">
             <span class="token-disc">${icon('target', { size: 24 })}</span>
             <span class="token-label">Trick Shots</span>
             <span class="token-sub" id="trickSub"></span>
           </button>
-          <button class="token" id="progressBtn" style="--tok: #a855f7">
+          <button class="token" id="progressBtn" style="--tok: ${SECTIONS.progress.accent}">
             <span class="token-disc">${icon('star', { size: 24 })}</span>
             <span class="token-label">Progress</span>
             <span class="token-sub" id="progressSub"></span>
           </button>
-          <button class="token" id="statsBtn" style="--tok: #34e2b0">
+          <button class="token" id="statsBtn" style="--tok: ${SECTIONS.stats.accent}">
             <span class="token-disc">${icon('chart', { size: 24 })}</span>
             <span class="token-label">Stats</span>
             <span class="token-sub" id="statsSub"></span>
           </button>
-          <button class="token" id="settingsBtn" style="--tok: #9ba7d8">
+          <button class="token" id="settingsBtn" style="--tok: ${SECTIONS.settings.accent}">
             <span class="token-disc">${icon('settings', { size: 24 })}</span>
             <span class="token-label">Settings</span>
             <span class="token-sub">Aim, table, audio</span>
@@ -194,6 +204,7 @@ export function renderHomePage(root: HTMLElement): () => void {
   const nextBtn = root.querySelector<HTMLButtonElement>('#railNext')!;
   const playerEl = root.querySelector<HTMLElement>('#homePlayer')!;
   const joinError = root.querySelector<HTMLElement>('#joinError')!;
+  const homeRoot = root.querySelector<HTMLElement>('#homeRoot')!;
 
   // ---- Live table backdrop ----
   // The CSS class paints a felt-and-vignette backdrop immediately; the live table then
@@ -202,7 +213,14 @@ export function renderHomePage(root: HTMLElement): () => void {
   backdrop.classList.add('has-fallback');
 
   if (!settings.reduceMotion) {
-    void TableRenderer.create(backdrop)
+    /*
+     * Scenery settings. This table sits under a scrim that hides most of it, and it used to be
+     * drawn at full resolution, antialiased, at the display's full refresh rate — then blurred
+     * by a CSS filter on top, which re-blurs the whole window every frame. Half resolution is
+     * softer than the blur was, for a quarter of the pixels; thirty frames a second is plenty
+     * for balls drifting across a table in the background.
+     */
+    void TableRenderer.create(backdrop, { resolution: 0.5, maxFps: 30, antialias: false })
       .then((created) => {
       if (disposed) {
         created.destroy();
@@ -277,9 +295,27 @@ export function renderHomePage(root: HTMLElement): () => void {
     const possible = CHALLENGES.length * 3;
     root.querySelector<HTMLElement>('#trickSub')!.textContent = `${stars} / ${possible} stars`;
 
+    /*
+     * Each token is a gauge, like the power ring on the shot deck: it fills with how far
+     * through that place you are. Six discs that all looked the same said nothing until you
+     * read the small print under them; a ring says "nearly done" or "barely started" at a
+     * glance.
+     */
+    const ring = (id: string, ratio: number): void => {
+      const pct = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+      root.querySelector<HTMLElement>(`#${id}`)!.style.setProperty('--ring', `${pct}%`);
+    };
+    ring('lockerBtn', collectionProgress(profile.unlocked).ratio);
+    ring('careerBtn', career.total > 0 ? career.beaten / career.total : 0);
+    ring('trickShotsBtn', possible > 0 ? stars / possible : 0);
+    ring('progressBtn', ach.total > 0 ? ach.earned / ach.total : 0);
+    ring('statsBtn', shots > 0 ? sp.stats.pots / shots : 0);
+
     const spins = profile.spins;
     root.querySelector<HTMLElement>('#lockerSub')!.textContent =
-      spins > 0 ? `${spins} spin${spins === 1 ? '' : 's'} ready!` : `${profile.unlocked.length} items owned`;
+      spins > 0
+        ? `${spins} ${spins === 1 ? 'key' : 'keys'} ready!`
+        : `${profile.unlocked.length} items owned`;
     root.querySelector<HTMLElement>('#lockerBtn')!.classList.toggle('has-reward', spins > 0);
   }
 
@@ -292,9 +328,23 @@ export function renderHomePage(root: HTMLElement): () => void {
   }
 
 
+  /**
+   * The room takes the colour of the game you have chosen.
+   *
+   * Choosing a mode used to move a gold ring onto one card in a rail of ten and change nothing
+   * else, so the single most consequential choice on the page — it decides what Play does —
+   * was the quietest thing on it. One custom property drives the marquee, the lit rule, the
+   * glow over the table behind the menu, the section heading and the page dots, so picking
+   * Speed Pool actually changes the light in the room.
+   */
+  function applyAccent(): void {
+    homeRoot.style.setProperty('--page-accent', modeAccent(selectedMode));
+  }
+
   function pickMode(id: GameMode): void {
     selectedMode = id;
     localStorage.setItem('8ball:lastMode', selectedMode);
+    applyAccent();
     drawModes();
     updateSoloSub();
     scrollToSelected();
@@ -307,6 +357,7 @@ export function renderHomePage(root: HTMLElement): () => void {
         (mode) => `
         <button class="mode-tile${mode.id === selectedMode ? ' active' : ''}" data-mode="${mode.id}"
                 style="--mode-accent: ${modeAccent(mode.id)}">
+          <span class="tile-glint" aria-hidden="true"></span>
           <span class="mode-art">${modeArtSvg(mode.id)}</span>
           <span class="mode-title">${mode.name}</span>
           <span class="mode-blurb">${mode.blurb}</span>
@@ -382,11 +433,57 @@ export function renderHomePage(root: HTMLElement): () => void {
     tile.innerHTML = `
       <div class="today-head">
         <span class="today-eyebrow">${icon(done ? 'check' : 'clock', { size: 13 })} Today</span>
-        <span class="today-reward">${done ? 'Claimed' : `+${challenge.xp} XP`}</span>
+        <span class="today-count">${done ? 'Complete' : `${value} / ${challenge.target}`}</span>
       </div>
       <div class="today-task">${done ? 'Done — a new one tomorrow' : challenge.text}</div>
       <div class="today-bar"><i style="width:${pct}%"></i></div>
-      <div class="today-count">${done ? 'Complete' : `${value} / ${challenge.target}`}</div>`;
+      ${/*
+         * The key was already being handed over on completion — `recordChallengeEvent` calls
+         * `grantSpin(1)` — and the tile had never once mentioned it. The single most valuable
+         * thing the daily pays was invisible, which is a strange way to run an incentive.
+         */ ''}
+      ${rewardChips({ xp: challenge.xp, spins: 1 }, !done)}`;
+  }
+
+  /*
+   * The cabinet has depth.
+   *
+   * The live table behind the menu leans a few pixels with the pointer, and a light travels
+   * across whichever mode card it is over. Both are written as custom properties inside a
+   * single rAF — including the one `getBoundingClientRect` — so moving the mouse costs one
+   * style write and one layout read per *frame* rather than per event. That matters on this
+   * page in particular: there is a real physics simulation running behind it.
+   */
+  let pointerRaf = 0;
+  let clientX = 0;
+  let clientY = 0;
+  let litTile: HTMLElement | null = null;
+
+  function flushPointer(): void {
+    pointerRaf = 0;
+    homeRoot.style.setProperty('--px', (clientX / window.innerWidth - 0.5).toFixed(3));
+    homeRoot.style.setProperty('--py', (clientY / window.innerHeight - 0.5).toFixed(3));
+    if (!litTile) return;
+    const box = litTile.getBoundingClientRect();
+    litTile.style.setProperty('--mx', `${Math.round(clientX - box.left)}px`);
+    litTile.style.setProperty('--my', `${Math.round(clientY - box.top)}px`);
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    clientX = e.clientX;
+    clientY = e.clientY;
+    const tile = (e.target as HTMLElement | null)?.closest<HTMLElement>('.mode-tile') ?? null;
+    if (tile !== litTile) {
+      litTile?.classList.remove('lit');
+      tile?.classList.add('lit');
+      litTile = tile;
+    }
+    if (!pointerRaf) pointerRaf = requestAnimationFrame(flushPointer);
+  }
+
+  // Under reduce-motion the room simply holds still. Nothing here carries information.
+  if (!settings.reduceMotion) {
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
   }
 
   prevBtn.addEventListener('click', () => railEl.scrollBy({ left: -railStep(), behavior: 'smooth' }));
@@ -425,6 +522,7 @@ export function renderHomePage(root: HTMLElement): () => void {
    */
   mountResumeStrip(root.querySelector<HTMLElement>('#homeResume')!);
 
+  applyAccent();
   drawPlayer();
   drawModes();
   updateSoloSub();
@@ -506,6 +604,8 @@ export function renderHomePage(root: HTMLElement): () => void {
 
   return () => {
     disposed = true;
+    window.removeEventListener('pointermove', onPointerMove);
+    cancelAnimationFrame(pointerRaf);
     renderer?.destroy();
   };
 }

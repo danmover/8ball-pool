@@ -33,6 +33,7 @@ import { playerBannerHtml } from '../render/banner';
 import { showToast } from '../render/dialogs';
 import { navigate } from '../router';
 import { bindPageShell, emptyStateHtml, pageShellHtml } from './pageShell';
+import { sectionStyle } from '../ui/sections';
 
 /**
  * The locker.
@@ -62,10 +63,9 @@ export function renderProfilePage(root: HTMLElement): () => void {
     if (stack) showToast(stack, msg, kind as Parameters<typeof showToast>[2]);
   }
 
-  function itemsTab(): string {
+  /** What the grid shows right now, and out of how many. */
+  function visibleItems(): { all: ReturnType<typeof itemsForSlot>; shown: ReturnType<typeof itemsForSlot> } {
     const profile = getProfile();
-    const loadout = resolveLoadout(profile.loadout);
-    const shelves = slotProgress(profile.unlocked);
     const all = itemsForSlot(activeSlot);
     const shown = filterItems(
       all,
@@ -79,6 +79,26 @@ export function renderProfilePage(root: HTMLElement): () => void {
       },
       chalkPrice
     );
+    return { all, shown };
+  }
+
+  function gridHtml(shown: ReturnType<typeof itemsForSlot>): string {
+    const profile = getProfile();
+    const loadout = resolveLoadout(profile.loadout);
+    return shown.length === 0
+      ? emptyStateHtml({
+          icon: 'locker',
+          title: 'Nothing matches that',
+          body: 'Try a different shelf, or clear the filters to see everything on this one.',
+          action: { id: 'clearFilters', label: 'Clear filters' },
+        })
+      : shown.map((item) => itemCard(item, profile, loadout)).join('');
+  }
+
+  function itemsTab(): string {
+    const profile = getProfile();
+    const shelves = slotProgress(profile.unlocked);
+    const { all, shown } = visibleItems();
 
     return `
       <div class="slot-tabs">
@@ -113,21 +133,10 @@ export function renderProfilePage(root: HTMLElement): () => void {
           <option value="name"${sort === 'name' ? ' selected' : ''}>By name</option>
           <option value="owned"${sort === 'owned' ? ' selected' : ''}>Owned first</option>
         </select>
-        <span class="filter-count">${shown.length} of ${all.length}</span>
+        <span class="filter-count" id="filterCount">${shown.length} of ${all.length}</span>
       </div>
 
-      <div class="item-grid">
-        ${
-          shown.length === 0
-            ? emptyStateHtml({
-                icon: 'locker',
-                title: 'Nothing matches that',
-                body: 'Try a different shelf, or clear the filters to see everything on this one.',
-                action: { id: 'clearFilters', label: 'Clear filters' },
-              })
-            : shown.map((item) => itemCard(item, profile, loadout)).join('')
-        }
-      </div>`;
+      <div class="item-grid" id="itemGrid">${gridHtml(shown)}</div>`;
   }
 
   function itemCard(
@@ -300,7 +309,18 @@ export function renderProfilePage(root: HTMLElement): () => void {
       </div>`;
   }
 
+  /**
+   * Redraws the page and puts you back where you were.
+   *
+   * Every action here — equip, buy, switch shelf, change a filter — redraws the page from its
+   * markup, and the page root is also the scroller. So equipping a cue halfway down the grid
+   * threw you back to the top of the locker, and the page's entrance animation played again
+   * on every single click as if you had just arrived. Both are the same fact: a redraw is not
+   * an arrival.
+   */
   function draw(): void {
+    const previous = root.querySelector<HTMLElement>('.profile-page');
+    const scrollY = previous?.scrollTop ?? 0;
     const profile = getProfile();
     const loadout = resolveLoadout(profile.loadout);
     const progress = levelProgress(profile.xp);
@@ -310,12 +330,13 @@ export function renderProfilePage(root: HTMLElement): () => void {
     ).length;
 
     root.innerHTML = `
-      <div class="profile-page">
+      <div class="profile-page menu-page" style="${sectionStyle('locker')}">
         ${pageShellHtml({
+          section: 'locker',
           title: 'Your Locker',
           subtitle: `Level ${progress.level} · ${profile.unlocked.length} items unlocked`,
           actions: `<span class="wallet-chip" title="Chalk">${icon('chalk', { size: 18 })} ${profile.chalk}</span>
-            <span class="wallet-chip ${profile.spins > 0 ? 'hot' : ''}" title="Spins">${icon('wheel', { size: 18 })} ${profile.spins}</span>`,
+            <span class="wallet-chip ${profile.spins > 0 ? 'hot' : ''}" title="Case keys">${icon('wheel', { size: 18 })} ${profile.spins}</span>`,
         })}
 
         <div class="profile-hero">
@@ -351,7 +372,7 @@ export function renderProfilePage(root: HTMLElement): () => void {
               <span><b>${profile.stats.bestCombo}</b> best combo</span>
             </div>
             <button id="spinBtn" ${profile.spins > 0 ? '' : 'disabled'}>
-              ${profile.spins > 0 ? `OPEN A CASE (${profile.spins})` : 'NO SPINS — PLAY TO EARN'}
+              ${profile.spins > 0 ? `OPEN A CASE (${profile.spins})` : 'NO KEYS — PLAY TO EARN'}
             </button>
           </div>
         </div>
@@ -368,7 +389,32 @@ export function renderProfilePage(root: HTMLElement): () => void {
         <div class="toast-stack" id="lockerToasts" role="status" aria-live="polite"></div>
       </div>`;
 
+    const page = root.querySelector<HTMLElement>('.profile-page');
+    if (previous && page) {
+      page.classList.add('is-redraw');
+      page.scrollTop = scrollY;
+    }
     wire();
+  }
+
+  /**
+   * Just the grid and its count.
+   *
+   * Typing in the search box used to redraw the entire locker per keystroke — hero, tabs,
+   * filters and every card's preview art — and then hunt the caret back into a brand-new input.
+   * The only thing a search changes is which cards are showing.
+   */
+  function drawGrid(): void {
+    const grid = root.querySelector<HTMLElement>('#itemGrid');
+    const count = root.querySelector<HTMLElement>('#filterCount');
+    if (!grid) {
+      draw();
+      return;
+    }
+    const { all, shown } = visibleItems();
+    grid.innerHTML = gridHtml(shown);
+    if (count) count.textContent = `${shown.length} of ${all.length}`;
+    wireGrid();
   }
 
   function wire(): void {
@@ -405,22 +451,11 @@ export function renderProfilePage(root: HTMLElement): () => void {
     });
 
     // --- filters ---
-    // The way out of an empty grid, from the empty state itself.
-    root.querySelector('#clearFilters')?.addEventListener('click', () => {
-      search = '';
-      ownership = 'all';
-      rarity = 'all';
-      draw();
-    });
-
     const searchInput = root.querySelector<HTMLInputElement>('#lockerSearch');
     searchInput?.addEventListener('input', () => {
       search = searchInput.value;
-      draw();
-      // Redrawing blows away focus, which makes typing impossible; put it back where it was.
-      const again = root.querySelector<HTMLInputElement>('#lockerSearch');
-      again?.focus();
-      again?.setSelectionRange(again.value.length, again.value.length);
+      // The input itself is never replaced, so focus and the caret stay where they are.
+      drawGrid();
     });
     root.querySelector<HTMLSelectElement>('#filterOwned')?.addEventListener('change', (e) => {
       ownership = (e.target as HTMLSelectElement).value as typeof ownership;
@@ -435,19 +470,7 @@ export function renderProfilePage(root: HTMLElement): () => void {
       draw();
     });
 
-    // --- items ---
-    root.querySelectorAll<HTMLElement>('[data-equip]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.equip!;
-        equip(cosmeticById(id)!.slot, id);
-        draw();
-      });
-    });
-    root.querySelectorAll<HTMLElement>('[data-buy]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (buyWithChalk(btn.dataset.buy!)) draw();
-      });
-    });
+    wireGrid();
 
     // --- sets ---
     root.querySelectorAll<HTMLElement>('[data-claimset]').forEach((btn) => {
@@ -491,6 +514,29 @@ export function renderProfilePage(root: HTMLElement): () => void {
       btn.addEventListener('click', () => {
         deletePreset(btn.dataset.delpreset!);
         draw();
+      });
+    });
+  }
+
+  /** The grid's own buttons, which `drawGrid` replaces without the rest of the page. */
+  function wireGrid(): void {
+    // The way out of an empty grid, from the empty state itself.
+    root.querySelector('#clearFilters')?.addEventListener('click', () => {
+      search = '';
+      ownership = 'all';
+      rarity = 'all';
+      draw();
+    });
+    root.querySelectorAll<HTMLElement>('[data-equip]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.equip!;
+        equip(cosmeticById(id)!.slot, id);
+        draw();
+      });
+    });
+    root.querySelectorAll<HTMLElement>('[data-buy]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (buyWithChalk(btn.dataset.buy!)) draw();
       });
     });
   }

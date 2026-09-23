@@ -16,9 +16,13 @@ import {
   weeklyMissions,
 } from '../profile/progression';
 import { cosmeticPreviewHtml } from '../profile/cosmeticPreview';
-import { icon } from '../render/icons';
+import { icon, type IconName } from '../render/icons';
+import { flyReward, rewardChips } from '../profile/rewards';
+import * as sfx from '../render/sfx';
+import { loadSettings } from '../settings/settingsStore';
 import { navigate } from '../router';
 import { bindPageShell, pageShellHtml } from './pageShell';
+import { sectionStyle } from '../ui/sections';
 
 /**
  * Where progress is actually visible.
@@ -27,6 +31,40 @@ import { bindPageShell, pageShellHtml } from './pageShell';
  * screen existed, which meant XP and cosmetics were arriving with no explanation. A reward
  * system nobody can see is just a number going up.
  */
+/**
+ * How hard an achievement is, derived from what it pays.
+ *
+ * The tiered achievements are generated with `xp: 120 + i * 180`, so the payout already encodes
+ * the rung — no new field needed, and none that could drift out of step with the rewards. It
+ * matters because "Pot 1 ball" and "Pot 10,000 balls" were rendered as the same grey card, and a
+ * wall of fifty-six identical grey cards tells you nothing about where the mountain is.
+ */
+function tierOf(xp: number): 'bronze' | 'silver' | 'gold' | 'platinum' {
+  if (xp < 220) return 'bronze';
+  if (xp < 420) return 'silver';
+  if (xp < 700) return 'gold';
+  return 'platinum';
+}
+
+const CATEGORY_ICON: Record<Achievement['category'], IconName> = {
+  potting: 'ball',
+  skill: 'cue',
+  grind: 'trophy',
+  career: 'star',
+  collection: 'locker',
+};
+
+const MISSION_ICON: Record<string, IconName> = {
+  potCount: 'ball',
+  winCount: 'trophy',
+  multiPot: 'sparkle',
+  cleanFrames: 'check',
+  careerWins: 'star',
+  challengeStars: 'target',
+  jumpPots: 'flame',
+  massePots: 'cue',
+};
+
 export function renderProgressPage(root: HTMLElement): () => void {
   type Tab = 'achievements' | 'missions' | 'season';
   let tab: Tab = 'achievements';
@@ -40,8 +78,9 @@ export function renderProgressPage(root: HTMLElement): () => void {
     const earned = new Set(profile.achievements ?? []);
 
     root.innerHTML = `
-      <div class="progress-page">
+      <div class="progress-page menu-page" style="${sectionStyle('progress')}">
         ${pageShellHtml({
+          section: 'progress',
           title: 'Progress',
           subtitle: `${earned.size} of ${ACHIEVEMENTS.length} achievements earned`,
           actions: `<div class="progress-rating" title="Elo against the computer opponents">
@@ -76,14 +115,37 @@ export function renderProgressPage(root: HTMLElement): () => void {
         draw();
       });
     });
+    /*
+     * Claiming is a moment, not a state change.
+     *
+     * It used to be a button relabelling itself while a number moved somewhere off screen. The
+     * reward is the whole point of a mission, so the chips lift off the card and a note plays —
+     * then the page redraws, once the flourish has been seen rather than under it.
+     */
+    const volume = loadSettings().soundEnabled ? loadSettings().soundVolume : 0;
     root.querySelectorAll<HTMLButtonElement>('[data-mission]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (claimMission(btn.dataset.mission!)) draw();
+        const entry = weeklyMissions().find((m) => m.mission.id === btn.dataset.mission);
+        if (!claimMission(btn.dataset.mission!)) return;
+        sfx.playReveal(volume, 2);
+        if (entry) flyReward(btn, { xp: entry.mission.xp, chalk: entry.mission.chalk });
+        setTimeout(draw, 420);
       });
     });
     root.querySelectorAll<HTMLButtonElement>('[data-tier]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (claimSeasonTier(Number(btn.dataset.tier))) draw();
+        const tier = seasonTrack().find((t) => t.tier === Number(btn.dataset.tier));
+        if (!claimSeasonTier(Number(btn.dataset.tier))) return;
+        sfx.playReveal(volume, 3);
+        if (tier) {
+          const item = tier.reward.kind === 'cosmetic' ? cosmeticById(tier.reward.id) : null;
+          flyReward(btn, {
+            chalk: tier.reward.kind === 'chalk' ? tier.reward.amount : undefined,
+            spins: tier.reward.kind === 'spin' ? 1 : undefined,
+            item: item?.name,
+          });
+        }
+        setTimeout(draw, 420);
       });
     });
   }
@@ -115,18 +177,22 @@ export function renderProgressPage(root: HTMLElement): () => void {
             .map((a) => {
               const done = earned.has(a.id);
               const pct = Math.round(a.progress(stats) * 100);
+              const tier = tierOf(a.xp);
               return `
-              <div class="ach-card${done ? ' earned' : ''}">
-                <div class="ach-top">
-                  <span class="ach-name">${a.name}</span>
-                  ${done ? icon('check', { size: 15 }) : `<span class="ach-pct">${pct}%</span>`}
+              <div class="ach-card tier-${tier}${done ? ' earned' : ''}">
+                <span class="ach-medal">
+                  ${icon(CATEGORY_ICON[a.category], { size: 18 })}
+                  ${done ? `<i class="ach-tick">${icon('check', { size: 11 })}</i>` : ''}
+                </span>
+                <div class="ach-body">
+                  <div class="ach-top">
+                    <span class="ach-name">${a.name}</span>
+                    <span class="ach-pct">${done ? 'Earned' : `${pct}%`}</span>
+                  </div>
+                  <p class="ach-blurb">${a.blurb}</p>
+                  <div class="ach-bar"><div style="width:${done ? 100 : pct}%"></div></div>
+                  ${rewardChips({ xp: a.xp, chalk: a.chalk }, !done)}
                 </div>
-                <p class="ach-blurb">${a.blurb}</p>
-                ${
-                  done
-                    ? `<div class="ach-reward">+${a.xp} XP · ${a.chalk} chalk</div>`
-                    : `<div class="ach-bar"><div style="width:${pct}%"></div></div>`
-                }
               </div>`;
             })
             .join('')}
@@ -144,14 +210,16 @@ export function renderProgressPage(root: HTMLElement): () => void {
         ${missions
           .map(({ mission, progress, claimed }) => {
             const done = progress >= mission.target;
+            const pct = Math.round((progress / mission.target) * 100);
             return `
             <div class="mission-card${claimed ? ' claimed' : done ? ' ready' : ''}">
+              <span class="mission-icon">${icon(MISSION_ICON[mission.kind] ?? 'target', { size: 20 })}</span>
               <div class="mission-text">
                 <b>${mission.text}</b>
-                <small>+${mission.xp} XP · ${mission.chalk} chalk</small>
+                ${rewardChips({ xp: mission.xp, chalk: mission.chalk }, !done)}
               </div>
               <div class="mission-bar">
-                <div style="width:${Math.round((progress / mission.target) * 100)}%"></div>
+                <div style="width:${pct}%"></div>
                 <span>${progress} / ${mission.target}</span>
               </div>
               <button class="mini${done && !claimed ? ' claimable' : ''}" data-mission="${mission.id}"
@@ -183,7 +251,7 @@ export function renderProgressPage(root: HTMLElement): () => void {
               t.reward.kind === 'chalk'
                 ? `${t.reward.amount} chalk`
                 : t.reward.kind === 'spin'
-                  ? 'A spin'
+                  ? '1 key'
                   : (item?.name ?? 'Cosmetic');
             return `
             <div class="season-tier${reached ? ' reached' : ''}${taken ? ' taken' : ''}">

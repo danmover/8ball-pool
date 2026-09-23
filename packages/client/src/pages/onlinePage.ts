@@ -16,6 +16,7 @@ import { icon } from '../render/icons';
 import { showToast } from '../render/dialogs';
 import { navigate } from '../router';
 import { bindPageShell, emptyStateHtml, pageShellHtml, skeletonRowsHtml } from './pageShell';
+import { sectionStyle } from '../ui/sections';
 import { runBusyWithTimeout } from '../ui/busy';
 
 /**
@@ -168,8 +169,9 @@ export function renderOnlinePage(root: HTMLElement): () => void {
 
   function draw(): void {
     root.innerHTML = `
-      <div class="page online-page">
+      <div class="page online-page menu-page" style="${sectionStyle('online')}">
         ${pageShellHtml({
+          section: 'online',
           title: 'Play Online',
           subtitle: 'Jump into a table, or pick one from the list',
           actions: `<span class="rank-badge" title="Your ranked standing">${formatRating(me)}</span>`,

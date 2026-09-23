@@ -1,6 +1,6 @@
 import type { PlayerSettings } from '@8ball/shared';
 import type { TableRenderer } from '../render/TableRenderer';
-import { applyTableThemeToPage, tableThemeFor } from '../render/cosmetics/tableThemes';
+import { applyTableThemeToPage, tableThemeFor, venueFor } from '../render/cosmetics/tableThemes';
 import { setMusicVolume, startMusic, stopMusic } from '../render/music';
 import { setAmbienceVolume, startAmbience, stopAmbience } from '../render/ambience';
 
@@ -15,18 +15,30 @@ export function applyRenderSettings(
   // Reduce motion is a master switch: it forces the low-effects path on top of its own.
   const effects = settings.reduceMotion ? 'low' : settings.effectsIntensity;
 
+  const theme = tableThemeFor(settings.tableTheme);
+  /*
+   * The room, as opposed to the table.
+   *
+   * Scenes, music and ambience are authored per shipped venue, and a table built in the Theme
+   * Studio is not one of those — so it borrows the room of the preset it shares a lamp with.
+   * All three have to agree on that, or you get an ice cavern that sounds like a pub.
+   */
+  const venue = venueFor(theme);
+
   renderer?.setColorblindPatterns(settings.colorblindPatterns);
   renderer?.setTableTheme(settings.tableTheme);
   renderer?.setEffectsIntensity(effects);
   renderer?.setTrailsEnabled(settings.ballTrails && !settings.reduceMotion);
   renderer?.setShakeEnabled(settings.screenShake && !settings.reduceMotion);
+  // The moving half of the room is the first thing "reduce motion" is actually about.
+  renderer?.setAmbientMotion(!settings.reduceMotion);
 
   // The surround behind the table follows the theme even on pages with no renderer.
-  applyTableThemeToPage(tableThemeFor(settings.tableTheme));
+  applyTableThemeToPage(theme);
 
   // Each table theme is scored, so switching the table switches the music with it.
   if (settings.musicEnabled && !settings.reduceMotion) {
-    startMusic(tableThemeFor(settings.tableTheme).id, settings.musicVolume);
+    startMusic(venue, settings.musicVolume);
   } else {
     stopMusic();
   }
@@ -36,7 +48,7 @@ export function applyRenderSettings(
   // `reduceMotion` deliberately does *not* silence it — it is about movement, not sound, and a
   // steady room tone is if anything the calmer option.
   if (settings.ambienceEnabled) {
-    startAmbience(tableThemeFor(settings.tableTheme).id, settings.ambienceVolume);
+    startAmbience(venue, settings.ambienceVolume);
   } else {
     stopAmbience();
   }

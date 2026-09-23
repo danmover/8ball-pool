@@ -53,13 +53,10 @@
 }
 
 .bn-champion {
-  background:
-    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, transparent 60%),
-    linear-gradient(180deg, #4a3a10, #241a05);
-  background-size:
-    250% 100%,
-    100% 100%;
-  animation: championSheen 3.5s linear infinite;
+  /* Its own stacking context, so the sheen overlay can sit under the name at z-index -1
+     while still above the banner's background — where it was when it was a background. */
+  isolation: isolate;
+  background: linear-gradient(180deg, #4a3a10, #241a05);
   box-shadow:
     inset 0 0 0 3px #ffe27a,
     inset 0 0 0 6px #b8862a,
@@ -128,6 +125,7 @@
 }
 
 .bn-oracle {
+  isolation: isolate;
   background:
     radial-gradient(circle at 20% 20%, rgba(185, 140, 255, 0.45), transparent 45%),
     radial-gradient(circle at 80% 70%, rgba(52, 226, 176, 0.3), transparent 45%),
@@ -137,6 +135,34 @@
     inset 0 0 26px rgba(185, 140, 255, 0.35),
     0 0 30px rgba(122, 74, 255, 0.4),
     0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+/* The champion's sheen, sliding rather than repainting — the banner clips it. */
+.bn-champion::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 250%;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, transparent 60%);
+  animation: championSheen 3.5s linear infinite;
+}
+
+/* The oracle breathes its inner light through an overlay's opacity rather than by animating
+   four box-shadows; the outer glow holds still, since the banner clips anything outside it. */
+.bn-oracle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 2px #e8d8ff,
+    inset 0 0 34px rgba(185, 140, 255, 0.5);
   animation: oracleBreathe 5s ease-in-out infinite alternate;
 }
 
@@ -194,15 +220,18 @@
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
+  /* Slides across by transform; `.item-card` clips it. Animating `background-position` here
+     re-rasterised the whole card — bevel, gradients, shadows — every frame it was on screen,
+     which measured as most of the locker's GPU time. */
   background: linear-gradient(
     115deg,
-    transparent 34%,
-    rgba(185, 140, 255, 0.35) 47%,
-    rgba(52, 226, 176, 0.28) 53%,
-    transparent 66%
+    transparent 30%,
+    rgba(185, 140, 255, 0.35) 46%,
+    rgba(52, 226, 176, 0.28) 54%,
+    transparent 70%
   );
-  background-size: 260% 100%;
-  animation: mysticSheen 3.2s linear infinite;
+  transform: translateX(-100%);
+  animation: mysticSheen 3.2s linear 3;
 }
 
 .item-rarity {

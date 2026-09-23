@@ -9,7 +9,8 @@
  *
  * Now each layer may only override the ones above it: tokens are facts, base knows nothing
  * about pool, components are what every screen is built from, and game and screens are the two
- * places something is allowed to be local to.
+ * places something is allowed to be local to. `system` is last because it is the one that makes
+ * the others agree — the plate, the room and the card every menu page is drawn in.
  */
 import './styles/tokens.css';
 import './styles/base.css';
@@ -17,6 +18,7 @@ import './styles/components.css';
 import './styles/game.css';
 import './styles/screens.css';
 import './styles/cosmetics.css';
+import './styles/system.css';
 import { startRouter, setCleanup, replace } from './router';
 import { renderHomePage } from './pages/homePage';
 import { renderHostPage } from './pages/hostPage';

@@ -46,8 +46,9 @@ import { offerShareCard, renderShareCard } from '../render/shareCard';
  * enough that the replay is over before anyone wants it to be.
  */
 const REPLAY_WINDOW_MS = 6000;
-import { confirmLeave, showToast } from '../render/dialogs';
+import { confirmLeave } from '../render/dialogs';
 import { PotCelebrator } from '../render/potCelebration';
+import { mountNotices, type NoticeOptions } from '../render/notices';
 import {
   challengeStars,
   equippedLoadout,
@@ -202,14 +203,16 @@ export function renderHostPage(
       <div class="bracket-wrap" id="bracketWrap"></div>
       <div class="centre-hud">
         <!--
-          Whose shot it is, and why the last one ended. The table had neither: the turn banner
-          existed only on the phone, so on the big screen a turn arriving was a scoreboard
-          highlight moving and nothing else — easy to miss across a room. And the reason for a
-          foul was said once in a toast and then gone, which is exactly the moment you were
-          looking at the balls rather than the corner of the screen.
+          Everything the table says, in one rail: whose shot it is, why the last one ended,
+          what a shot was worth, who just disconnected. It used to be four systems — a turn
+          flourish and a foul note here, a toast stack fixed twelve pixels lower, and combo
+          callouts a third of the way down the screen — which on a busy shot put four
+          unrelated objects on screen at once, two of them painted through each other.
+
+          It sits first in the centre column so the shot clock flows underneath whatever is
+          currently being said, rather than behind it.
         -->
-        <div class="turn-flourish" id="turnFlourish" hidden></div>
-        <div class="foul-note" id="foulNote" hidden></div>
+        <div id="notices"></div>
         <div class="shot-clock" id="shotClock" style="display:none"></div>
         <div class="speed-clock" id="speedClock" style="display:none"></div>
         <div class="spot-bar" id="spotBar" style="display:none"></div>
@@ -217,7 +220,6 @@ export function renderHostPage(
         <div id="callout"></div>
         <div id="callHud"></div>
       </div>
-      <div class="toast-stack" id="toastStack" role="status" aria-live="polite"></div>
       <div class="challenge-hud" id="challengeHud" style="display:none"></div>
       <div id="bottomArea"></div>
     </div>
@@ -287,6 +289,14 @@ export function renderHostPage(
   const lobbyWrap = root.querySelector<HTMLElement>('#lobbyWrap')!;
   const shotDeck = root.querySelector<HTMLElement>('#shotDeck')!;
   const challengeHud = root.querySelector<HTMLElement>('#challengeHud')!;
+
+  /*
+   * The one voice the table has. Every announcement in this file goes through `notify`, and
+   * the rail decides what outranks what — so a foul can no longer land on top of the turn it
+   * handed over, and three identical errors fold into one note with a count.
+   */
+  const notices = mountNotices(root.querySelector<HTMLElement>('#notices')!);
+  const notify = (message: string, opts: NoticeOptions = {}): void => notices.show(message, opts);
   const powerValue = root.querySelector<HTMLElement>('#powerValue')!;
   const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
   const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
@@ -327,16 +337,28 @@ export function renderHostPage(
     shotDeck.style.setProperty('--deck-scale', '1');
     deckNaturalHeight = shotDeck.offsetHeight || deckNaturalHeight;
     if (!deckNaturalHeight) return;
-    const scale = Math.max(0.62, Math.min(1, (window.innerHeight - renderer.tableBottomOnScreen() - 18) / deckNaturalHeight));
-    shotDeck.style.setProperty('--deck-scale', scale.toFixed(3));
 
     /*
-     * If the deck has shrunk as far as it is allowed and still does not fit, the table gives
-     * way instead. Shrinking the controls without limit is the wrong trade — a deck nobody can
-     * hit is worse than a slightly smaller table — and letting it sit on the bottom rail
-     * covers the middle pocket.
+     * The table first, between the scoreboard and a full-size deck — then the deck takes
+     * whatever floor is really left under it.
+     *
+     * The scoreboard's own bottom edge is the top of the band. The table used to mirror the
+     * deck's band at the top instead, leaving ~190px of empty floor under a ~100px
+     * scoreboard; measuring what is really there is what lets the table be as big as the
+     * room it has.
      */
-    renderer.setBottomClearance(deckNaturalHeight * scale + 22);
+    const topBar = root.querySelector<HTMLElement>('#gameHud .top-bar');
+    const hudBottom = topBar && topBar.offsetParent ? topBar.getBoundingClientRect().bottom + 10 : 0;
+    renderer.setClearances(hudBottom, deckNaturalHeight + 22);
+
+    /*
+     * If the window is too short for both, the table stops shrinking at its floor and the deck
+     * gives way down to its own. Shrinking the controls without limit is the wrong trade — a
+     * deck nobody can hit is worse than a slightly smaller table — and letting it sit on the
+     * bottom rail covers the middle pocket.
+     */
+    const scale = Math.max(0.62, Math.min(1, (window.innerHeight - renderer.tableBottomOnScreen() - 18) / deckNaturalHeight));
+    shotDeck.style.setProperty('--deck-scale', scale.toFixed(3));
   }
 
   function setPowerHud(power: number): void {
@@ -685,7 +707,7 @@ export function renderHostPage(
     // visible underneath it.
     root.classList.toggle('table-portrait', online);
     applyRenderSettings(renderer, settings);
-    celebrator = new PotCelebrator(root, () => renderer, settings);
+    celebrator = new PotCelebrator(root, () => renderer, settings, notices);
     if (lastState) renderer.updateBalls(lastState.balls);
 
     // The host screen had no spin control at all, so hosts could only ever play centre-ball.
@@ -1346,15 +1368,26 @@ export function renderHostPage(
    * Post-match rewards for the seats this device actually played. XP is awarded once per
    * game (guarded by `rewardsShown`) so a re-render of the overlay can't double-pay.
    */
-  /** Tells the player what they just earned, one toast at a time so none of it is missed. */
+  /**
+   * Tells the player what they just earned, one note at a time so none of it is missed.
+   *
+   * The reward itself is drawn as chips rather than written into the sentence, so what you
+   * got here looks identical to what the mission list promised you for it.
+   */
   function announceUnlocks(outcome: ReturnType<typeof recordFrameResult>): void {
-    const stack = root.querySelector<HTMLElement>('#toastStack')!;
     if (outcome.careerReward) {
       const item = cosmeticById(outcome.careerReward);
-      showToast(stack, `Won from the ladder: ${item?.name ?? outcome.careerReward}`, 'reward', 4200);
+      notify('Won from the ladder', {
+        kind: 'reward',
+        ms: 4200,
+        reward: { item: item?.name ?? outcome.careerReward },
+      });
     }
     outcome.achievements.forEach((a, i) => {
-      setTimeout(() => showToast(stack, `${a.name} — ${a.blurb}`, 'reward', 4000), 700 * (i + 1));
+      setTimeout(
+        () => notify(a.name, { kind: 'reward', detail: a.blurb, ms: 4000, icon: 'trophy' }),
+        700 * (i + 1)
+      );
     });
   }
 
@@ -1435,14 +1468,14 @@ export function renderHostPage(
     });
   }
 
-  /** Celebration toast when the day's objective is met. */
+  /** The day's objective, met. */
   function showChallengeToast(xp: number): void {
-    showToast(
-      root.querySelector<HTMLElement>('#toastStack')!,
-      `Daily challenge complete — +${xp} XP and a spin`,
-      'reward',
-      4000
-    );
+    notify('Daily challenge complete', {
+      kind: 'reward',
+      ms: 4000,
+      icon: 'check',
+      reward: { xp, spins: 1 },
+    });
     if (settings.soundEnabled) sfx.playLevelUp(settings.soundVolume);
   }
 
@@ -1691,33 +1724,25 @@ export function renderHostPage(
    */
   let announcedShooter: Seat | null = null;
   function announceTurn(state: GameState): void {
-    const flourish = root.querySelector<HTMLElement>('#turnFlourish');
-    const foul = root.querySelector<HTMLElement>('#foulNote');
-    if (!flourish || !foul) return;
-
     if (state.phase === 'game_over') {
-      flourish.hidden = true;
-      foul.hidden = true;
+      notices.clearPin();
       announcedShooter = null;
       return;
     }
+    if (state.currentShooter === announcedShooter) return;
 
-    if (state.currentShooter !== announcedShooter) {
-      announcedShooter = state.currentShooter;
-      const mine = state.currentShooter === ownedSeat;
-      const who = state.players[state.currentShooter]?.name ?? 'Someone';
-      flourish.textContent = mine ? 'Your shot' : `${who} to play`;
-      flourish.classList.toggle('mine', mine);
-      flourish.hidden = false;
-      // Restarting the animation needs the class off and a reflow between, or a second turn
-      // in a row silently plays nothing.
-      flourish.classList.remove('show');
-      void flourish.offsetWidth;
-      flourish.classList.add('show');
+    announcedShooter = state.currentShooter;
+    const mine = state.currentShooter === ownedSeat;
+    const who = state.players[state.currentShooter]?.name ?? 'Someone';
+    notify(mine ? 'Your shot' : `${who} to play`, { kind: 'turn', strong: mine });
 
-      foul.textContent = state.lastFoulReason ?? '';
-      foul.hidden = !state.lastFoulReason;
-    }
+    /*
+     * The reason, pinned rather than announced. A foul explained once in something that fades
+     * is explained at the exact moment you were looking at the balls instead; this stays up
+     * until it stops being true, which is the next time somebody takes a shot.
+     */
+    if (state.lastFoulReason) notices.pin(state.lastFoulReason, { kind: 'foul', icon: 'close' });
+    else notices.clearPin();
   }
 
   function applyState(state: GameState): void {
@@ -1864,7 +1889,7 @@ export function renderHostPage(
       shotKind.miscued = true;
       // Say so out loud. A miscue looks identical to a badly played shot from the outside, and
       // "the game is broken" is the wrong lesson to take from striking too far off centre.
-      showToast(root.querySelector<HTMLElement>('#toastStack')!, 'Miscue! Struck too far off centre', 'foul');
+      notify('Miscue!', { kind: 'foul', detail: 'Struck too far off centre' });
       if (settings.soundEnabled) sfx.playMiscue(settings.soundVolume);
     } else if (ev.type === 'shotSettled') {
       onShotSettled();
@@ -2008,11 +2033,9 @@ export function renderHostPage(
         subtitle: modeDescriptor(lastState?.mode ?? 'classic').name,
       });
       const how = await offerShareCard(card, 'shot.png');
-      showToast(
-        root.querySelector<HTMLElement>('#toastStack')!,
-        how === 'copied' ? 'Shot copied — paste it anywhere' : 'Shot saved as an image',
-        'info'
-      );
+      notify(how === 'copied' ? 'Shot copied — paste it anywhere' : 'Shot saved as an image', {
+        icon: 'replay',
+      });
     });
     overlay.querySelector('#rpClose')!.addEventListener('click', close);
     scrub.addEventListener('input', () => replayPlayer.seek(Number(scrub.value) / 1000));
@@ -2046,11 +2069,12 @@ export function renderHostPage(
     lastCalloutText = call?.text ?? null;
     if (!call) return;
 
-    const el = document.createElement('div');
-    el.className = `shot-callout tone-${call.tone}`;
-    el.textContent = call.text;
-    root.querySelector<HTMLElement>('#toastStack')!.appendChild(el);
-    setTimeout(() => el.remove(), 2600);
+    notify(call.text, {
+      kind: 'feat',
+      // A great shot is said loudly; a wry one about a foul must not look like a trophy.
+      scale: call.tone === 'great' ? 1.15 : call.tone === 'wry' ? 0.85 : 1,
+      ms: 2600,
+    });
   }
 
   socket.on('ratingChanged', ({ rating, delta, provisional, tier }) => {
@@ -2065,24 +2089,24 @@ export function renderHostPage(
     // worst version of this; knowing why nothing is happening is most of the fix.
     void seat;
     const seconds = Math.max(0, Math.round((forfeitsAt - Date.now()) / 1000));
-    showToast(
-      root.querySelector<HTMLElement>('#toastStack')!,
-      `${name} lost connection — ${seconds}s to come back`,
-      'foul',
-      4000
-    );
+    notify(`${name} lost connection`, {
+      kind: 'foul',
+      detail: `${seconds}s to come back before the frame is forfeited`,
+      ms: 4000,
+      key: `dc:${name}`,
+    });
   });
 
   socket.on('seatReconnected', ({ name }) => {
-    showToast(root.querySelector<HTMLElement>('#toastStack')!, `${name} is back`, 'info');
+    notify(`${name} is back`, { icon: 'check', key: `dc:${name}` });
   });
 
   socket.on('seatForfeited', ({ name }) => {
-    showToast(root.querySelector<HTMLElement>('#toastStack')!, `${name} left the table`, 'foul', 4000);
+    notify(`${name} left the table`, { kind: 'foul', ms: 4000, icon: 'leave' });
   });
 
   socket.on('errorMessage', (msg) => {
-    showToast(root.querySelector<HTMLElement>('#toastStack')!, msg, 'foul');
+    notify(msg, { kind: 'foul' });
   });
 
   return () => {

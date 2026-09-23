@@ -9,6 +9,7 @@ import {
   xpForResult,
 } from '@8ball/shared';
 import { PotCelebrator } from '../render/potCelebration';
+import { mountNotices } from '../render/notices';
 import {
   equippedLoadout,
   getProfile,
@@ -416,7 +417,7 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
           ${EMOTES.map((e) => `<button class="emote-btn" data-emote="${e}">${e}</button>`).join('')}
         </div>
       </div>
-      <div class="toast-stack" id="toastStack" role="status" aria-live="polite"></div>
+      <div class="toast-stack" id="toastStack"></div>
       <div class="ctrl-buttons">
         <!-- The locker was reachable from the join screen and then not again, so changing your
              cue meant leaving the table for good. A player session is stored under this code,
@@ -436,13 +437,16 @@ export function renderControllerPage(root: HTMLElement, code: string): () => voi
     const powerTier = root.querySelector<HTMLElement>('#powerTier')!;
     const powerHud = root.querySelector<HTMLElement>('#powerHud')!;
 
+    // The phone says the same things the big screen does, through the same rail.
+    const notices = mountNotices(root.querySelector<HTMLElement>('#toastStack')!);
+
     renderer = await TableRenderer.create(miniTableEl);
     renderer.setChromeless(true); // no chute/power bar on the small phone preview
     applyRenderSettings(renderer, settings);
     // This preview is the player's own screen, so it shows their own ball set — the shared
     // table on the host screen is the one that follows the host's set.
     renderer.setBallSet(equippedLoadout().ballSet);
-    celebrator = new PotCelebrator(root, () => renderer, settings);
+    celebrator = new PotCelebrator(root, () => renderer, settings, notices);
     if (lastState) renderer.updateBalls(lastState.balls);
 
     /*

@@ -192,57 +192,6 @@
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.7));
 }
 
-.reveal-burst {
-  position: absolute;
-  top: 30px;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--rarity), transparent 66%);
-  opacity: 0.5;
-  animation: burstPulse 1.6s ease-out infinite;
-  pointer-events: none;
-}
-
-.reveal-preview {
-  position: relative;
-  z-index: 2;
-}
-
-.reveal-rarity {
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-weight: 800;
-  color: var(--rarity);
-}
-
-.reveal-name {
-  margin: 0;
-  font-size: 1.6rem;
-}
-
-.reveal-blurb {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.86rem;
-  max-width: 280px;
-}
-
-.reveal-new {
-  margin: 0.2rem 0 0;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-  color: var(--accent);
-}
-
-.reveal-dupe {
-  margin: 0.2rem 0 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
 /* ==========================================================================
    The arcade shell: home screen, mode tiles, shot clock, emotes and the
    extra lobby controls.
@@ -255,14 +204,15 @@
   overflow-x: hidden;
 }
 
-/* A live table runs behind the menu — pushed back with blur and low opacity so it
-   reads as atmosphere rather than competing with the buttons. */
+/* A live table runs behind the menu — pushed back with low opacity so it reads as
+   atmosphere rather than competing with the buttons. It is drawn at half resolution, which
+   softens it more than the `blur(1px)` filter that used to sit here — and that filter re-blurred
+   the entire window on every frame the table moved. */
 .home-backdrop {
   position: fixed;
   inset: -4% -4% -4% -4%;
   z-index: 0;
   opacity: 0.6;
-  filter: blur(1px);
   pointer-events: none;
 }
 
@@ -301,14 +251,14 @@
   max-width: 1180px;
   min-height: 100%;
   margin: 0 auto;
-  padding: 1.6rem 1.2rem 2rem;
+  padding: 1.3rem 1.2rem 1.4rem;
   display: flex;
   flex-direction: column;
   /* `safe` matters: plain `center` in a scrolling column pushes the overflow off the *top*,
      where no scrollbar can reach it. Centred while it fits, top-aligned once it does not —
      which is the whole reason the bottom of this page was unreachable. */
   justify-content: safe center;
-  gap: 1.4rem;
+  gap: 1.15rem;
 }
 
 .home-head {
@@ -531,13 +481,10 @@
 .mode-tile.active .mode-art::after {
   content: '';
   position: absolute;
-  top: -60%;
-  bottom: -60%;
-  width: 42px;
-  left: -70px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  transform: rotate(16deg);
-  animation: tileSheen 4.5s ease-in-out infinite;
+  inset: 0;
+  background: linear-gradient(106deg, transparent 38%, rgba(255, 255, 255, 0.35) 50%, transparent 62%);
+  transform: translateX(-100%);
+  animation: tileSheen 4.5s ease-in-out 3;
 }
 
 /* A ribbon on the selected tile, because which mode is chosen decides what Play does and a
@@ -670,8 +617,10 @@
     0 0 0 2px var(--ink),
     0 7px 0 var(--gold-dark),
     0 15px 24px rgba(0, 0, 0, 0.45),
-    0 0 24px rgba(255, 197, 49, 0.25);
-  animation: playBreathe 3.2s ease-in-out infinite;
+    0 0 30px rgba(255, 197, 49, 0.36);
+  /* The glow used to breathe by animating this whole box-shadow — a repaint of the biggest
+     button on the page, every frame, for as long as the menu was open. It holds at the middle
+     of that breath now; the shine crossing it is what says "press me". */
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.15s ease;
 }
 
@@ -679,14 +628,13 @@
 .btn-play::after {
   content: '';
   position: absolute;
-  top: -60%;
-  bottom: -60%;
-  width: 46px;
-  left: -90px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-  transform: rotate(18deg);
+  inset: 0;
+  /* The slant is in the gradient rather than a rotate, so the one transform left is the slide
+     — which the compositor runs without repainting the button. */
+  background: linear-gradient(108deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
+  transform: translateX(-100%);
   pointer-events: none;
-  animation: playShine 3.8s ease-in-out infinite;
+  animation: playShine 3.8s ease-in-out 3;
 }
 
 .btn-play:hover:not(:disabled) {
@@ -776,26 +724,55 @@
 
 /* Sized to what it holds — four characters — rather than stretching to a black slab twice the
    width of the text in it, which is what made it the heaviest thing in the row. */
+/* One control, not two.
+   A separate input and a separate button, each with its own outline and a gap between them,
+   read as two more things to weigh up on a row that already had three. Joined into a single
+   fused unit they read as what they are: one field with its own submit. */
 .join-box {
   flex: 0 0 auto;
   display: flex;
-  gap: 0.4rem;
   align-items: stretch;
+  border-radius: 13px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 3px 0 var(--paper-3);
 }
 
 .join-box input {
-  flex: 0 0 116px;
-  width: 116px;
+  flex: 0 0 108px;
+  width: 108px;
   text-align: center;
   letter-spacing: 0.2em;
   font-weight: 700;
   font-family: 'Fredoka', sans-serif;
+  border-radius: 0;
+  box-shadow: none;
+  /* Placeholder was near-invisible against the panel it sits on. */
+  color: var(--paper);
+  background: var(--panel-3);
+}
+
+.join-box input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.join-box input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--gold);
 }
 
 .join-box button {
   flex: 0 0 auto;
-  padding: 0.6rem 1.1rem;
-  border-radius: 12px;
+  padding: 0.6rem 1.05rem;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.join-box button:hover:not(:disabled) {
+  transform: none;
+  filter: brightness(1.08);
 }
 
 .home-actions .error {
@@ -814,16 +791,39 @@
    sit on one line at any width the game is actually played at.
    ========================================================================== */
 
+/*
+ * The dock.
+ *
+ * The same machined plate the shot deck stands on at the table — cut corners, a bolt in each
+ * one, a lit lip along the top — so the menu and the game are visibly the same machine. It was
+ * a faint translucent strip before, the one part of the hub with no edge to it at all.
+ *
+ * The lip takes the page accent, so it changes colour with the chosen game along with the
+ * rest of the room.
+ */
 .home-shelf {
+  --lip: var(--page-accent, var(--gold));
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(255, 236, 255, 0.05), rgba(0, 0, 0, 0.3));
+  gap: 1.1rem;
+  padding: 1rem 1.1rem 0.95rem 1.3rem;
+  border-radius: 24px;
+  corner-shape: bevel;
+  background:
+    linear-gradient(90deg, transparent 3%, var(--lip) 15%, color-mix(in srgb, var(--lip) 45%, #fff) 50%, var(--lip) 85%, transparent 97%) top center / 100% 2.5px no-repeat,
+    radial-gradient(ellipse 60% 100% at 50% 0%, color-mix(in srgb, var(--lip) 12%, transparent), transparent 70%),
+    radial-gradient(circle 3px at 19px 17px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 19px) 17px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at 17px calc(100% - 15px), rgba(255, 236, 255, 0.3), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 17px) calc(100% - 15px), rgba(255, 236, 255, 0.3), transparent 100%),
+    linear-gradient(180deg, rgba(78, 47, 102, 0.9) 0%, rgba(32, 18, 47, 0.94) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 255, 0.12),
-    inset 0 0 0 1.5px rgba(0, 0, 0, 0.45);
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1.5px rgba(255, 236, 255, 0.12),
+    0 0 34px -8px color-mix(in srgb, var(--lip) 45%, transparent),
+    0 7px 0 rgba(10, 5, 18, 0.8),
+    0 18px 30px rgba(0, 0, 0, 0.55);
 }
 
 /* The six spread themselves across whatever room the Today card leaves, so the shelf is
@@ -836,6 +836,111 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.5rem 0.35rem;
+}
+
+/*
+ * A token is a gauge.
+ *
+ * The disc sits inside a ring in its own colour, filled to how far through that place you
+ * are — the same conic ring as the power gauge on the shot deck. The face is drawn on top of
+ * the ring as a `closest-side` circle, so the ring is whatever is left round its edge and
+ * scales with the disc on every height tier without a second element.
+ */
+.home-shelf .token-disc {
+  width: 60px;
+  height: 60px;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 236, 255, 0.16), transparent 42%),
+    radial-gradient(circle closest-side, transparent 0 calc(100% - 7.5px), rgba(0, 0, 0, 0.55) calc(100% - 7px) calc(100% - 5.5px), transparent calc(100% - 5px)),
+    radial-gradient(circle closest-side,
+      color-mix(in srgb, var(--tok, #fff) 14%, #2e1b40) 0,
+      #22132f calc(100% - 7.5px),
+      transparent calc(100% - 7px)),
+    conic-gradient(var(--tok, #fff) var(--ring, 0%), rgba(12, 6, 22, 0.75) 0);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1px rgba(255, 236, 255, 0.12),
+    0 5px 0 rgba(10, 5, 18, 0.85),
+    0 10px 16px rgba(0, 0, 0, 0.4);
+}
+
+.home-shelf .token:hover .token-disc {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1px rgba(255, 236, 255, 0.2),
+    0 9px 0 rgba(10, 5, 18, 0.85),
+    0 16px 22px rgba(0, 0, 0, 0.45),
+    0 0 28px color-mix(in srgb, var(--tok, #fff) 55%, transparent);
+}
+
+.home-shelf .token:active .token-disc {
+  box-shadow: 0 0 0 2px var(--ink), 0 1px 0 rgba(10, 5, 18, 0.85);
+}
+
+/* Something waiting: the whole ring lights gold and the disc keeps nudging until you look. */
+.home-shelf .token.has-reward .token-disc {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.5), transparent 45%),
+    radial-gradient(circle closest-side, var(--gold-light) 0, var(--gold) calc(100% - 7.5px), transparent calc(100% - 7px)),
+    conic-gradient(#fff4c2, var(--gold), #fff4c2);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 5px 0 var(--gold-dark),
+    0 0 26px rgba(255, 197, 49, 0.5);
+}
+
+.home-shelf .token-label {
+  font-size: 0.8rem;
+}
+
+/* Between the doors and the day's task: an engraved seam down the plate, the way the deck's
+   bays are separated. */
+.home-shelf .today-card {
+  position: relative;
+  margin-left: 0.3rem;
+}
+
+.home-shelf .today-card::after {
+  content: '';
+  position: absolute;
+  left: -1.05rem;
+  top: 8%;
+  bottom: 8%;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.6) 20%, rgba(0, 0, 0, 0.6) 80%, transparent);
+  box-shadow: 1.5px 0 0 rgba(255, 236, 255, 0.07);
+}
+
+/*
+ * Today's task, as a readout set into the plate: a recessed screen rather than a second card
+ * stacked on top of the first. Its gold bar across the top keeps it the day's one call to
+ * action.
+ */
+.home-shelf .today-card {
+  overflow: visible;
+  border-radius: 16px;
+  corner-shape: bevel;
+  background:
+    linear-gradient(90deg, transparent 5%, var(--gold) 22%, var(--gold-light) 50%, var(--gold) 78%, transparent 95%) top center / 100% 2px no-repeat,
+    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(255, 197, 49, 0.12), transparent 70%),
+    linear-gradient(180deg, rgba(8, 4, 14, 0.72), rgba(20, 10, 30, 0.72));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1.5px rgba(255, 236, 255, 0.07),
+    inset 0 3px 10px rgba(0, 0, 0, 0.55);
+}
+
+.home-shelf .today-card::before {
+  content: none;
+}
+
+.home-shelf .today-card.done {
+  background:
+    linear-gradient(90deg, transparent 5%, var(--accent) 22%, #b8ffea 50%, var(--accent) 78%, transparent 95%) top center / 100% 2px no-repeat,
+    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(52, 226, 176, 0.12), transparent 70%),
+    linear-gradient(180deg, rgba(8, 4, 14, 0.72), rgba(20, 10, 30, 0.72));
 }
 
 /* --- Today's challenge ---
@@ -905,6 +1010,10 @@
 
 .today-card.done .today-eyebrow {
   color: var(--accent);
+}
+
+.today-card .rw-row {
+  margin-top: 0.45rem;
 }
 
 .today-reward {
@@ -981,6 +1090,15 @@
   /* Full width once it is on its own row — a 268px card centred in a phone looks stranded. */
   .today-card {
     flex-basis: auto;
+  }
+
+  /* Stacked, there is nothing beside it to be separated from. */
+  .home-shelf .today-card {
+    margin-left: 0;
+  }
+
+  .home-shelf .today-card::after {
+    content: none;
   }
 
   .action-pair {
@@ -1163,6 +1281,27 @@ body.reduce-motion .stat-card {
 }
 
 /* ================= Case opening ================= */
+/* ==========================================================================
+   Opening a case.
+
+   Four beats, and the root element carries which one we are on: `.phase-crate`,
+   `.phase-bursting`, `.phase-spinning`, `.phase-revealed`. Keeping the state in one class
+   rather than in a dozen toggled elements is what makes the choreography readable — every
+   rule below is "at this beat, this element is here".
+
+   `--rc` is the rarity colour of the prize, set on the shell the moment it is known, and it
+   drives the lip, the seam glow, the rays and the frame. One custom property is the whole
+   reason a mystic feels different from a common rather than merely being labelled differently.
+
+   The second draft is bigger and plainer about what matters. The reel was a strip of small
+   cards lost in the middle of a dark box, read through a 116px "window" of two hairlines that
+   visibly failed to line up with the cards sliding under it; now the cards are larger, the
+   marker is one lit line down the centre, and when it lands everything that did not win goes
+   dark. The overlay also stopped blurring the page behind it — a full-screen `backdrop-filter`
+   under a reel that moves every frame is re-blurred every frame, to show a page that sits
+   under a 94%-opaque scrim anyway.
+   ========================================================================== */
+
 .case-overlay {
   position: fixed;
   inset: 0;
@@ -1170,203 +1309,804 @@ body.reduce-motion .stat-card {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(6, 8, 14, 0.82);
-  backdrop-filter: blur(3px);
   padding: 1rem;
+  background:
+    radial-gradient(ellipse 55% 50% at 50% 40%, rgba(106, 63, 143, 0.2), transparent 70%),
+    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(20, 10, 32, 0.9), rgba(3, 2, 6, 0.96));
+  opacity: 0;
+  transition: opacity 0.18s ease;
 }
 
-.case-card {
+.case-overlay.open {
+  opacity: 1;
+}
+
+.case-shell {
+  --rc: #7d8aa0;
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.7rem;
-  width: min(760px, 96vw);
-  padding: 1.2rem;
-  border-radius: 20px;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  width: min(860px, 96vw);
+  padding: 1rem 1.1rem 1.1rem;
+  border-radius: 26px;
+  corner-shape: bevel;
   color: var(--paper);
+  background:
+    linear-gradient(90deg, transparent 3%, var(--rc) 16%, color-mix(in srgb, var(--rc) 45%, #fff) 50%, var(--rc) 84%, transparent 97%) top center / 100% 3px no-repeat,
+    radial-gradient(ellipse 60% 40% at 50% 0%, color-mix(in srgb, var(--rc) 16%, transparent), transparent 70%),
+    radial-gradient(circle 3px at 20px 18px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 20px) 18px, rgba(255, 236, 255, 0.5), transparent 100%),
+    radial-gradient(circle 3px at 18px calc(100% - 16px), rgba(255, 236, 255, 0.3), transparent 100%),
+    radial-gradient(circle 3px at calc(100% - 18px) calc(100% - 16px), rgba(255, 236, 255, 0.3), transparent 100%),
+    linear-gradient(180deg, #4b2d63 0%, #1f112e 100%);
   box-shadow:
     0 0 0 2px var(--ink),
-    0 8px 0 var(--paper-3),
-    0 26px 60px rgba(0, 0, 0, 0.6);
+    inset 0 0 0 1.5px rgba(255, 236, 255, 0.1),
+    0 0 60px -10px color-mix(in srgb, var(--rc) 55%, transparent),
+    0 8px 0 rgba(10, 5, 18, 0.85),
+    0 30px 70px rgba(0, 0, 0, 0.65);
+  transform: scale(0.92);
+  transition:
+    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.5s ease;
 }
 
-.case-sub {
+.case-overlay.open .case-shell {
+  transform: none;
+}
+
+/* ---- Head ---- */
+
+.case-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0.4rem 0.85rem;
+}
+
+.case-kicker {
+  display: block;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.case-title h2 {
   margin: 0;
-  font-size: 0.8rem;
-  opacity: 0.65;
+  font-size: 1.55rem;
+  line-height: 1;
+  color: #fff6ff;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--rc) 50%, transparent), 0 3px 0 var(--ink);
 }
 
-/* ---- The strip ---- */
-.reel-stage {
+/* Keys, not "spins": there is a case on screen, and the thing that opens a case is a key. */
+.case-spins {
+  margin-left: auto;
+  padding: 0.35rem 0.8rem;
+  border-radius: 11px;
+  corner-shape: bevel;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+    0 0 16px rgba(255, 197, 49, 0.4);
+}
+
+.case-spins.empty {
+  color: var(--paper-2);
+  background: var(--panel-3);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.case-x {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 12px;
+  corner-shape: bevel;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* ---- The stage: crate, reel and reveal all live here, one at a time ---- */
+
+/*
+ * The stage.
+ *
+ * Sized by `min-height` with `height: auto`, and the reveal sits in normal flow inside it —
+ * *not* pinned with `inset: 0` like the crate and the reel are. An absolutely-positioned
+ * reveal is the height of the stage no matter how tall its contents are, so a long blurb or a
+ * big frame simply ran off the top. Letting the prize define the box removes the whole class
+ * of bug rather than picking a number that happens to fit the prizes I looked at.
+ *
+ * A recessed well in the plate, lit from its floor in the prize's colour.
+ */
+.case-stage {
   position: relative;
-  width: 100%;
-  height: 128px;
+  min-height: 312px;
+  border-radius: 18px;
+  corner-shape: bevel;
   overflow: hidden;
-  border-radius: 14px;
-  background: #16121c;
-  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.5);
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 100%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 72%),
+    radial-gradient(ellipse 80% 100% at 50% 55%, #1d1430 0%, #0b0714 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1.5px rgba(255, 236, 255, 0.06),
+    inset 0 4px 18px rgba(0, 0, 0, 0.7);
+  transition: min-height 0.42s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.case-overlay.phase-revealed .case-stage {
+  min-height: 380px;
+}
+
+/* Rays in the prize's colour: evenly spaced spokes, turning slowly behind the prize. */
+.case-rays {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 150%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--rc) 50%, transparent) 0deg 4deg,
+    transparent 4deg 18deg
+  );
+  opacity: 0.32;
+  pointer-events: none;
+  animation: caseRays 30s linear infinite, raysIn 0.7s ease-out both;
+  -webkit-mask-image: radial-gradient(circle, #000 8%, transparent 52%);
+  mask-image: radial-gradient(circle, #000 8%, transparent 52%);
+}
+
+@keyframes raysIn {
+  from { opacity: 0; }
+  to { opacity: 0.32; }
+}
+
+@keyframes caseRays {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ---- Beat 1: the closed case ---- */
+
+.crate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.case-overlay.phase-crate .crate,
+.case-overlay.phase-bursting .crate {
+  opacity: 1;
+}
+
+/* A pool of light on the floor of the well, so the case stands somewhere. */
+.crate::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 380px;
+  height: 90px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 213, 105, 0.22), transparent 70%);
+  pointer-events: none;
+}
+
+.crate-svg {
+  width: 330px;
+  max-width: 80%;
+  overflow: visible;
+  filter: drop-shadow(0 0 34px color-mix(in srgb, var(--rc) 45%, transparent));
+  animation: crateFloat 3.6s ease-in-out infinite;
+}
+
+@keyframes crateFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+.crate-shadow {
+  fill: #000;
+  opacity: 0.45;
+}
+
+/* The seam. This is the case telling you there is something in it, and it is the only thing
+   moving before you press anything — so it has to be plainly visible. */
+.crate-glow {
+  fill: #ffd569;
+  transform-origin: 110px 76px;
+  filter: blur(6px);
+  opacity: 0.55;
+  animation: crateBreathe 2.4s ease-in-out infinite;
+}
+
+@keyframes crateBreathe {
+  0%, 100% { opacity: 0.4; transform: scaleY(0.7); }
+  50% { opacity: 0.95; transform: scaleY(1.35); }
+}
+
+.crate-lid {
+  transform-origin: 110px 80px;
+  transition: transform 0.3s cubic-bezier(0.5, -0.4, 0.7, 0.2);
+}
+
+/* Rattling, right before it goes. */
+.case-overlay.shaking .crate-svg {
+  animation: crateShake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.case-overlay.shaking .crate-glow {
+  animation: crateCharge 0.62s ease-in both;
+}
+
+@keyframes crateShake {
+  0% { transform: translate(0, 0) rotate(0); }
+  15% { transform: translate(-5px, 1px) rotate(-2deg); }
+  30% { transform: translate(5px, -2px) rotate(2.5deg); }
+  45% { transform: translate(-6px, 2px) rotate(-3deg); }
+  60% { transform: translate(6px, -3px) rotate(3deg); }
+  78% { transform: translate(-4px, 1px) rotate(-2deg); }
+  100% { transform: translate(0, -4px) rotate(0); }
+}
+
+@keyframes crateCharge {
+  0% { opacity: 0.3; transform: scaleY(0.9); }
+  100% { opacity: 1; transform: scaleY(2.6); }
+}
+
+/* The lid leaves, and a flash covers the swap to the reel. */
+.case-overlay.phase-bursting .crate-lid {
+  transform: translateY(-150px) rotate(-26deg);
+  opacity: 0;
+}
+
+.case-overlay.phase-bursting .crate-body {
+  animation: crateSink 0.38s ease-in both;
+}
+
+@keyframes crateSink {
+  to { transform: translateY(24px) scale(0.9); opacity: 0; }
+}
+
+.case-overlay.phase-bursting .case-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: radial-gradient(circle at 50% 55%, #fff 0%, var(--rc) 30%, transparent 68%);
+  animation: caseFlash 0.38s ease-out both;
+  pointer-events: none;
+}
+
+@keyframes caseFlash {
+  0% { opacity: 0; transform: scale(0.3); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* ---- Beat 3: the strip ---- */
+
+/*
+ * The strip fades out at both ends through a mask rather than two painted overlays: the
+ * overlays were hard-coded to one shade of the well, so the moment the well took on the
+ * prize's colour they showed up as two dark bars.
+ */
+.reel-stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 204px;
+  transform: translateY(-50%) scaleY(0.72);
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 17%, #000 83%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 17%, #000 83%, transparent 100%);
+}
+
+.case-overlay.phase-spinning .reel-stage,
+.case-overlay.phase-revealed .reel-stage {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
+.case-overlay.phase-revealed .reel-stage {
+  /* Still there behind the reveal, dimmed — the prize rises out of the strip it landed on
+     rather than replacing it, which is what ties the two halves of the animation together. */
+  opacity: 0.25;
+  filter: saturate(0.5);
+}
+
+.reel-fade {
+  display: none;
+}
+
+/* Cell 136px + gap 12px = CELL (148) in caseReel.ts. The offset centres cell 0 on the marker. */
 .reel-track {
   display: flex;
-  gap: 8px;
-  padding: 10px 0;
-  /* The marker sits at the centre; the strip is offset so cell 0 starts under it. */
-  padding-left: calc(50% - 48px);
+  gap: 12px;
+  padding: 18px 0;
+  padding-left: calc(50% - 68px);
   will-change: transform;
 }
 
 .reel-cell {
-  flex: 0 0 96px;
-  height: 104px;
+  flex: 0 0 136px;
+  height: 168px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  border-radius: 10px;
-  background: #221b2c;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
-  /* A bar of the rarity colour along the bottom — readable even at speed. */
-  border-bottom: 4px solid var(--rc, #7d8aa0);
+  gap: 0.35rem;
+  border-radius: 14px;
+  corner-shape: bevel;
+  /* The rarity reads as a wash up the card and a lit edge along its foot, not just a bar —
+     at speed a bar was a row of dashes and a legendary looked like a common going past. */
+  background:
+    linear-gradient(90deg, transparent 8%, var(--rc, #7d8aa0) 25%, var(--rc, #7d8aa0) 75%, transparent 92%) bottom center / 100% 3px no-repeat,
+    radial-gradient(ellipse 80% 60% at 50% 100%, color-mix(in srgb, var(--rc, #7d8aa0) 38%, transparent), transparent 75%),
+    linear-gradient(180deg, #2c2140 0%, #191226 100%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.07);
+  transition: opacity 0.35s ease, filter 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.reel-art {
+  display: grid;
+  place-items: center;
+  height: 84px;
 }
 
 .reel-name {
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.75);
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
   text-align: center;
   line-height: 1.1;
-  padding: 0 0.2rem;
+  padding: 0 0.4rem;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/*
+ * The marker: one lit line down the centre, notched top and bottom.
+ *
+ * It was a 116px window drawn with two hairlines, which put two thin lines across every card
+ * that passed and never lined up with the cards themselves while they moved. A single line says
+ * exactly one thing: whatever it is on when it stops is yours.
+ */
 .reel-marker {
   position: absolute;
   left: 50%;
-  top: 0;
-  bottom: 0;
+  top: 6px;
+  bottom: 6px;
   width: 3px;
   transform: translateX(-50%);
-  background: #ffd569;
-  box-shadow: 0 0 12px rgba(255, 213, 105, 0.9);
   z-index: 3;
   pointer-events: none;
+  border-radius: 3px;
+  /* Solid where it meets the notches, a faint thread where it crosses the card — a line drawn
+     at full strength straight through the prize's art and name was covering the very thing
+     it was pointing at. */
+  background: linear-gradient(
+    180deg,
+    var(--gold-light) 0%,
+    var(--gold) 12%,
+    rgba(255, 244, 214, 0.38) 22%,
+    rgba(255, 244, 214, 0.38) 78%,
+    var(--gold) 88%,
+    var(--gold-light) 100%
+  );
+  box-shadow: 0 0 12px rgba(255, 213, 105, 0.55);
 }
 
-.reel-marker::before,
-.reel-marker::after {
-  content: '';
+.reel-marker i {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  border: 7px solid transparent;
+  border: 11px solid transparent;
+  filter: drop-shadow(0 0 8px rgba(255, 197, 49, 0.9));
 }
 
-.reel-marker::before { top: -1px; border-top-color: #ffd569; }
-
-.reel-marker::after { bottom: -1px; border-bottom-color: #ffd569; }
-
-/* Edges fade so the strip reads as continuous rather than as a list that stops. */
-.reel-fade {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 84px;
-  pointer-events: none;
-  z-index: 2;
+.reel-marker i:first-child {
+  top: -6px;
+  border-top-color: var(--gold-light);
 }
 
-.reel-fade.left {
-  left: 0;
-  background: linear-gradient(90deg, #16121c 0%, rgba(22, 18, 28, 0) 100%);
+.reel-marker i:last-child {
+  bottom: -6px;
+  border-bottom-color: var(--gold-light);
 }
 
-.reel-fade.right {
-  right: 0;
-  background: linear-gradient(270deg, #16121c 0%, rgba(22, 18, 28, 0) 100%);
-}
-
-/* The tease: something better is sliding past the marker right now. */
+/* The tease: something better is sliding past right now. */
 .reel-stage.teasing .reel-marker {
   background: #fff;
-  box-shadow: 0 0 22px rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1.5px rgba(18, 10, 26, 0.7), 0 0 22px #fff, 0 0 40px rgba(255, 255, 255, 0.6);
 }
 
-.reel-stage.landed {
-  box-shadow: inset 0 0 0 2px var(--rc, #7d8aa0);
+.reel-stage.teasing .reel-marker i:first-child { border-top-color: #fff; }
+.reel-stage.teasing .reel-marker i:last-child { border-bottom-color: #fff; }
+
+/* Landed: everything that did not win goes dark, and the one that did steps forward. */
+.reel-stage.landed .reel-cell:not(.is-winner) {
+  opacity: 0.32;
+  filter: saturate(0.4);
 }
-
-.reel-stage.landed-epic { --rc: #b46aff; }
-
-.reel-stage.landed-legendary { --rc: #ffc94d; }
-
-.reel-stage.landed-mystic { --rc: #c9a8ff; }
 
 .reel-cell.is-winner {
+  transform: scale(1.08);
   box-shadow:
-    inset 0 0 0 2px var(--rc),
-    0 0 26px var(--rc);
+    0 0 0 2px var(--ink),
+    0 0 0 4.5px var(--rc),
+    0 0 36px var(--rc);
 }
 
-.case-actions {
-  display: flex;
-  gap: 0.5rem;
-}
+/* ---- Beat 4: the reveal ---- */
 
-.case-odds {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  justify-content: center;
-}
-
-/* ---- The reveal, laid over the reel rather than replacing it ---- */
 .case-reveal {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
+  position: relative;
+  z-index: 6;
+  display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 1.2rem;
-  border-radius: 20px;
+  gap: 0.15rem;
   text-align: center;
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-  animation: revealIn 260ms ease both;
+  padding: 1.2rem 1rem 1.2rem;
+  /* Its own scrim. The reel stays visible behind — the prize rises out of the strip it landed
+     on — but a dimmed reel is still a row of bright cards, and prize text laid straight over it
+     was unreadable. */
+  background: radial-gradient(ellipse 70% 72% at 50% 46%, rgba(11, 7, 20, 0.94) 38%, rgba(11, 7, 20, 0.7) 100%);
+}
+
+/* In flow, so it sets the stage's height — and stretched to the full width so its scrim still
+   covers the reel it is laid over. */
+.case-overlay.phase-revealed .case-reveal {
+  display: flex;
+  width: 100%;
+  min-height: 380px;
+}
+
+.reveal-halo {
+  position: absolute;
+  left: 50%;
+  top: 36%;
+  width: 380px;
+  height: 380px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--rc) 45%, transparent) 0%, transparent 62%);
+  pointer-events: none;
+  animation: haloIn 0.5s ease-out both;
+}
+
+@keyframes haloIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* The prize rises out of the strip rather than being pasted over it. */
+.reveal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  animation: revealRise 0.5s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+@keyframes revealRise {
+  from { opacity: 0; transform: translateY(40px) scale(0.8); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+ * The frame grows to fit what is in it.
+ *
+ * It was a fixed 132px square that clipped whatever did not fit, and a banner preview is
+ * nearly twice as wide as it is tall — so winning a banner showed you its left two-thirds,
+ * shoved against the frame's edge. Width follows the art now, with a square as the minimum.
+ */
+.reveal-frame {
+  display: grid;
+  place-items: center;
+  min-width: 172px;
+  height: 172px;
+  padding: 0 20px;
+  margin-bottom: 0.55rem;
+  border-radius: 24px;
+  corner-shape: bevel;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 100%, color-mix(in srgb, var(--rc) 40%, transparent), transparent 75%),
+    linear-gradient(180deg, #241c33, #120c1c);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 5px var(--rc),
+    0 0 44px color-mix(in srgb, var(--rc) 60%, transparent),
+    inset 0 0 30px color-mix(in srgb, var(--rc) 22%, transparent);
+}
+
+.reveal-tier {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--rc);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--rc) 70%, transparent);
+}
+
+.reveal-name {
+  margin: 0.05rem 0 0;
+  font-size: 1.8rem;
+  line-height: 1.1;
+  color: #fff6ff;
+  text-shadow: 0 3px 0 var(--ink), 0 0 20px color-mix(in srgb, var(--rc) 40%, transparent);
+}
+
+.reveal-slot {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reveal-blurb {
+  margin: 0.35rem 0 0;
+  max-width: 38ch;
+  font-size: 0.85rem;
+  color: var(--paper-2);
+}
+
+.reveal-status {
+  margin-top: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reveal-status.new {
+  color: var(--accent);
+}
+
+.reveal-status.dupe {
+  color: var(--paper-2);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.reveal-chalk {
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--ink);
+  background: linear-gradient(180deg, #bfe3ff, #6fb6ea);
+  box-shadow: 0 0 0 2px var(--ink);
 }
 
 .reveal-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.reveal-actions .secondary {
+  corner-shape: bevel;
+}
+
+/* ---- Foot ---- */
+
+.case-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.95rem;
+}
+
+/* One big obvious action. The old pair of equal buttons made "Close" look like half the point
+   of a dialog whose entire purpose is the other one. */
+.case-open {
+  position: relative;
+  overflow: hidden;
+  min-width: 240px;
+  padding: 0.8rem 1.8rem;
+  border-radius: 16px;
+  corner-shape: bevel;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    0 6px 0 var(--gold-dark),
+    0 0 26px rgba(255, 197, 49, 0.35);
+}
+
+.case-open:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 0.6) 50%, transparent 60%);
+  transform: translateX(-100%);
+  animation: caseGlint 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.case-open:disabled {
+  color: var(--paper-2);
+  background: var(--panel-3);
+  box-shadow: 0 0 0 2px var(--ink), 0 5px 0 var(--paper-3);
+}
+
+.case-overlay.phase-spinning .case-foot,
+.case-overlay.phase-bursting .case-foot {
+  opacity: 0.25;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* The reveal carries its own "Open another", so the footer's button would be the same offer
+   made twice, six inches apart. The odds stay — they are reference, not an action. */
+.case-overlay.phase-revealed .case-foot .case-open {
+  display: none;
+}
+
+@keyframes caseGlint {
+  0%, 62% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ---- The odds, as a bar ---- */
+
+.case-odds {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.odds-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  padding: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(8, 4, 14, 0.7);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.odds-seg {
+  display: block;
+  border-radius: 999px;
+  background: var(--c);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.odds-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.odds-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.odds-key::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 6px var(--c);
+}
+
+.odds-key b {
+  color: var(--paper);
 }
 
 /* ---- Confetti ---- */
+
 .case-burst {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 6;
+  z-index: 9;
   overflow: hidden;
 }
 
 .case-burst i {
   position: absolute;
   left: 50%;
-  top: 55%;
+  top: 50%;
   width: 9px;
   height: 14px;
   background: var(--c);
   border-radius: 2px;
   animation: confetti var(--d) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+/* ---- Reduce motion: the information, none of the theatre ---- */
+
+body.reduce-motion .crate-svg,
+body.reduce-motion .crate-glow,
+body.reduce-motion .case-rays,
+body.reduce-motion .reveal-halo,
+body.reduce-motion .reveal-card,
+body.reduce-motion .case-open::after {
+  animation: none;
+}
+
+body.reduce-motion .case-shell,
+body.reduce-motion .reel-stage,
+body.reduce-motion .reel-cell,
+body.reduce-motion .crate-lid {
+  transition: none;
+}
+
+@media (max-width: 560px) {
+  .case-shell {
+    padding: 0.75rem 0.7rem 0.8rem;
+  }
+
+  .case-stage {
+    min-height: 260px;
+  }
+
+  .reveal-frame {
+    min-width: 128px;
+    height: 128px;
+  }
+
+  .reveal-name {
+    font-size: 1.35rem;
+  }
+
+  .case-open {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 /* ================= Locker ================= */
@@ -1888,7 +2628,7 @@ body.reduce-motion .stat-card {
   border-radius: 50%;
   background: var(--felt);
   box-shadow: 0 0 0 2px var(--ink), 0 0 10px var(--felt);
-  animation: resumePulse 1.8s ease-in-out infinite;
+  animation: resumePulse 1.8s ease-in-out 5;
 }
 
 @keyframes resumePulse {
@@ -2060,80 +2800,6 @@ body.reduce-motion .stat-card {
   box-shadow: 0 0 0 2px var(--ink), inset 0 3px 8px rgba(0, 0, 0, 0.85);
 }
 
-/* --- Animated backdrop behind the locker and trick shots ---
-   Two layers: a woven cloth that drifts, and pool balls floating slowly across it. The
-   previous version was a 2px hatch under a heavy vignette drifting over 40 seconds, which on
-   a real screen read as a still image. */
-
-.profile-page,
-.challenges-page {
-  position: relative;
-}
-
-.profile-page::before,
-.challenges-page::before {
-  content: '';
-  position: fixed;
-  inset: -10%;
-  z-index: -2;
-  pointer-events: none;
-  background-image:
-    radial-gradient(ellipse 85% 75% at 50% 45%, rgba(6, 10, 8, 0.55), rgba(6, 10, 8, 0.9) 92%),
-    repeating-linear-gradient(
-      45deg,
-      color-mix(in srgb, var(--theme-felt) 34%, transparent) 0 2px,
-      transparent 2px 13px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      color-mix(in srgb, var(--theme-felt-dark) 34%, transparent) 0 2px,
-      transparent 2px 13px
-    );
-  animation: weaveDrift 18s linear infinite;
-}
-
-/* Drifting balls, drawn as radial gradients so the whole layer is one element. Each is a
-   different colour from the ball palette, and they move at different rates for parallax. */
-.profile-page::after,
-.challenges-page::after {
-  content: '';
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  pointer-events: none;
-  /* Small, soft and low-contrast on purpose: at full size and opacity these read as UI
-     elements that have gone wrong rather than as depth behind the page. */
-  opacity: 0.22;
-  background-image:
-    radial-gradient(circle 22px at 12% 22%, #ffcf2e 0 20px, transparent 22px),
-    radial-gradient(circle 17px at 78% 16%, #2a6ee0 0 15px, transparent 17px),
-    radial-gradient(circle 26px at 88% 74%, #f03a2e 0 24px, transparent 26px),
-    radial-gradient(circle 14px at 26% 82%, #8b4bd8 0 12px, transparent 14px),
-    radial-gradient(circle 19px at 58% 52%, #17a85a 0 17px, transparent 19px),
-    radial-gradient(circle 13px at 42% 12%, #ff8a1f 0 11px, transparent 13px),
-    radial-gradient(circle 16px at 8% 58%, #2a6ee0 0 14px, transparent 16px),
-    radial-gradient(circle 20px at 68% 88%, #ffcf2e 0 18px, transparent 20px),
-    radial-gradient(circle 15px at 94% 38%, #17a85a 0 13px, transparent 15px);
-  background-repeat: no-repeat;
-  filter: blur(5px);
-  animation: ballsDrift 42s ease-in-out infinite alternate;
-}
-
-@keyframes weaveDrift {
-  from {
-    background-position:
-      0 0,
-      0 0,
-      0 0;
-  }
-  to {
-    background-position:
-      0 0,
-      120px 120px,
-      -120px 120px;
-  }
-}
-
 /* --- Locker --- */
 
 .profile-top h1 {
@@ -2153,19 +2819,12 @@ body.reduce-motion .stat-card {
 
 /* --- Wheel --- */
 
-.wheel-card h2,
-.reveal-name {
+.wheel-card h2 {
   color: var(--wood-deep);
 }
 
-.wheel-sub,
-.reveal-blurb,
-.reveal-dupe {
+.wheel-sub {
   color: var(--muted);
-}
-
-.reveal-new {
-  color: var(--felt-dark);
 }
 
 .wheel-pointer {
@@ -2604,9 +3263,10 @@ body.reduce-motion .stat-card {
 
 .mission-card {
   display: grid;
-  grid-template-columns: 1fr minmax(140px, 220px) auto;
+  /* An icon column, so a mission is identifiable before it is read. */
+  grid-template-columns: auto 1fr minmax(140px, 220px) auto;
   align-items: center;
-  gap: 0.9rem;
+  gap: 0.8rem;
   padding: 0.7rem 0.9rem;
   border-radius: 14px;
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
@@ -2622,14 +3282,51 @@ body.reduce-motion .stat-card {
   filter: brightness(0.92) saturate(0.6);
 }
 
+.mission-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--gold);
+  background: var(--panel-3);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.mission-card.ready .mission-icon {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+}
+
 .mission-text b {
   display: block;
   font-size: 0.95rem;
 }
 
-.mission-text small {
-  color: var(--muted);
-  font-size: 0.72rem;
+/* A mission that is ready shouldn't be shy about it. */
+.mission-card.ready .claimable {
+  animation: missionPulse 1.4s ease-in-out 5;
+}
+
+@keyframes missionPulse {
+  0%, 100% { transform: none; }
+  50% { transform: scale(1.05); }
+}
+
+body.reduce-motion .mission-card.ready .claimable {
+  animation: none;
+}
+
+@media (max-width: 640px) {
+  .mission-card {
+    grid-template-columns: auto 1fr;
+    row-gap: 0.5rem;
+  }
+
+  .mission-bar,
+  .mission-card > button {
+    grid-column: 1 / -1;
+  }
 }
 
 .mission-bar {
@@ -2768,3 +3465,382 @@ body.reduce-motion .stat-card {
   animation: none;
 }
 
+
+/* ==========================================================================
+   The hub on a short window.
+
+   Measured rather than guessed: at 1440x805 the hub came to 916px, so the shelf — six nav
+   tokens and the day's objective — was clipped off the bottom with no scrollbar reachable
+   above it. That is 111px to find, and the honest place to find it is *only on the screens
+   that need it*: a 1440x1200 monitor has the room, and squeezing it there to fix a laptop
+   would be trading one problem for a worse one.
+
+   So the generous spacing is the base, and this is the same page with its margins pulled in.
+   Nothing is hidden and nothing is dropped — every element that was on the page is still on
+   it, which is the difference between fitting a layout and truncating one.
+   ========================================================================== */
+
+@media (max-height: 920px) {
+  .home-content {
+    gap: 0.85rem;
+    padding: 0.9rem 1.2rem 1rem;
+  }
+
+  .home-logo {
+    font-size: 2rem;
+  }
+
+  .home-logo svg {
+    width: 44px;
+    height: 44px;
+  }
+
+  .home-title h1 {
+    font-size: clamp(1.5rem, 3.4vw, 2rem);
+  }
+
+  .home-title .tagline {
+    font-size: 0.78rem;
+  }
+
+  .mode-tile {
+    padding: 0.6rem 0.6rem 0.55rem;
+  }
+
+  .mode-art {
+    height: 74px;
+  }
+
+  .mode-blurb {
+    min-height: 2.4em;
+    line-height: 1.28;
+  }
+
+  .mode-rules {
+    min-height: 4.6em;
+    gap: 0.1rem;
+    line-height: 1.24;
+    padding-top: 0.3rem;
+  }
+
+  .home-shelf {
+    padding: 0.6rem 0.9rem;
+  }
+
+  .token-disc {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* The resume strip is an *occasional* row — it only exists while you have a table to go back
+   to — and it is tall enough to put the page back over the edge on its own. Tightening the
+   whole layout to reserve room for something usually absent would make the common case worse
+   to fix the rarer one, so the extra squeeze is scoped to the pages that actually have it. */
+@media (max-height: 920px) {
+  .home-content:has(#homeResume .resume-strip) {
+    gap: 0.7rem;
+  }
+
+  .home-content:has(#homeResume .resume-strip) .mode-art {
+    height: 62px;
+  }
+
+  .home-content:has(#homeResume .resume-strip) .mode-tile {
+    gap: 0.25rem;
+  }
+
+  .home-content:has(#homeResume .resume-strip) .mode-blurb {
+    min-height: 2.1em;
+  }
+
+  .home-content:has(#homeResume .resume-strip) .mode-rules {
+    min-height: 3.4em;
+    /* Capped as well as floored: a four-bullet mode is what pushed the page over, and the
+       cards must stay the same height as each other whichever mode is longest. */
+    max-height: 5.2em;
+    overflow: hidden;
+  }
+
+  /* Decoration goes before content does. The rule is a nice line under the sign; the rules
+     list on a mode card is what the card is for, and this tier is already clipping it. */
+  .home-content:has(#homeResume .resume-strip) .marquee-rule {
+    display: none;
+  }
+
+  .home-content:has(#homeResume .resume-strip) .token-disc {
+    width: 38px;
+    height: 38px;
+  }
+
+  .home-content:has(#homeResume .resume-strip) .home-shelf {
+    padding: 0.45rem 0.9rem;
+  }
+}
+
+/* Shorter still — a small laptop, or a browser with a lot of chrome. The rules list is the
+   first thing to go here: it is reference material you read once per mode, where the art and
+   the name are what you navigate by every time. */
+@media (max-height: 760px) {
+  .mode-rules,
+  .marquee-rule {
+    display: none;
+  }
+
+  .mode-art {
+    height: 66px;
+  }
+
+  .home-content {
+    gap: 0.7rem;
+  }
+}
+
+/* ==========================================================================
+   The hub, lit.
+
+   Everything below is one idea: the menu is the front of a cabinet, and a cabinet is a thing
+   with a sign on it, light coming off it, and depth behind the glass. What was here was a
+   correct layout painted flat — a white heading, a still backdrop, and ten cards where the
+   chosen one was marked by a ring and nothing else.
+
+   One custom property carries it. `--page-accent` is set from the selected mode and drives
+   the marquee, the rule under it, the glow over the table, the section heading and the page
+   dots, so choosing a game changes the colour of the room rather than moving a ring.
+   ========================================================================== */
+
+/*
+ * Registered, so it interpolates. An unregistered custom property inside a gradient snaps
+ * from one colour to the next; a registered `<color>` transitions, which is the difference
+ * between the room changing and the room flickering.
+ */
+@property --page-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffc531;
+}
+
+.home {
+  --page-accent: var(--gold);
+  transition: --page-accent 0.5s ease;
+}
+
+/* --- The marquee ---------------------------------------------------------- */
+
+.home-logo {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+/* The sign's own light, spilling off the ball. */
+.home-logo::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -22%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--page-accent) 50%, transparent) 0%,
+    transparent 68%
+  );
+  animation: logoHalo 1.4s ease-out 0.2s both;
+}
+
+.home-wordmark h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  letter-spacing: -0.01em;
+  color: #fff6ff;
+  text-shadow:
+    0 0 5px rgba(255, 255, 255, 0.75),
+    0 0 16px color-mix(in srgb, var(--page-accent) 85%, transparent),
+    0 0 40px color-mix(in srgb, var(--page-accent) 55%, transparent),
+    0 4px 0 var(--ink);
+  animation: neonHum 1.2s linear 0.25s both;
+}
+
+/* The 8 keeps its own colour whatever the room is doing — it is the mark, not the lighting. */
+.home-wordmark h1 i {
+  font-style: normal;
+  color: var(--gold-light);
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(255, 197, 49, 0.9),
+    0 4px 0 var(--ink);
+}
+
+.home-wordmark .tagline {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+/* The tube under the sign. Brightest in the middle, gone at both ends, so it reads as a lit
+   strip rather than as a border round the header. */
+.marquee-rule {
+  /* `flex: none` is load-bearing. `.home-content` is a column flex container whose content
+     overflows, so a 2px item with the default `flex-shrink: 1` is shrunk to nothing — the
+     rule was in the DOM, styled, and exactly zero pixels tall. */
+  flex: none;
+  height: 2px;
+  margin: -0.5rem 0 -0.3rem;
+  border-radius: 2px;
+  opacity: 0.8;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--page-accent) 55%, transparent) 22%,
+    var(--page-accent) 50%,
+    color-mix(in srgb, var(--page-accent) 55%, transparent) 78%,
+    transparent 100%
+  );
+  box-shadow: 0 0 18px color-mix(in srgb, var(--page-accent) 55%, transparent);
+}
+
+/* The ball's light comes up with the sign, and then holds. */
+@keyframes logoHalo {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 0.85; transform: scale(1); }
+}
+
+/*
+ * The sign strikes: a stutter as the tube catches, and then it holds steady.
+ *
+ * It used to hum on a seven-second loop for as long as the menu was open, stuttering for about
+ * a twentieth of each cycle. The stutter was the part anyone saw, and it was paid for with a
+ * never-ending animation — which keeps the compositor redrawing the whole screen at the full
+ * refresh rate even through the 95% of the loop where nothing changes. Played once on arrival,
+ * it is the same moment and costs nothing afterwards.
+ */
+@keyframes neonHum {
+  0% { opacity: 0.15; }
+  8% { opacity: 1; }
+  14% { opacity: 0.35; }
+  22% { opacity: 1; }
+  30% { opacity: 0.6; }
+  36%, 100% { opacity: 1; }
+}
+
+/* --- The room ------------------------------------------------------------- */
+
+/* The glow over the table takes the accent, so the light above the cloth is the colour of the
+   game you are about to play. */
+.home-scrim {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 0%, color-mix(in srgb, var(--page-accent) 20%, transparent), transparent 62%),
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(20, 10, 32, 0.6), transparent 70%),
+    linear-gradient(180deg, rgba(20, 10, 32, 0.9) 0%, rgba(24, 12, 38, 0.82) 45%, rgba(12, 6, 20, 0.96) 100%);
+}
+
+/*
+ * Depth. The table behind the menu leans with the pointer — a couple of dozen pixels, which
+ * is enough to separate it from the buttons in front of it and not enough to be noticed as
+ * an effect. The extra scale covers the corners the lean would otherwise pull into view.
+ *
+ * `--px` / `--py` come from one rAF in homePage.ts; the transition is what smooths a value
+ * written once a frame into something that reads as weight rather than as tracking.
+ */
+.home-backdrop {
+  transform: translate3d(calc(var(--px, 0) * 30px), calc(var(--py, 0) * 20px), 0) scale(1.05);
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* --- The rail ------------------------------------------------------------- */
+
+/*
+ * No `transition` here on purpose. `--page-accent` is a registered property and is already
+ * transitioning on `.home`, so everything that reads it interpolates for free. Transitioning
+ * `color` on top of that sets a second animation chasing a value that is itself moving, and
+ * it never catches up — the heading was still the old mode's colour a full second after the
+ * room had finished changing.
+ */
+.mode-section .section-head h2 {
+  color: var(--page-accent);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--page-accent) 45%, transparent);
+}
+
+/*
+ * A light that travels across the card you are pointing at.
+ *
+ * Both pseudo-elements on `.mode-tile` are spoken for — the accent bar across the top and the
+ * SELECTED ribbon — so this is a real element. It is painted under the card's content and
+ * over its background, which is what makes it read as light on the surface rather than as a
+ * coloured shape drawn on it.
+ */
+.tile-glint {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 0px),
+    color-mix(in srgb, var(--mode-accent, #fff) 34%, transparent) 0%,
+    transparent 62%
+  );
+}
+
+.mode-tile.lit .tile-glint {
+  opacity: 1;
+}
+
+/* Everything the card actually says stands above the light. */
+.mode-tile > :not(.tile-glint) {
+  position: relative;
+  z-index: 1;
+}
+
+.rail-dot.active {
+  background: var(--page-accent);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 12px color-mix(in srgb, var(--page-accent) 70%, transparent);
+}
+
+/* --- Arrival -------------------------------------------------------------- */
+
+/*
+ * The hub used to appear all at once, fully formed, which is the one thing a cabinet never
+ * does. Each band rises a beat after the one above it — sign, rule, games, buttons, shelf —
+ * so the page assembles in the order you would read it.
+ */
+.home-content > * {
+  animation: homeRise 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.12) backwards;
+}
+
+.home-content > *:nth-child(1) { animation-delay: 0.02s; }
+.home-content > *:nth-child(2) { animation-delay: 0.08s; }
+.home-content > *:nth-child(3) { animation-delay: 0.13s; }
+.home-content > *:nth-child(4) { animation-delay: 0.18s; }
+.home-content > *:nth-child(5) { animation-delay: 0.24s; }
+.home-content > *:nth-child(6) { animation-delay: 0.3s; }
+.home-content > *:nth-child(n + 7) { animation-delay: 0.34s; }
+
+@keyframes homeRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Reduce motion --------------------------------------------------------
+   The room stops moving and the sign stops humming. Both keep their colour, and the accent
+   still changes with the mode — losing the animation costs nothing you were reading. */
+
+body.reduce-motion .home-wordmark h1,
+body.reduce-motion .home-logo::before,
+body.reduce-motion .home-content > * {
+  animation: none;
+}
+
+body.reduce-motion .home-logo::before {
+  opacity: 0.8;
+}
+
+body.reduce-motion .home-backdrop {
+  transform: none;
+  transition: none;
+}
+
+body.reduce-motion .tile-glint {
+  display: none;
+}

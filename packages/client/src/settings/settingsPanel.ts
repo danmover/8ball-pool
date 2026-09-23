@@ -1,10 +1,12 @@
-import type { BotDifficulty, PlayerSettings } from '@8ball/shared';
+import { DEFAULT_SETTINGS, type BotDifficulty, type PlayerSettings } from '@8ball/shared';
 import { navigate } from '../router';
-import { icon } from '../render/icons';
+import { icon, type IconName } from '../render/icons';
 import { openTransferDialog } from '../profile/transferDialog';
-import { modalBehaviour, promptText } from '../render/dialogs';
+import { confirmDialog, modalBehaviour, promptText } from '../render/dialogs';
 import { getProfile, setDisplayName } from '../profile/profile';
-import { TABLE_THEMES } from '../render/cosmetics/tableThemes';
+import { allTableThemes, CUSTOM_PREFIX } from '../render/cosmetics/tableThemes';
+import { drawTablePreview } from '../render/tablePreview';
+import { openThemeStudio } from './themeStudio';
 
 const BOT_LABELS: Record<BotDifficulty, string> = {
   rookie: 'Rookie',
@@ -15,23 +17,52 @@ const BOT_LABELS: Record<BotDifficulty, string> = {
 
 type TabId = 'game' | 'table' | 'audio' | 'access' | 'profile';
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'game', label: 'Game' },
-  { id: 'table', label: 'Table' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'access', label: 'Access' },
-  { id: 'profile', label: 'You' },
+const TABS: { id: TabId; label: string; icon: IconName }[] = [
+  { id: 'game', label: 'Game', icon: 'target' },
+  { id: 'table', label: 'Table', icon: 'ball' },
+  { id: 'audio', label: 'Audio', icon: 'volume' },
+  { id: 'access', label: 'Access', icon: 'eye' },
+  { id: 'profile', label: 'You', icon: 'star' },
 ];
 
-function row(label: string, desc: string, control: string): string {
+/*
+ * The drawer's building blocks.
+ *
+ * The previous version had exactly one: a row of label, description and control, repeated down
+ * a flat list. That is why it read as a spreadsheet — nine settings of visibly equal importance
+ * with nothing saying which belonged with which, and controls landing wherever their own width
+ * put them, so a two-option segment sat right-aligned and a four-option one ran full width.
+ *
+ * Three things fix it, and they are the whole redesign: settings are collected into named
+ * **groups**; every row is the same `icon | text | control` skeleton with the control in a
+ * fixed column so they all line up; and a switch that owns a level — sound, music, ambience —
+ * is *one* row with the level under it rather than two rows pretending to be unrelated.
+ */
+
+/** A titled block of related settings. */
+function group(title: string, rows: string[]): string {
   return `
-    <div class="settings-row">
-      <div>
-        <div class="label">${label}</div>
-        ${desc ? `<div class="desc">${desc}</div>` : ''}
+    <section class="set-group">
+      <h3 class="set-group-title">${title}</h3>
+      <div class="set-group-body">${rows.join('')}</div>
+    </section>`;
+}
+
+function row(iconName: IconName, label: string, desc: string, control: string): string {
+  return `
+    <div class="set-row">
+      <span class="set-icon">${icon(iconName, { size: 18 })}</span>
+      <div class="set-text">
+        <div class="set-label">${label}</div>
+        ${desc ? `<div class="set-desc">${desc}</div>` : ''}
       </div>
-      ${control}
+      <div class="set-control">${control}</div>
     </div>`;
+}
+
+/** A row with no control, for something that opens a screen of its own. */
+function linkRow(iconName: IconName, label: string, desc: string, control: string): string {
+  return row(iconName, label, desc, control);
 }
 
 function segmented(key: string, options: { value: string; label: string }[]): string {
@@ -41,13 +72,41 @@ function segmented(key: string, options: { value: string; label: string }[]): st
 }
 
 function toggle(key: string): string {
-  return `<div class="toggle" data-key="${key}"></div>`;
+  return `<button class="toggle" data-key="${key}" role="switch" aria-label="Toggle"></button>`;
 }
 
-function slider(key: string, value: number): string {
-  return `<input class="slider" type="range" min="0" max="100" value="${Math.round(
-    value * 100
-  )}" data-key="${key}" />`;
+/**
+ * A switch and the level it governs, as one control.
+ *
+ * These were two separate rows — "Music" then "Music volume" — which is a lie about how they
+ * relate: turning the switch off leaves a live-looking slider sitting under it doing nothing.
+ * Here the slider is visibly part of the switch's row, it carries a readout so the number is
+ * knowable, and it goes flat and inert when the switch is off.
+ */
+function levelRow(
+  iconName: IconName,
+  label: string,
+  desc: string,
+  toggleKey: string,
+  levelKey: string,
+  value: number,
+  on: boolean
+): string {
+  const pct = Math.round(value * 100);
+  return `
+    <div class="set-row set-row-level${on ? '' : ' muted'}">
+      <span class="set-icon">${icon(iconName, { size: 18 })}</span>
+      <div class="set-text">
+        <div class="set-label">${label}</div>
+        ${desc ? `<div class="set-desc">${desc}</div>` : ''}
+      </div>
+      <div class="set-control">${toggle(toggleKey)}</div>
+      <div class="set-level">
+        <input class="slider" type="range" min="0" max="100" value="${pct}"
+               data-key="${levelKey}" aria-label="${label} level"${on ? '' : ' disabled'} />
+        <span class="set-level-value" data-readout="${levelKey}">${pct}%</span>
+      </div>
+    </div>`;
 }
 
 /**
@@ -84,103 +143,152 @@ export function openSettingsPanel(
   function panelFor(id: TabId): string {
     if (id === 'game') {
       return [
-        row(
-          'Aim guide',
-          'Preview where the cue ball (and object ball) will travel',
-          segmented('trajectoryPreview', [
-            { value: 'off', label: 'Off' },
-            { value: 'basic', label: 'Basic' },
-            { value: 'full', label: 'Full' },
-          ])
-        ),
-        row(
-          'Computer skill',
-          'Used for Play Solo and when you add a bot to a lobby',
-          segmented(
-            'defaultBotDifficulty',
-            (Object.keys(BOT_LABELS) as BotDifficulty[]).map((d) => ({
-              value: d,
-              label: BOT_LABELS[d],
-            }))
-          )
-        ),
-        row(
-          'Shot clock',
-          'Default countdown for tables you host',
-          segmented('defaultShotClock', [
-            { value: 'null', label: 'Off' },
-            { value: '30', label: '30s' },
-            { value: '20', label: '20s' },
-            { value: '10', label: '10s' },
-          ])
-        ),
-        row('Left-handed layout', 'Mirror the phone controls', toggle('leftHanded')),
+        group('Aiming', [
+          row(
+            'target',
+            'Aim guide',
+            'Preview where the cue ball — and the object ball — will travel',
+            segmented('trajectoryPreview', [
+              { value: 'off', label: 'Off' },
+              { value: 'basic', label: 'Basic' },
+              { value: 'full', label: 'Full' },
+            ])
+          ),
+          row('phone', 'Left-handed layout', 'Mirror the phone controls', toggle('leftHanded')),
+        ]),
+        group('Tables you host', [
+          row(
+            'bot',
+            'Computer skill',
+            'Used for Play Solo and when you add a bot to a lobby',
+            segmented(
+              'defaultBotDifficulty',
+              (Object.keys(BOT_LABELS) as BotDifficulty[]).map((d) => ({
+                value: d,
+                label: BOT_LABELS[d],
+              }))
+            )
+          ),
+          row(
+            'clock',
+            'Shot clock',
+            'Default countdown for new tables',
+            segmented('defaultShotClock', [
+              { value: 'null', label: 'Off' },
+              { value: '30', label: '30s' },
+              { value: '20', label: '20s' },
+              { value: '10', label: '10s' },
+            ])
+          ),
+        ]),
       ].join('');
     }
 
     if (id === 'table') {
+      /*
+       * Drawn rather than described.
+       *
+       * These were three nested coloured boxes — a wood-ish frame round a green-ish middle —
+       * and you cannot pick between eleven tables from that, because what separates them is
+       * the weave, the light and the fittings, none of which a box has. Each swatch is now the
+       * same miniature the Theme Studio previews with, so the picker and the builder cannot
+       * disagree about what a table looks like.
+       */
       return [
-        `<div class="settings-row column">
-          <div>
-            <div class="label">Table</div>
-            <div class="desc">Cloth, rails and the room behind them</div>
-          </div>
+        `<section class="set-group">
+          <h3 class="set-group-title">Your table</h3>
           <div class="theme-grid" data-key="tableTheme">
-            ${TABLE_THEMES.map(
-              (t) => `
-              <button class="theme-swatch" data-value="${t.id}" title="${t.name}">
-                <span class="theme-preview" style="background:${t.surround}">
-                  <span class="theme-rail" style="background:${t.rail}">
-                    <span class="theme-cloth" style="background:linear-gradient(160deg, ${t.light}, ${t.dark})"></span>
-                  </span>
-                </span>
+            ${allTableThemes()
+              .map(
+                (t) => `
+              <button class="theme-swatch${t.custom ? ' custom' : ''}" data-value="${t.id}" title="${t.name}">
+                <span class="theme-preview"><canvas data-theme="${t.id}"></canvas></span>
                 <span class="theme-name">${t.name}</span>
+                ${t.custom ? '<span class="theme-badge">Yours</span>' : ''}
               </button>`
-            ).join('')}
+              )
+              .join('')}
           </div>
-        </div>`,
-        row(
-          'Effects',
-          'Sparks, dust and confetti on hits and pots',
-          segmented('effectsIntensity', [
-            { value: 'low', label: 'Low' },
-            { value: 'high', label: 'High' },
-          ])
-        ),
-        row('Ball trails', 'Speed streaks behind moving balls', toggle('ballTrails')),
-        row('Screen shake', 'Camera kick on hard hits and pots', toggle('screenShake')),
+          <button class="studio-open" id="openStudio">
+            <span class="studio-open-mark">✦</span>
+            <span>
+              <strong>Design your own table</strong>
+              <em>Cloth, frame, fittings, pockets and lighting</em>
+            </span>
+          </button>
+          ${
+            String(settings.tableTheme).startsWith(CUSTOM_PREFIX)
+              ? `<button class="mini secondary studio-edit" id="editStudio">Edit this table</button>`
+              : ''
+          }
+        </section>`,
+        group('Effects', [
+          row(
+            'sparkle',
+            'Detail',
+            'Sparks, dust and confetti on hits and pots',
+            segmented('effectsIntensity', [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' },
+            ])
+          ),
+          row('flame', 'Ball trails', 'Speed streaks behind moving balls', toggle('ballTrails')),
+          row('screen', 'Screen shake', 'Camera kick on hard hits and pots', toggle('screenShake')),
+        ]),
       ].join('');
     }
 
     if (id === 'audio') {
       return [
-        row('Sound effects', 'Hits, cushions, pots and the wheel', toggle('soundEnabled')),
-        row('Effects volume', '', slider('soundVolume', settings.soundVolume)),
-        row('Music', 'Each table theme has its own score', toggle('musicEnabled')),
-        row('Music volume', '', slider('musicVolume', settings.musicVolume)),
-        row('Room ambience', 'The venue behind the table — chatter, hum, wind', toggle('ambienceEnabled')),
-        row('Ambience volume', '', slider('ambienceVolume', settings.ambienceVolume)),
-        row('Vibration', 'Haptic feedback on collisions and pots', toggle('hapticsEnabled')),
+        group('Mix', [
+          levelRow(
+            'ball',
+            'Sound effects',
+            'Hits, cushions, pots and the wheel',
+            'soundEnabled',
+            'soundVolume',
+            settings.soundVolume,
+            settings.soundEnabled
+          ),
+          levelRow(
+            'volume',
+            'Music',
+            'Each table has its own score',
+            'musicEnabled',
+            'musicVolume',
+            settings.musicVolume,
+            settings.musicEnabled
+          ),
+          levelRow(
+            'sparkle',
+            'Room tone',
+            'The air around the table — hum, chatter, wind',
+            'ambienceEnabled',
+            'ambienceVolume',
+            settings.ambienceVolume,
+            settings.ambienceEnabled
+          ),
+        ]),
+        group('On your phone', [
+          row('phone', 'Vibration', 'Haptic feedback on collisions and pots', toggle('hapticsEnabled')),
+        ]),
       ].join('');
     }
 
-    return [
+    return group('Access', [
       row(
+        'eye',
         'Colourblind patterns',
-        'Add hatching to stripe balls in addition to colour',
+        'Hatch the stripes as well as colouring them',
         toggle('colorblindPatterns')
       ),
       row(
+        'heart',
         'Reduce motion',
-        'Stills the menu backdrop, banner effects and celebrations',
+        'Stills the air around the table, the banners and the celebrations',
         toggle('reduceMotion')
       ),
-      row(
-        'Locker',
-        'Cues, ball sets, trails, banners and the prize wheel',
-        `<button id="openLocker" class="mini">Open</button>`
-      ),
-    ].join('');
+    ]);
   }
 
   /**
@@ -189,36 +297,63 @@ export function openSettingsPanel(
    * bottom of "Access" is one nobody would ever find.
    */
   function profilePanel(): string {
+    const profile = getProfile();
     return [
-      row('Display name', 'What other players see at the table', `<button id="editProfileName" class="mini">Change</button>`),
-      row(
-        'Locker',
-        'Cues, ball sets, trails, banners and the prize wheel',
-        `<button id="openLocker" class="mini">Open</button>`
-      ),
+      `<div class="set-identity">
+        <span class="set-identity-avatar">${(profile.displayName || 'Player').slice(0, 2).toUpperCase()}</span>
+        <div>
+          <div class="set-identity-name">${profile.displayName || 'Player'}</div>
+          <div class="set-identity-sub">What other players see at the table</div>
+        </div>
+        <button id="editProfileName" class="mini secondary">Rename</button>
+      </div>`,
+      group('Your things', [
+        linkRow(
+          'locker',
+          'Locker',
+          'Cues, ball sets, trails, banners and the prize wheel',
+          `<button id="openLocker" class="mini">Open</button>`
+        ),
+      ]),
       // Progress lives on the server now, so it can follow you. There's no account to log
       // into, which is deliberate — see the note in profiles/routes.ts.
-      row(
-        'Play on another device',
-        'Get a code to carry this profile to your phone, or enter one from another device',
-        `<button id="transferProfile" class="mini">Transfer</button>`
-      ),
+      group('Devices', [
+        linkRow(
+          'phone',
+          'Play on another device',
+          'Get a code to carry this profile to your phone, or enter one from another device',
+          `<button id="transferProfile" class="mini secondary">Transfer</button>`
+        ),
+      ]),
     ].join('');
   }
 
   function render(): void {
+    /*
+     * The tab strip is icon-over-label rather than a row of text pills.
+     *
+     * Five text pills at this width were forever one word away from wrapping, and they gave the
+     * eye nothing to aim at — every tab looked like every other tab. An icon is a target you can
+     * hit without reading, which is what a tab strip you use constantly needs to be.
+     */
     drawer.innerHTML = `
       <header class="drawer-head">
         <h2>${icon('settings', { size: 20 })} Settings</h2>
         <button class="icon-btn" id="closeSettings" title="Close">${icon('close', { size: 18 })}</button>
       </header>
-      <div class="settings-tabs">
+      <div class="settings-tabs" role="tablist">
         ${TABS.map(
           (t) =>
-            `<button class="settings-tab${t.id === tab ? ' active' : ''}" data-tab="${t.id}">${t.label}</button>`
+            `<button class="settings-tab${t.id === tab ? ' active' : ''}" data-tab="${t.id}"
+                     role="tab" aria-selected="${t.id === tab}">
+              ${icon(t.icon, { size: 18 })}<span>${t.label}</span>
+            </button>`
         ).join('')}
       </div>
-      <div class="settings-body">${tab === 'profile' ? profilePanel() : panelFor(tab)}</div>`;
+      <div class="settings-body">${tab === 'profile' ? profilePanel() : panelFor(tab)}</div>
+      <footer class="settings-foot">
+        <button class="mini secondary" id="resetSettings">Reset to defaults</button>
+      </footer>`;
 
     drawer.querySelectorAll<HTMLElement>('.segmented, .theme-grid').forEach((seg) => {
       const key = seg.dataset.key as keyof PlayerSettings;
@@ -229,6 +364,16 @@ export function openSettingsPanel(
     drawer.querySelectorAll<HTMLElement>('.toggle').forEach((t) => {
       const key = t.dataset.key as keyof PlayerSettings;
       t.classList.toggle('on', Boolean(settings[key]));
+    });
+
+    // Canvases have no size until they are laid out, so the miniatures are painted on the
+    // frame after the markup lands rather than as part of building it.
+    const themes = allTableThemes();
+    requestAnimationFrame(() => {
+      drawer.querySelectorAll<HTMLCanvasElement>('.theme-preview canvas').forEach((canvas) => {
+        const theme = themes.find((t) => t.id === canvas.dataset.theme);
+        if (theme) drawTablePreview(canvas, theme, { pad: 0.06 });
+      });
     });
 
     bind();
@@ -282,9 +427,50 @@ export function openSettingsPanel(
       input.addEventListener('input', () => {
         const key = input.dataset.key as keyof PlayerSettings;
         (settings as unknown as Record<string, unknown>)[key] = Number(input.value) / 100;
+        // Updated in place rather than through `render()`: re-rendering the drawer on every
+        // input event would tear the slider out from under the pointer mid-drag.
+        const readout = drawer.querySelector<HTMLElement>(`[data-readout="${key}"]`);
+        if (readout) readout.textContent = `${input.value}%`;
         commit();
       });
     });
+
+    drawer.querySelector('#resetSettings')?.addEventListener('click', () => {
+      confirmDialog({
+        title: 'Reset settings?',
+        message:
+          'Every setting goes back to how it shipped. Your locker, your progress and any tables you designed are left alone.',
+        confirmLabel: 'Reset',
+        cancelLabel: 'Keep mine',
+        iconName: 'settings',
+        onConfirm: () => {
+          // The table you are looking at is deliberately kept. Resetting the aim guide should
+          // not also take away a table you spent ten minutes building in the Studio.
+          const keptTheme = settings.tableTheme;
+          Object.assign(settings, DEFAULT_SETTINGS, { tableTheme: keptTheme });
+          render();
+          commit();
+        },
+      });
+    });
+
+    /*
+     * The studio is opened over the drawer rather than replacing it, and it hands back the id
+     * of whatever was saved. Applying it through the same `settings`/`commit` path as any other
+     * control is what makes a table you built indistinguishable from one that shipped.
+     */
+    const studio = (editing?: string) => (): void => {
+      openThemeStudio(editing, ({ themeId }) => {
+        if (!themeId) return;
+        settings.tableTheme = themeId;
+        render();
+        commit();
+      });
+    };
+    drawer.querySelector('#openStudio')?.addEventListener('click', studio());
+    drawer
+      .querySelector('#editStudio')
+      ?.addEventListener('click', studio(String(settings.tableTheme)));
 
     drawer.querySelector('#openLocker')?.addEventListener('click', () => {
       close();

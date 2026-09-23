@@ -32,27 +32,58 @@ body,
 body {
   /* Nunito for UI copy; Fredoka (rounder, chunkier) for headings and numerals. */
   font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  /* The room behind the table, painted from the active table theme. */
-  background: var(--surround);
   color: var(--paper);
   overflow: hidden;
+
+  /*
+   * The backdrop, painted here rather than on `#app`.
+   *
+   * It sat on `#app` briefly and that quietly switched off the drifting light below.
+   * `body::before` is `z-index: -1`, which puts it in front of the body's own background but
+   * *behind* the background of any in-flow block that follows — and `#app` is one. So the
+   * moment `#app` had a background of its own, the light had nothing left to fall across, and
+   * the table lost the one thing that kept it from being completely static.
+   *
+   * Menus are the default and the table opts out. This used to be a list of six page-root
+   * classes, so a screen not named in it fell through to the green room — which is exactly
+   * what happened the moment the phone's join screen was renamed.
+   *
+   * The room is a cabinet's back panel: deep violet, perforated like the speaker grille on
+   * the front of a machine, darkening into the corners. It replaced a field of diagonal
+   * stripes that every page but two sat on and two pages covered with something else — each
+   * page's own light now comes from `.menu-page::before` in system.css, in that page's colour.
+   */
+  background:
+    radial-gradient(ellipse 110% 85% at 50% 38%, transparent 52%, rgba(4, 2, 8, 0.72) 100%),
+    radial-gradient(circle at 50% 50%, rgba(255, 236, 255, 0.055) 0 1.1px, transparent 1.7px) 0 0 / 22px 22px,
+    radial-gradient(ellipse 92% 76% at 50% 34%, #2b1740 0%, #1a0e28 56%, #0c0614 100%);
 }
 
-/* Slow drifting light across the room, so no screen is ever completely static. */
+/* The table and the phone's controls sit in the room, painted from the active table theme. */
+body:has(#app > .table-canvas),
+body:has(#app > .controller-root) {
+  background: var(--surround);
+}
+
+/*
+ * Light in the room.
+ *
+ * This used to drift, on a 26-second loop, so that no screen was ever completely still. It was
+ * measured and it was not worth it: the hub's scrim and the table's own painted room both cover
+ * it completely, so on the two screens people spend the most time on it was invisible — and a
+ * never-ending animation keeps the compositor redrawing the whole stacked screen at the
+ * display's full refresh rate for as long as the page is open. The pages that could see it
+ * each have their own light in their own colour now (see `.menu-page::before`).
+ */
 body::before {
   content: '';
   position: fixed;
-  inset: -20%;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.07), transparent 42%),
-    radial-gradient(circle at 78% 72%, rgba(255, 255, 255, 0.05), transparent 46%);
-  animation: roomDrift 26s ease-in-out infinite alternate;
-}
-
-body.reduce-motion::before {
-  animation: none;
+    radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.06), transparent 42%),
+    radial-gradient(circle at 78% 72%, rgba(255, 255, 255, 0.04), transparent 46%);
 }
 
 /* Chunky pressable buttons: ink outline, a solid shadow that collapses when pressed. */
@@ -170,13 +201,19 @@ body.fx-low .bn-fx i {
   display: none;
 }
 
+/* The moving layer of each banner and banner effect is a pseudo-element now (so it can slide
+   on the compositor instead of repainting), so that is what gets stilled. */
 body.fx-low .bn-fx,
-body.fx-low .bn-champion {
+body.fx-low .bn-fx::before,
+body.fx-low .bn-fx::after,
+body.fx-low .bn-champion::after {
   animation: none;
 }
 
 body.reduce-motion .item-card.rarity-mystic::after,
-body.reduce-motion .bn-oracle,
+body.reduce-motion .bn-oracle::after,
+body.reduce-motion .bn-fx::before,
+body.reduce-motion .bn-fx::after,
 body.reduce-motion .fx-thirdeye {
   animation: none;
 }
@@ -196,15 +233,10 @@ body.reduce-motion .home-backdrop {
   display: none;
 }
 
-body.reduce-motion .combo-callout,
 body.reduce-motion .emote-pop,
-body.reduce-motion .bn-champion,
+body.reduce-motion .bn-champion::after,
 body.reduce-motion .shot-clock {
   animation: none !important;
-}
-
-body.reduce-motion .shot-callout {
-  animation: none;
 }
 
 body.reduce-motion .case-reveal { animation: none; }
@@ -277,14 +309,6 @@ body.reduce-motion .table-menu {
   animation: none;
 }
 
-body.reduce-motion .turn-flourish.show {
-  animation: turnHold 2.1s steps(1) forwards;
-}
-
-body.reduce-motion .foul-note {
-  animation: none;
-}
-
 #app.in-lobby .table-canvas {
   opacity: 0.85;
   filter: blur(1.5px) saturate(0.92);
@@ -325,26 +349,7 @@ body.reduce-motion .star.big.earned {
 
    Done with `:has` rather than a route class because there is no route class to hang it on,
    and inventing one to paint a background would be plumbing for a paint job. */
-/* --- The backdrop behind a menu ---
-   This was a list of six page-root classes, so every screen had to be named here or it
-   silently fell through to the green table surround underneath — which is exactly what
-   happened the moment the phone's join screen was renamed.
-
-   Inverted. Menus are the default and the table opts out, because the table is the one place
-   that genuinely wants the felt-green room behind it, and there are two of those against a
-   growing number of menus. */
-#app {
-  background:
-    radial-gradient(ellipse 62% 46% at 50% -4%, rgba(255, 61, 139, 0.14), transparent 62%),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.022) 0 14px, transparent 14px 28px),
-    radial-gradient(ellipse 92% 76% at 50% 34%, #2b1740 0%, #1a0e28 56%, #0c0614 100%);
-}
-
-/* The table and the phone controls sit in the room, not in the menu. */
-#app:has(> .table-canvas),
-#app:has(> .controller-root) {
-  background: var(--surround);
-}
+/* `#app` stays transparent. The backdrop is painted on `body` — see the note there. */
 
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(10px); }

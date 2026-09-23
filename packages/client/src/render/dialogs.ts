@@ -1,4 +1,5 @@
 import { icon, type IconName } from './icons';
+import { mountNotices, type NoticeKind } from './notices';
 
 /**
  * Shared chrome: the confirm dialog behind destructive actions, and the toast stack.
@@ -96,28 +97,44 @@ export function modalBehaviour(
   return close;
 }
 
-export function confirmLeave(
-  title: string,
-  message: string,
-  onConfirm: () => void
-): void {
+export interface ConfirmOptions {
+  title: string;
+  message: string;
+  /** Label on the button that does the thing. */
+  confirmLabel: string;
+  /** Label on the button that doesn't. */
+  cancelLabel: string;
+  iconName?: IconName;
+  onConfirm: () => void;
+}
+
+/**
+ * "Are you sure?", in the game's own chrome.
+ *
+ * This was `confirmLeave` and nothing else — the labels "Stay" and "Leave" and a door icon were
+ * baked into the markup, so the second thing that needed confirming had a choice between lying
+ * about what its buttons did and growing a second copy of the dialog. The leave case is now a
+ * three-line wrapper over this, which is all it ever was.
+ */
+export function confirmDialog(opts: ConfirmOptions): void {
+  const { title, message, confirmLabel, cancelLabel, iconName = 'leave', onConfirm } = opts;
   const scrim = document.createElement('div');
   scrim.className = 'dialog-scrim';
   scrim.innerHTML = `
     <div class="dialog">
-      <div class="dialog-icon">${icon('leave', { size: 30 })}</div>
+      <div class="dialog-icon">${icon(iconName, { size: 30 })}</div>
       <h2>${title}</h2>
       <p>${message}</p>
       <div class="dialog-actions">
-        <button class="secondary" data-act="cancel">Stay</button>
-        <button class="danger-btn" data-act="confirm">Leave</button>
+        <button class="secondary" data-act="cancel">${cancelLabel}</button>
+        <button class="danger-btn" data-act="confirm">${confirmLabel}</button>
       </div>
     </div>`;
   document.body.appendChild(scrim);
   requestAnimationFrame(() => scrim.classList.add('open'));
 
   const close = asDialog(scrim, title);
-  // Staying is the safe answer, so it is the one already under the finger.
+  // Backing out is the safe answer, so it is the one already under the finger.
   scrim.querySelector<HTMLElement>('[data-act="cancel"]')!.focus();
 
   scrim.querySelector('[data-act="cancel"]')!.addEventListener('click', close);
@@ -128,6 +145,10 @@ export function confirmLeave(
   scrim.addEventListener('click', (e) => {
     if (e.target === scrim) close();
   });
+}
+
+export function confirmLeave(title: string, message: string, onConfirm: () => void): void {
+  confirmDialog({ title, message, confirmLabel: 'Leave', cancelLabel: 'Stay', onConfirm });
 }
 
 /**
@@ -187,17 +208,16 @@ export function promptText(
   });
 }
 
-export type ToastKind = 'info' | 'foul' | 'reward';
-
-const TOAST_ICONS: Record<ToastKind, IconName> = {
-  info: 'target',
-  foul: 'close',
-  reward: 'star',
-};
+export type ToastKind = NoticeKind;
 
 /**
- * Pushes a toast onto the top-centre stack. `stack` is the container the page owns, so
- * toasts are cleaned up with the page rather than leaking onto the next screen.
+ * The old name for "say something", kept because six screens speak it.
+ *
+ * It used to build its own toast element here. It now hands the message to the page's notice
+ * centre — the one system that owns everything the game announces — so the five menu screens
+ * that still call `showToast` get the same shape, timing and live region as the table without
+ * each having to be rewritten. `stack` is the element the page owns, which is what keeps the
+ * rail scoped to the page rather than leaking onto the next one.
  */
 export function showToast(
   stack: HTMLElement,
@@ -205,36 +225,5 @@ export function showToast(
   kind: ToastKind = 'info',
   ms = 2600
 ): void {
-  /*
-   * Toasts carry the only account of what just happened — a foul, whose turn it is, a reward.
-   * None of it was reaching a screen reader, so the entire running commentary of the game was
-   * silent. Set on the stack rather than on each toast, because a live region has to be in the
-   * document *before* the thing it announces is put into it.
-   *
-   * A foul interrupts; everything else waits its turn. That distinction is the whole reason
-   * `assertive` exists, and getting it backwards is how a page starts talking over itself.
-   */
-  if (!stack.hasAttribute('role')) {
-    stack.setAttribute('role', 'status');
-    stack.setAttribute('aria-live', 'polite');
-  }
-  if (kind === 'foul') stack.setAttribute('aria-live', 'assertive');
-
-  const el = document.createElement('div');
-  el.className = `toast toast-${kind}`;
-  el.innerHTML = `${icon(TOAST_ICONS[kind], { size: 18 })}<span>${message}</span>`;
-  stack.appendChild(el);
-
-  // Back to polite once this one has been read, so an ordinary note does not interrupt.
-  if (kind === 'foul') {
-    setTimeout(() => stack.setAttribute('aria-live', 'polite'), 100);
-  }
-
-  // Keep the stack short — a run of fouls shouldn't paper over the table.
-  while (stack.children.length > 3) stack.firstElementChild?.remove();
-
-  setTimeout(() => {
-    el.classList.add('leaving');
-    setTimeout(() => el.remove(), 250);
-  }, ms);
+  mountNotices(stack).show(message, { kind, ms });
 }

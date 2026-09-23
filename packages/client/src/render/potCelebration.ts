@@ -1,6 +1,7 @@
 import type { PlayerSettings } from '@8ball/shared';
 import { xpForPot } from '@8ball/shared';
 import type { TableRenderer } from './TableRenderer';
+import type { NoticeCentre } from './notices';
 import * as sfx from './sfx';
 
 /**
@@ -11,7 +12,9 @@ import * as sfx from './sfx';
  * Layers, smallest to biggest:
  *   1. the drop itself (handled by TableRenderer.spawnPotFlash, scaled by combo)
  *   2. an XP toast flying off the pocket
- *   3. a combo callout for the second and later balls on one shot
+ *   3. a combo callout for the second and later balls on one shot, raised on the page's
+ *      notice rail rather than thrown at a fixed point a third of the way down the screen —
+ *      it used to be able to land straight through the turn banner and the toast stack
  *   4. a streak state ("ON FIRE") across turns, owned by the caller
  *   5. a takeover flash when the game-winning ball drops
  */
@@ -29,13 +32,20 @@ export class PotCelebrator {
   private root: HTMLElement;
   private renderer: () => TableRenderer | null;
   private settings: PlayerSettings;
+  private notices: NoticeCentre;
   private comboCount = 0;
   private shotXp = 0;
 
-  constructor(root: HTMLElement, renderer: () => TableRenderer | null, settings: PlayerSettings) {
+  constructor(
+    root: HTMLElement,
+    renderer: () => TableRenderer | null,
+    settings: PlayerSettings,
+    notices: NoticeCentre
+  ) {
     this.root = root;
     this.renderer = renderer;
     this.settings = settings;
+    this.notices = notices;
   }
 
   private get volume(): number {
@@ -114,15 +124,18 @@ export class PotCelebrator {
     this.showCallout('GAME!', 5);
   }
 
+  /**
+   * Bigger words for bigger runs, capped so a long runout doesn't fill the screen. The scale
+   * is also what decides the argument on the rail: a five-ball combo outranks the turn banner
+   * that follows it, and GAME! outranks everything.
+   */
   private showCallout(text: string, tier: number): void {
     if (!text) return;
-    const el = document.createElement('div');
-    el.className = 'combo-callout';
-    el.textContent = text;
-    // Bigger words for bigger runs, capped so a long runout doesn't fill the screen.
-    el.style.fontSize = `${Math.min(2.2 + tier * 0.55, 5)}rem`;
-    this.root.appendChild(el);
-    setTimeout(() => el.remove(), 1200);
+    this.notices.show(text, {
+      kind: 'hype',
+      scale: Math.min(1 + tier * 0.24, 2.2),
+      ms: 1200,
+    });
     this.renderer()?.shake(4 + tier * 2);
   }
 

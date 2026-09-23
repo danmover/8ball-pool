@@ -27,6 +27,8 @@ import { applyTableThemeToPage, tableThemeFor, type TableTheme } from './cosmeti
 import { hitEffectFor, type HitEffect } from './cosmetics/hitEffects';
 import { drawScene } from './cosmetics/scenes';
 import { sceneCacheKey } from './sceneKey';
+import { AmbientFx } from './ambientFx';
+import { clothCanvasFor, railCanvasFor, surfaceKey } from './surfaces';
 
 const TEX_SIZE = 192;
 const POT_ANIM_MS = 320;
@@ -51,6 +53,26 @@ const BAR_W = 52; // power bar down the left
 /** Sized so a ball sitting in the return track is exactly its on-table size. */
 const CHUTE_BALL = BALL_RADIUS * 2;
 const CHUTE_W = CHUTE_BALL + 26;
+
+/**
+ * The ball rack down the right-hand side.
+ *
+ * Fifteen cups, always drawn, whether or not there is a ball in one — that is what a rack *is*,
+ * and an empty cup reads as "still on the table" far better than an empty channel did. The
+ * geometry lives out here because two things need it and they must agree: the routed cups, and
+ * the balls that come to rest in them.
+ */
+const RACK_CUPS = 15;
+/** Metal end caps top and bottom, where a real rack is screwed to the wall. */
+const RACK_CAP = 34;
+
+function rackGeometry(): { x: number; y: number; h: number; cx: number; pitch: number; first: number } {
+  const x = TABLE_LENGTH + RAIL + SIDE_GAP;
+  const y = -RAIL + 10;
+  const h = TABLE_WIDTH + RAIL * 2 - 20;
+  const pitch = (h - RACK_CAP * 2) / RACK_CUPS;
+  return { x, y, h, cx: x + CHUTE_W / 2, pitch, first: y + RACK_CAP + pitch / 2 };
+}
 
 /** The left edge of the board, with room for the power meter that runs down that side. */
 const BOARD_LEFT = -(RAIL + SIDE_GAP + BAR_W);
@@ -469,105 +491,6 @@ function generateNumberCanvas(id: number): HTMLCanvasElement | null {
   return canvas;
 }
 
-function generateFeltCanvas(colors: TableTheme): HTMLCanvasElement {
-  const w = 1024;
-  const h = Math.round((w * TABLE_WIDTH) / TABLE_LENGTH);
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-
-  const grad = ctx.createRadialGradient(w / 2, h * 0.42, h * 0.1, w / 2, h / 2, w * 0.66);
-  grad.addColorStop(0, colors.light);
-  grad.addColorStop(1, colors.dark);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, w, h);
-
-  // Baulk/head string, centre line and the two spots, as on a real cloth. Neon skips them —
-  // painted lines on a backlit table read as dirt.
-  if (colors.markings) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 2;
-    for (const frac of [0.25, 0.5]) {
-      ctx.beginPath();
-      ctx.moveTo(w * frac, 0);
-      ctx.lineTo(w * frac, h);
-      ctx.stroke();
-    }
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    for (const frac of [0.25, 0.72]) {
-      ctx.beginPath();
-      ctx.arc(w * frac, h / 2, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // Faint woven-fabric speckle.
-  const speckleCount = Math.round((w * h) / 260);
-  ctx.globalAlpha = 1;
-  for (let i = 0; i < speckleCount; i++) {
-    const x = Math.random() * w;
-    const y = Math.random() * h;
-    const shade = Math.random() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.045)';
-    ctx.fillStyle = shade;
-    ctx.fillRect(x, y, 1.4, 1.4);
-  }
-
-  // Directional sheen streak, like light raking across cloth.
-  const sheen = ctx.createLinearGradient(0, 0, w, h * 0.6);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.05)');
-  sheen.addColorStop(0.4, 'rgba(255,255,255,0)');
-  sheen.addColorStop(1, 'rgba(0,0,0,0.08)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, w, h);
-
-  // Light vignette toward the cushions — kept subtle so the cloth stays vivid.
-  const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.4, w / 2, h / 2, w * 0.68);
-  vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.2)');
-  ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, w, h);
-
-  return canvas;
-}
-
-/** Warm wood grain for the rails, generated once and tiled over the frame. */
-function generateWoodCanvas(rail: string, railDark: string): HTMLCanvasElement {
-  const w = 512;
-  const h = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-
-  ctx.fillStyle = rail;
-  ctx.fillRect(0, 0, w, h);
-
-  // Long grain streaks with gently varying darkness.
-  for (let i = 0; i < 200; i++) {
-    const y = Math.random() * h;
-    const thickness = 0.6 + Math.random() * 2.6;
-    const dark = Math.random() * 0.16;
-    ctx.strokeStyle = `rgba(60,34,14,${dark.toFixed(3)})`;
-    ctx.lineWidth = thickness;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    for (let x = 0; x <= w; x += 32) {
-      ctx.lineTo(x, y + Math.sin((x / w) * Math.PI * 2 + i) * 3);
-    }
-    ctx.stroke();
-  }
-
-  // Broad tonal banding so the frame isn't a flat slab of colour.
-  const band = ctx.createLinearGradient(0, 0, 0, h);
-  band.addColorStop(0, 'rgba(255,255,255,0.10)');
-  band.addColorStop(0.5, 'rgba(0,0,0,0)');
-  band.addColorStop(1, railDark + '55');
-  ctx.fillStyle = band;
-  ctx.fillRect(0, 0, w, h);
-
-  return canvas;
-}
 
 /**
  * One marking stuck to the ball's surface.
@@ -625,6 +548,104 @@ interface BallVisual {
 /** Cap how far we'll dead-reckon a ball forward if network updates stall. */
 const MAX_EXTRAPOLATION_S = 0.12;
 
+/**
+ * Half the display's rate, on a display fast enough that half is still more than enough.
+ *
+ * A renderer draws once per display refresh, so on a 240Hz monitor the table was drawn 240
+ * times a second — twice the work of 120 for motion nobody can tell apart on a pool table,
+ * where the fastest thing on screen is a ball crossing the cloth. Below ~180Hz it is left
+ * alone: halving a 144Hz display gives 72, which you can see.
+ *
+ * Measured rather than assumed, from the ticker's own first second. The cap is set a shade
+ * under two whole frames because Pixi floors the elapsed time before comparing it: asking for
+ * exactly half would compare 8ms against 8.33ms and skip every frame but the third.
+ */
+function settleFrameRate(app: Application): void {
+  const samples: number[] = [];
+  const probe = (): void => {
+    samples.push(app.ticker.elapsedMS);
+    if (samples.length < 60) return;
+    app.ticker.remove(probe);
+    const frame = [...samples].sort((a, b) => a - b)[30];
+    if (frame > 0 && frame < 5.5) app.ticker.maxFPS = 1000 / (Math.floor(frame * 2) - 0.5);
+  };
+  app.ticker.add(probe);
+}
+
+/**
+ * How hard a renderer should work.
+ *
+ * The defaults are the table you play on: full resolution, antialiased, as fast as the display
+ * will go. Everything else — the menu's backdrop above all — is scenery, and scenery that runs
+ * at the table's cost is the single most expensive thing on a screen that is otherwise text.
+ */
+export interface RendererOptions {
+  /** Backing-store scale. Below 1 draws fewer pixels and lets the browser stretch them. */
+  resolution?: number;
+  /** Frame cap. The ticker still runs; it just skips frames above this rate. */
+  maxFps?: number;
+  antialias?: boolean;
+}
+
+/**
+ * The light a lamp over the table throws on the cloth, as a texture.
+ *
+ * Brightest over the middle, falling to shade at the cushions and into the corners. Neutral
+ * rather than tinted, so it lights every cloth colour without shifting it, and small — it is a
+ * gradient, so 256×128 stretched over the table is indistinguishable from full size.
+ */
+let LAMP_TEXTURE: Texture | null = null;
+
+/**
+ * A ball's shadow: soft, darkest under the ball and gone by its edge.
+ *
+ * These were hard ellipses re-tessellated into a Graphics every frame — sixteen of them, at
+ * 0.3 alpha, mostly hidden under the ball that cast them. A sprite of a baked gradient is both
+ * softer and cheaper: moving it is a transform, not a new mesh.
+ */
+let SHADOW_TEXTURE: Texture | null = null;
+function shadowTexture(): Texture {
+  if (SHADOW_TEXTURE && !SHADOW_TEXTURE.destroyed) return SHADOW_TEXTURE;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+  g.addColorStop(0.45, 'rgba(0, 0, 0, 0.42)');
+  g.addColorStop(0.75, 'rgba(0, 0, 0, 0.14)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  SHADOW_TEXTURE = Texture.from(canvas);
+  return SHADOW_TEXTURE;
+}
+function lampTexture(): Texture {
+  if (LAMP_TEXTURE && !LAMP_TEXTURE.destroyed) return LAMP_TEXTURE;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  // Stretched 2:1 across a 2:1 table, so an ellipse here lands as the right shape.
+  ctx.save();
+  ctx.scale(2, 1);
+  const light = ctx.createRadialGradient(64, 64, 0, 64, 64, 70);
+  light.addColorStop(0, 'rgba(255, 250, 235, 0.13)');
+  light.addColorStop(0.45, 'rgba(255, 250, 235, 0.05)');
+  light.addColorStop(1, 'rgba(255, 250, 235, 0)');
+  ctx.fillStyle = light;
+  ctx.fillRect(0, 0, 128, 128);
+  const shade = ctx.createRadialGradient(64, 64, 40, 64, 64, 96);
+  shade.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  shade.addColorStop(0.6, 'rgba(0, 0, 0, 0.12)');
+  shade.addColorStop(1, 'rgba(0, 0, 0, 0.34)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.restore();
+  LAMP_TEXTURE = Texture.from(canvas);
+  return LAMP_TEXTURE;
+}
+
 export class TableRenderer {
   app: Application;
   private container: HTMLElement;
@@ -633,10 +654,23 @@ export class TableRenderer {
   private sceneLayer = new Graphics();
   /** Canvas size and theme the scene was last painted for, so it only redraws on change. */
   private sceneKey = '';
+  /**
+   * The moving half of the room — dust, snow, embers, a beam crossing the floor.
+   *
+   * Its own layer above the static scene and *below* the table, so nothing it draws can ever
+   * sit between the player and a ball they are trying to hit. A room effect that obscures the
+   * game has stopped being a room effect.
+   */
+  private ambientLayer = new Graphics();
+  private ambient = new AmbientFx(this.ambientLayer);
+  /** Motion switched off independently of the effects level — see setAmbientMotion. */
+  private ambientOff = false;
   private tableLayer = new Container();
   private diamondLayer = new Graphics();
   private feltSprite: Sprite | null = null;
-  private shadowLayer = new Graphics();
+  /** One soft shadow sprite per ball — see `shadowTexture`. */
+  private shadowLayer = new Container();
+  private shadows = new Map<number, Sprite>();
   private trailLayer = new Graphics();
   private highlightLayer = new Graphics();
   /** Party-mode discs on the cloth, under the balls so a ball can be seen sitting on one. */
@@ -672,6 +706,8 @@ export class TableRenderer {
   >();
   /** Where each ball was last seen dropping, so its chute flight can start there. */
   private lastPotPos = new Map<number, { x: number; y: number }>();
+  /** Torn down with the renderer; a listener on `document` outlives one otherwise. */
+  private onVisibility: (() => void) | null = null;
   private textureCache = new Map<string, Texture>();
   private feltTextureCache = new Map<string, Texture>();
   private woodTextureCache = new Map<string, Texture>();
@@ -718,6 +754,8 @@ export class TableRenderer {
   private cueElevation = 0;
   /** Screen pixels that must stay clear below the board, for the shot deck to stand in. */
   private bottomClearance = 0;
+  /** Screen pixels already taken along the top by the scoreboard. */
+  private topClearance = 0;
 
   private constructor(container: HTMLElement, app: Application) {
     this.container = container;
@@ -725,18 +763,65 @@ export class TableRenderer {
     this.particles = new ParticleSystem(this.fxLayer);
   }
 
-  static async create(container: HTMLElement): Promise<TableRenderer> {
+  static async create(container: HTMLElement, opts: RendererOptions = {}): Promise<TableRenderer> {
+    const resolution = opts.resolution ?? 1;
     const app = new Application();
-    await app.init({ resizeTo: container, backgroundAlpha: 0, antialias: true });
+    await app.init({
+      resizeTo: container,
+      backgroundAlpha: 0,
+      antialias: opts.antialias ?? true,
+      /*
+       * On a laptop with two GPUs the default lets the browser pick, and what it picks for a
+       * canvas is usually the integrated one. This is a game; ask for the discrete part.
+       */
+      powerPreference: 'high-performance',
+      /*
+       * Pinned rather than left to `devicePixelRatio`. Windows display scaling is commonly
+       * 125% or 150%, and at 150% an unpinned renderer quietly draws 2.25× the pixels every
+       * frame for a top-down cartoon table that gains almost nothing from them.
+       */
+      resolution,
+      // Only needed when drawing below 1:1 — it is what stretches the smaller backing store
+      // back over the full box instead of leaving it in the top-left corner.
+      autoDensity: resolution !== 1,
+    });
+    if (opts.maxFps) app.ticker.maxFPS = opts.maxFps;
+    else settleFrameRate(app);
     container.appendChild(app.canvas);
     const renderer = new TableRenderer(container, app);
     renderer.buildTable();
     // The room goes on the stage directly, in screen space, so it doesn't scale or shake
     // with the table sitting in it.
     app.stage.addChild(renderer.sceneLayer);
+    app.stage.addChild(renderer.ambientLayer);
     app.stage.addChild(renderer.root);
+    renderer.ambient.setTheme(renderer.theme);
     app.ticker.add((ticker) => renderer.tick(ticker.deltaMS / 1000));
+    renderer.watchVisibility();
     return renderer;
+  }
+
+  /**
+   * Stop drawing when nobody is looking.
+   *
+   * `requestAnimationFrame` is throttled for a *hidden* tab, but "hidden" is narrower than it
+   * sounds: a window behind another window, or on another monitor, or minimised on some
+   * setups, keeps ticking at full rate. So a table left open in a background tab goes on
+   * running a physics attract loop and a WebGL scene at the refresh rate of the display,
+   * competing for the GPU with whatever you actually switched to — which is exactly how a
+   * game gets blamed for making a whole machine feel slow.
+   *
+   * Stopping the ticker stops the render, the ambient particles and the attract simulation
+   * together, because all three hang off it. Coming back resumes them; nothing is lost,
+   * because the table's state is the server's, not the ticker's.
+   */
+  private watchVisibility(): void {
+    this.onVisibility = () => {
+      if (document.hidden) this.app.ticker.stop();
+      else this.app.ticker.start();
+    };
+    document.addEventListener('visibilitychange', this.onVisibility);
+    this.onVisibility();
   }
 
   private buildTable(): void {
@@ -751,7 +836,7 @@ export class TableRenderer {
     frame.roundRect(outerX + 6, outerY + 12, outerW, outerH, 40).fill({ color: 0x000000, alpha: 0.45 });
     frame.roundRect(outerX, outerY, outerW, outerH, 38).fill({ color: cssToHex(colors.railDark) });
 
-    const woodSprite = new Sprite(this.woodTextureFor(colors.rail, colors.railDark));
+    const woodSprite = new Sprite(this.railTextureFor(colors));
     woodSprite.position.set(outerX + 7, outerY + 7);
     woodSprite.width = outerW - 14;
     woodSprite.height = outerH - 14;
@@ -766,6 +851,20 @@ export class TableRenderer {
       .roundRect(outerX + 7, outerY + 7, outerW - 14, outerH - 14, 32)
       .stroke({ width: 3, color: 0xffffff, alpha: 0.22 });
     frameTop.roundRect(outerX, outerY, outerW, outerH, 38).stroke({ width: 3, color: 0x000000, alpha: 0.35 });
+    /*
+     * The lacquer. A rail is a polished, rounded thing, and it was drawn as a flat band of
+     * grain: now the lamp's reflection runs round the crown of it as a long soft band, and the
+     * outer edge rolls away into shade. Two strokes and a shadow, drawn once.
+     */
+    frameTop
+      .roundRect(-46, -46, TABLE_LENGTH + 92, TABLE_WIDTH + 92, 26)
+      .stroke({ width: 13, color: 0xffffff, alpha: 0.06 });
+    frameTop
+      .roundRect(-44, -44, TABLE_LENGTH + 88, TABLE_WIDTH + 88, 24)
+      .stroke({ width: 2.5, color: 0xffffff, alpha: 0.1 });
+    frameTop
+      .roundRect(outerX + 4, outerY + 4, outerW - 8, outerH - 8, 34)
+      .stroke({ width: 6, color: 0x000000, alpha: 0.18 });
     // Inner lip where the cushion meets the cloth.
     frameTop
       .roundRect(-12, -12, TABLE_LENGTH + 24, TABLE_WIDTH + 24, 14)
@@ -778,12 +877,31 @@ export class TableRenderer {
     this.feltSprite.width = TABLE_LENGTH;
     this.feltSprite.height = TABLE_WIDTH;
 
-    const pocketGfx = this.buildPockets(this.theme);
+    const pockets = this.buildPockets(this.theme);
     this.buildDiamonds();
     this.buildChute();
 
+    /*
+     * The lamp. One soft pool of light on the middle of the cloth, falling away to shade at the
+     * cushions — the thing every photograph of a pool table has and a flat texture does not.
+     * Baked once into a small canvas and stretched, so it costs one sprite.
+     */
+    const lamp = new Sprite(lampTexture());
+    lamp.width = TABLE_LENGTH;
+    lamp.height = TABLE_WIDTH;
+
     this.tableLayer.removeChildren();
-    this.tableLayer.addChild(frame, woodMask, woodSprite, frameTop, this.feltSprite, pocketGfx, this.diamondLayer);
+    this.tableLayer.addChild(
+      frame,
+      woodMask,
+      woodSprite,
+      frameTop,
+      pockets.under,
+      this.feltSprite,
+      lamp,
+      pockets.over,
+      this.diamondLayer
+    );
 
     this.root.addChild(
       this.tableLayer,
@@ -802,24 +920,45 @@ export class TableRenderer {
     );
 
     if (!this.cueGlowLayer.filters) {
-      this.cueGlowLayer.filters = [new BlurFilter({ strength: 5, quality: 3 })];
+      /*
+       * `quality` is the number of blur passes, and each one is a full render-target round
+       * trip over the layer's bounds — at 3 that is six passes every frame the cue is drawn,
+       * which is every frame anybody is aiming. Two is visually indistinguishable at this
+       * strength and costs a third less.
+       */
+      this.cueGlowLayer.filters = [new BlurFilter({ strength: 5, quality: 2 })];
     }
   }
 
   /**
-   * Pockets drawn the way a real table reads: a dark throat, with the cushions cut back
-   * into angled jaws around each mouth rather than a plain circle punched in the cloth.
-   * The cushion run is drawn as trapezoids whose playing edge (the nose) is the narrowest
-   * point, so each pocket visibly opens up behind the nose like the real thing.
+   * Pockets drawn the way a real table reads from above: a round hole behind each mouth, in a
+   * metal casting with a leather liner, and the cushions cut back into angled jaws either side.
+   * The cushion run is drawn as trapezoids whose playing edge (the nose) is the narrowest point,
+   * so each pocket visibly opens up behind the nose like the real thing.
+   *
+   * Two layers, because a hole is both above and below the cloth. The casting and the liner sit
+   * on the rail *under* the cloth, which trims them to the rail for free; the hole itself sits
+   * *over* it, because at a corner the drop starts inside the cloth's rectangle, between the
+   * jaws.
+   *
+   * These used to be a single "bag": a quadratic from one jaw tip to the other, pulled out past
+   * the corner. A quadratic is pointed at both ends, so every pocket was a black teardrop — and
+   * at the size a table is actually drawn, a teardrop reads as a triangle.
    */
-  private buildPockets(theme: TableTheme): Graphics {
+  private buildPockets(theme: TableTheme): { under: Graphics; over: Graphics } {
+    const under = new Graphics();
     const g = new Graphics();
     const CUSH = 30; // cushion depth from the playing edge outward
     const JAW = 26; // how far each cushion end angles back toward the pocket
     const cushion = cssToHex(theme.cushion);
     const leather = cssToHex(theme.pocket);
     const throat = cssToHex(theme.pocketDark);
-    // Straight from the shared table geometry, so the bag we draw is exactly the opening the
+    const metal = theme.metal;
+    const metalMid = cssToHex(metal.mid);
+    const metalLit = cssToHex(metal.light);
+    const metalDark = cssToHex(metal.dark);
+    const spec = 0.35 + metal.polish * 0.5;
+    // Straight from the shared table geometry, so the hole we draw is exactly the opening the
     // simulation lets a ball through. These used to be local copies, and the physics used a
     // much smaller capture circle — which is why balls that visibly entered a pocket bounced.
     const cornerGap = CORNER_MOUTH;
@@ -827,93 +966,115 @@ export class TableRenderer {
     const midX = TABLE_LENGTH / 2;
 
     /**
-     * A pocket mouth is not a circle punched in the cloth — it's an opening *between* two
-     * cushion jaws, bagging outward past the playing surface. Each one is built from the two
-     * jaw tips plus an outward bulge, so corner pockets open on the diagonal and side pockets
-     * open square, exactly as they do on a real table.
+     * A pocket mouth: the two jaw tips on the nose line, which way is out, and where the hole's
+     * centre sits relative to the chord between them (positive = outward).
+     *
+     * The hole is the circle through both jaw tips with that centre, so the jaws always land
+     * exactly on its rim. A corner's centre sits just inside the cloth's corner, which makes the
+     * hole more than a semicircle and properly round; a side pocket's sits on the cloth side of
+     * the chord, which makes a shallower bowl that stays inside the narrower rail.
      */
     type Mouth = {
       a: { x: number; y: number };
       b: { x: number; y: number };
       out: { x: number; y: number };
-      depth: number;
+      centre: number;
     };
 
     const D = Math.SQRT1_2;
+    // Puts a corner's centre 10 units in from the cloth's corner on the diagonal.
+    const cornerCentre = cornerGap * D - 10 * Math.SQRT2;
     const mouths: Mouth[] = [
-      // Corners, opening on the diagonal.
-      // `depth` is how far the back of the bag sits past the *chord* between the jaw tips.
-      // For a corner that chord already cuts across the corner, so the depth has to clear it
-      // before the pocket reads as cutting into the rail at all.
-      { a: { x: cornerGap, y: 0 }, b: { x: 0, y: cornerGap }, out: { x: -D, y: -D }, depth: 98 },
+      { a: { x: cornerGap, y: 0 }, b: { x: 0, y: cornerGap }, out: { x: -D, y: -D }, centre: cornerCentre },
       {
         a: { x: TABLE_LENGTH - cornerGap, y: 0 },
         b: { x: TABLE_LENGTH, y: cornerGap },
         out: { x: D, y: -D },
-        depth: 98,
+        centre: cornerCentre,
       },
       {
         a: { x: 0, y: TABLE_WIDTH - cornerGap },
         b: { x: cornerGap, y: TABLE_WIDTH },
         out: { x: -D, y: D },
-        depth: 98,
+        centre: cornerCentre,
       },
       {
         a: { x: TABLE_LENGTH, y: TABLE_WIDTH - cornerGap },
         b: { x: TABLE_LENGTH - cornerGap, y: TABLE_WIDTH },
         out: { x: D, y: D },
-        depth: 98,
+        centre: cornerCentre,
       },
-      // Sides, opening square to the rail.
-      {
-        a: { x: midX - sideGap, y: 0 },
-        b: { x: midX + sideGap, y: 0 },
-        out: { x: 0, y: -1 },
-        depth: 50,
-      },
+      { a: { x: midX - sideGap, y: 0 }, b: { x: midX + sideGap, y: 0 }, out: { x: 0, y: -1 }, centre: -14 },
       {
         a: { x: midX + sideGap, y: TABLE_WIDTH },
         b: { x: midX - sideGap, y: TABLE_WIDTH },
         out: { x: 0, y: 1 },
-        depth: 50,
+        centre: -14,
       },
     ];
 
-    /**
-     * Traces the bag: jaw tip → outward curve → other jaw tip → straight back across.
-     *
-     * A quadratic's midpoint is `0.5·mid + 0.5·control`, not the control point itself, so to
-     * land the back of the bag exactly `depth` past the chord the control has to go *twice*
-     * that far. Getting this wrong is what makes a pocket look like a shallow notch.
-     */
-    const bag = (m: Mouth, grow: number): void => {
-      const mid = { x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2 };
-      const d = (m.depth + grow) * 2;
-      const ctrl = { x: mid.x + m.out.x * d, y: mid.y + m.out.y * d };
-      const aOut = { x: m.a.x + m.out.x * grow, y: m.a.y + m.out.y * grow };
-      const bOut = { x: m.b.x + m.out.x * grow, y: m.b.y + m.out.y * grow };
-      g.moveTo(aOut.x, aOut.y).quadraticCurveTo(ctrl.x, ctrl.y, bOut.x, bOut.y).closePath();
-    };
-
     for (const m of mouths) {
-      // Leather surround, then the dark throat inside it, then a shadow across the top of
-      // the throat so the hole reads as having depth rather than being a flat black shape.
-      bag(m, 13);
-      g.fill({ color: leather });
-      bag(m, 13);
-      g.stroke({ width: 3, color: 0x000000, alpha: 0.45 });
+      const mid = { x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2 };
+      const cx = mid.x + m.out.x * m.centre;
+      const cy = mid.y + m.out.y * m.centre;
+      const r = Math.hypot(m.a.x - cx, m.a.y - cy);
 
-      bag(m, 0);
+      // Which way round the circle is "outward" from a to b: whichever direction's halfway
+      // point lies past the chord.
+      const ta = Math.atan2(m.a.y - cy, m.a.x - cx);
+      let tb = Math.atan2(m.b.y - cy, m.b.x - cx);
+      if (tb <= ta) tb += Math.PI * 2;
+      const cwMid = (ta + tb) / 2;
+      const cwOut =
+        (Math.cos(cwMid) * r + cx - mid.x) * m.out.x + (Math.sin(cwMid) * r + cy - mid.y) * m.out.y > 0;
+      const ccw = !cwOut;
+      const from = ta;
+      const to = cwOut ? tb : tb - Math.PI * 2;
+      const span = to - from;
+
+      // --- Under the cloth: the casting and the liner, standing on the rail. ---
+      under.circle(cx + 2, cy + 4, r + 11).fill({ color: 0x000000, alpha: 0.35 });
+      under.circle(cx, cy, r + 10).fill({ color: metalDark });
+      under.circle(cx, cy, r + 8.5).fill({ color: metalMid });
+      // The casting is lit from the lamp above the middle of the table, so its bright edge is
+      // the one facing the cloth — drawn as an arc over the half of the ring nearest the table.
+      const inward = Math.atan2(-m.out.y, -m.out.x);
+      under.arc(cx, cy, r + 7, inward - 1.3, inward + 1.3).stroke({ width: 2.4, color: metalLit, alpha: spec });
+      under.arc(cx, cy, r + 9.5, inward + Math.PI - 1.1, inward + Math.PI + 1.1).stroke({
+        width: 1.6,
+        color: 0x000000,
+        alpha: 0.35,
+      });
+      under.circle(cx, cy, r + 4).fill({ color: leather });
+      under.circle(cx, cy, r + 4).stroke({ width: 1.5, color: 0x000000, alpha: 0.5 });
+
+      // --- Over the cloth: the hole. ---
+      const hole = (radius: number): void => {
+        g.moveTo(m.a.x, m.a.y).arc(cx, cy, radius, from, to, ccw).lineTo(m.b.x, m.b.y).closePath();
+      };
+      hole(r);
       g.fill({ color: throat });
 
-      // Inner shadow pooling at the back of the bag, so it reads as depth not a flat shape.
-      const mid = { x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2 };
-      const back = { x: mid.x + m.out.x * m.depth * 0.55, y: mid.y + m.out.y * m.depth * 0.55 };
-      g.circle(back.x, back.y, m.depth * 0.4).fill({ color: 0x000000, alpha: 0.5 });
+      // The cloth's edge dropping away into it: a shadow just inside the chord, which is what
+      // makes the cloth read as ending at a lip rather than being painted black past a line.
+      g.moveTo(m.a.x, m.a.y).lineTo(m.b.x, m.b.y).stroke({ width: 7, color: 0x000000, alpha: 0.4 });
 
-      // A sliver of light on the far lip, which is what makes it look like a hole.
-      bag(m, 6);
-      g.stroke({ width: 2.5, color: 0xffffff, alpha: 0.12 });
+      // The far wall, deeper — a second, smaller pass across the back of the hole.
+      const back = { x: cx + m.out.x * r * 0.25, y: cy + m.out.y * r * 0.25 };
+      g.arc(back.x, back.y, r * 0.45, from + span * 0.15, to - span * 0.15, ccw).stroke({
+        width: r * 0.4,
+        color: 0x000000,
+        alpha: 0.35,
+      });
+
+      // Light on the far lip, and the liner's edge round the rim. The lip is what makes a dark
+      // shape read as a hole rather than as a dark shape.
+      g.arc(cx, cy, r - 2, from + span * 0.25, to - span * 0.25, ccw).stroke({
+        width: 2.2,
+        color: 0xffffff,
+        alpha: 0.13,
+      });
+      g.arc(cx, cy, r, from, to, ccw).stroke({ width: 2.5, color: leather, alpha: 0.9 });
     }
 
     // A cushion run along one edge: `along` walks the rail, `depth` points out of play.
@@ -972,86 +1133,236 @@ export class TableRenderer {
     run(cornerGap, TABLE_WIDTH - cornerGap, 'v', -1);
     run(cornerGap, TABLE_WIDTH - cornerGap, 'v', 1);
 
-    return g;
+    return { under, over: g };
   }
 
-  /** The ball-return track down the right-hand side that collects potted balls. */
+  /**
+   * The ball rack down the right-hand side.
+   *
+   * This was a rounded bar with one long dark channel routed down it, and potted balls stacked
+   * up inside like coins in a slot. Nothing in a pool hall looks like that. A ball rack is a
+   * board screwed to the wall with a *turned cup for every ball*, and the cups are there whether
+   * they are full or not — which is the detail that makes it read, because a rack with gaps in it
+   * tells you at a glance how much of the frame is left.
+   *
+   * A cup seen from directly above is four things: the routed rim standing proud of the board,
+   * the bore, the far wall of the bore catching the light, and the near wall in shadow. The lamp
+   * is over the table, which is to the *left* of this rack, so the lit wall is the right-hand
+   * one — get that backwards and every cup reads as a dome instead of a hole.
+   */
   private buildChute(): void {
     const g = this.chuteLayer;
     g.clear();
-    const x = TABLE_LENGTH + RAIL + SIDE_GAP;
-    const y = -RAIL + 10;
-    const h = TABLE_WIDTH + RAIL * 2 - 20;
-    const r = CHUTE_W / 2;
+    const { x, y, h, cx, pitch, first } = rackGeometry();
+    const r = 14;
 
-    g.roundRect(x + 4, y + 8, CHUTE_W, h, r).fill({ color: 0x000000, alpha: 0.45 });
-    // Maple casing matching the rails, so the return track belongs to the same table.
-    g.roundRect(x, y, CHUTE_W, h, r).fill({ color: cssToHex(this.theme.railDark) });
-    g.roundRect(x + 3, y + 3, CHUTE_W - 6, h - 6, r - 3).fill({ color: cssToHex(this.theme.rail) });
+    const wood = cssToHex(this.theme.rail);
+    const woodDark = cssToHex(this.theme.railDark);
+    const bore = cssToHex(this.theme.pocketDark);
+    const metal = cssToHex(this.theme.metal.mid);
+    const metalLit = cssToHex(this.theme.metal.light);
+    const metalDark = cssToHex(this.theme.metal.dark);
+
+    // --- The board. Square-cornered, like a piece of joinery rather than a chute. ---
+    g.roundRect(x + 5, y + 9, CHUTE_W, h, r).fill({ color: 0x000000, alpha: 0.5 });
+    g.roundRect(x, y, CHUTE_W, h, r).fill({ color: woodDark });
+    g.roundRect(x + 3, y + 3, CHUTE_W - 6, h - 6, r - 2).fill({ color: wood });
+
+    // Grain runs the length of the board, as it would in a sawn plank.
+    for (let i = 0; i < 14; i++) {
+      const gx = x + 6 + ((i + 0.5) / 14) * (CHUTE_W - 12);
+      g.moveTo(gx, y + 6);
+      for (let gy = y + 6; gy <= y + h - 6; gy += 60) {
+        g.lineTo(gx + Math.sin(gy * 0.01 + i) * 1.6, gy);
+      }
+      g.stroke({ width: 0.8 + (i % 3) * 0.5, color: woodDark, alpha: 0.16 + (i % 4) * 0.05 });
+    }
+
+    // A lit chamfer down the left edge, where the light from the table falls on it.
+    g.roundRect(x + 3, y + 3, CHUTE_W - 6, h - 6, r - 2).stroke({ width: 2, color: 0xffffff, alpha: 0.1 });
     g.roundRect(x, y, CHUTE_W, h, r).stroke({ width: 3, color: 0x1a1410, alpha: 0.9 });
-    // Recessed inner channel the balls sit in.
-    const inset = 9;
-    g.roundRect(x + inset, y + inset, CHUTE_W - inset * 2, h - inset * 2, r - inset).fill({
-      color: cssToHex(this.theme.pocketDark),
-    });
-    g.roundRect(x + inset, y + inset, CHUTE_W - inset * 2, h - inset * 2, r - inset).stroke({
-      width: 2.5,
-      color: 0x1a1410,
-      alpha: 0.9,
-    });
+
+    // --- Metal end caps and the screws through them. ---
+    for (const capY of [y + 4, y + h - RACK_CAP - 4]) {
+      g.roundRect(x + 5, capY, CHUTE_W - 10, RACK_CAP, 6).fill({ color: metalDark });
+      g.roundRect(x + 6, capY + 1, CHUTE_W - 12, RACK_CAP - 3, 5).fill({ color: metal });
+      g.roundRect(x + 6, capY + 1, CHUTE_W - 12, RACK_CAP * 0.4, 5).fill({ color: metalLit, alpha: 0.3 });
+      for (const sx of [x + 18, x + CHUTE_W - 18]) {
+        const sy = capY + RACK_CAP / 2;
+        g.circle(sx, sy, 5).fill({ color: metalDark });
+        g.circle(sx, sy, 3.6).fill({ color: metalLit, alpha: 0.75 });
+        // The slot in the screw head.
+        g.moveTo(sx - 2.6, sy).lineTo(sx + 2.6, sy).stroke({ width: 1.2, color: metalDark, alpha: 0.9 });
+      }
+    }
+
+    // --- The cups. ---
+    const rim = BALL_RADIUS + 5;
+    const hole = BALL_RADIUS + 1.5;
+    for (let i = 0; i < RACK_CUPS; i++) {
+      const cy = first + i * pitch;
+
+      // The routed rim, standing proud, lit from the table side.
+      g.circle(cx, cy, rim).fill({ color: woodDark, alpha: 0.55 });
+      g.circle(cx - 1.5, cy - 1.5, rim).stroke({ width: 2, color: 0xffffff, alpha: 0.11 });
+
+      // The bore. Not black: a cup has a bottom, and fifteen empty ones in a row read as
+      // punched-through holes unless something catches light down there.
+      g.circle(cx, cy, hole).fill({ color: bore });
+      g.circle(cx, cy, hole * 0.72).fill({ color: wood, alpha: 0.13 });
+      /*
+       * The far wall, catching the light. Drawn as one circle offset toward the light and then
+       * knocked back by a slightly smaller one at the centre — the sliver left over between the
+       * two is the crescent, which is the cheapest way to get one out of a vector context.
+       */
+      g.circle(cx + 3, cy + 2.5, hole).fill({ color: wood, alpha: 0.3 });
+      g.circle(cx - 1, cy - 1, hole * 0.94).fill({ color: bore });
+      // And the near wall's own shadow, hard against the rim.
+      g.circle(cx - 2, cy - 2, hole).fill({ color: 0x000000, alpha: 0.3 });
+      g.circle(cx + 1.2, cy + 1.2, hole * 0.93).fill({ color: bore });
+    }
   }
 
+  /**
+   * The sights, as actual inlays.
+   *
+   * These were a flat dot in the theme's `diamond` colour, which is the one detail on a rail
+   * everyone has looked at closely — they are what your eye uses to aim a bank shot, so they
+   * are looked at *deliberately* rather than glanced past. An inlay is four things: the recess
+   * cut for it, the metal bezel round it, the stone itself, and the one bright speck where the
+   * light catches its top edge. Drawing all four costs eight primitives per sight and is the
+   * difference between a fitting and a sticker.
+   *
+   * Long-rail sights are the traditional diamond; short-rail ones are round, as most tables
+   * have them.
+   */
   private buildDiamonds(): void {
     const g = this.diamondLayer;
     g.clear();
     const inset = 22;
-    const sight = cssToHex(this.theme.diamond);
-    const draw = (x: number, y: number) => {
-      g.circle(x, y, 4.5).fill({ color: sight, alpha: 0.85 });
+    const metal = this.theme.metal;
+    const bezel = cssToHex(metal.mid);
+    const bezelLit = cssToHex(metal.light);
+    const bezelDark = cssToHex(metal.dark);
+    const stone = cssToHex(this.theme.diamond);
+    // Polished metal takes a tighter, brighter specular than satin.
+    const spec = 0.35 + metal.polish * 0.55;
+
+    const draw = (x: number, y: number, diamond: boolean) => {
+      // Sized so the four layers survive being drawn at a normal table fit. At the 4.5 the
+      // flat dot used, the bezel lands inside a single screen pixel and the whole inlay
+      // collapses back into the dot it replaced.
+      const R = 10;
+      // The recess the inlay sits in.
+      g.circle(x, y + 1.5, R + 1.8).fill({ color: 0x000000, alpha: 0.45 });
+
+      if (diamond) {
+        const pts = (r: number) => [x, y - r, x + r * 0.72, y, x, y + r, x - r * 0.72, y];
+        g.poly(pts(R)).fill({ color: bezelDark });
+        g.poly(pts(R - 1.8)).fill({ color: bezel });
+        g.poly(pts(R - 3.8)).fill({ color: stone, alpha: 0.95 });
+        // Light catches the upper-left facet only.
+        g.poly([x, y - R + 3.2, x - (R - 3.8) * 0.72, y, x, y - 0.8]).fill({
+          color: bezelLit,
+          alpha: spec,
+        });
+        // The bezel's own lit rim, drawn last so nothing sits over it — and following the
+        // inlay's actual outline. A circle here would ring a diamond, which is not a bezel.
+        g.poly(pts(R)).stroke({ width: 1.4, color: bezelLit, alpha: spec * 0.55 });
+      } else {
+        g.circle(x, y, R).fill({ color: bezelDark });
+        g.circle(x, y, R - 1.8).fill({ color: bezel });
+        g.circle(x, y, R - 3.8).fill({ color: stone, alpha: 0.95 });
+        g.circle(x - R * 0.28, y - R * 0.3, R * 0.3).fill({ color: bezelLit, alpha: spec });
+        g.circle(x, y, R).stroke({ width: 1.4, color: bezelLit, alpha: spec * 0.55 });
+      }
     };
+
     for (let i = 1; i < 8; i++) {
       if (i === 4) continue; // no diamond over the side pockets
       const x = (TABLE_LENGTH * i) / 8;
-      draw(x, -inset);
-      draw(x, TABLE_WIDTH + inset);
+      draw(x, -inset, true);
+      draw(x, TABLE_WIDTH + inset, true);
     }
     for (const frac of [0.25, 0.5, 0.75]) {
       const y = TABLE_WIDTH * frac;
-      draw(-inset, y);
-      draw(TABLE_LENGTH + inset, y);
+      draw(-inset, y, false);
+      draw(TABLE_LENGTH + inset, y, false);
     }
   }
 
-  private woodTextureFor(rail: string, railDark: string): Texture {
-    const key = `${rail}|${railDark}`;
-    let tex = this.woodTextureCache.get(key);
-    if (!tex) {
-      tex = Texture.from(generateWoodCanvas(rail, railDark));
-      this.woodTextureCache.set(key, tex);
-    }
-    return tex;
+  /*
+   * Both surfaces are cached on every material field they read rather than on the theme id.
+   *
+   * The id was enough while a theme was a fixed list of colours. It is not enough now: a table
+   * edited in the Studio keeps its id across a re-save, so keying on it would hand back the
+   * cloth from *before* the edit and the preview would never change.
+   *
+   * Both are one line now. The bounded LRU that used to live here moved into `surfaces.ts`,
+   * where it caches the generated *canvas* for the session instead of caching a `Texture` for
+   * the lifetime of one renderer — which is what made every navigation regenerate every
+   * surface from scratch. Uploading a texture from cached pixels is a memcpy; making those
+   * pixels is fifty milliseconds of per-pixel arithmetic on the main thread.
+   */
+  private railTextureFor(theme: TableTheme): Texture {
+    return this.uploaded(this.woodTextureCache, surfaceKey(theme), () => railCanvasFor(theme));
   }
 
   private feltTextureFor(theme: TableTheme): Texture {
-    let tex = this.feltTextureCache.get(theme.id);
-    if (!tex) {
-      tex = Texture.from(generateFeltCanvas(theme));
-      this.feltTextureCache.set(theme.id, tex);
-    }
+    return this.uploaded(this.feltTextureCache, surfaceKey(theme), () => clothCanvasFor(theme));
+  }
+
+  /**
+   * This renderer's texture for a cached canvas.
+   *
+   * Per-instance on purpose, and never destroyed by hand: a texture belongs to the GL context
+   * that uploaded it, and these go when the context does. The map is only here so one renderer
+   * does not upload the same cloth twice.
+   */
+  private uploaded(
+    cache: Map<string, Texture>,
+    key: string,
+    canvas: () => HTMLCanvasElement
+  ): Texture {
+    const hit = cache.get(key);
+    if (hit) return hit;
+    const tex = Texture.from(canvas());
+    cache.set(key, tex);
     return tex;
   }
 
   /** Swaps the whole table — cloth, rails, pockets — and repaints the room behind it. */
   setTableTheme(id: string): void {
     const theme = tableThemeFor(id);
-    if (this.theme.id === theme.id) return;
+    // Compared on the surfaces rather than the id, so re-saving a Studio table under its own
+    // id still rebuilds. `id` alone would make every edit after the first a no-op.
+    if (this.theme.id === theme.id && surfaceKey(this.theme) === surfaceKey(theme)) return;
     this.theme = theme;
     applyTableThemeToPage(theme);
+    this.ambient.setTheme(theme);
+    // Force the room to repaint: the cache key holds the theme id, which a re-saved Studio
+    // table shares with the version it replaced.
+    this.sceneKey = '';
     this.buildTable();
   }
 
   setEffectsIntensity(level: 'low' | 'high'): void {
     this.particles.intensity = level;
+    // `chromeless` wins: the menu backdrop never runs the atmosphere, whatever the effects
+    // level says, because nothing it draws is visible behind the menu on top of it.
+    this.ambient.setIntensity(this.ambientOff || this.chromeless ? 'off' : level);
+  }
+
+  /**
+   * Stills the moving part of the room.
+   *
+   * Separate from the effects level because they answer different questions: effects is "how
+   * much can this machine draw", motion is "how much movement can I stand". Someone on a fast
+   * laptop who gets motion sick wants high effects and a still room.
+   */
+  setAmbientMotion(on: boolean): void {
+    this.ambientOff = !on;
+    this.ambient.setIntensity(on && !this.chromeless ? this.particles.intensity : 'off');
   }
 
   /**
@@ -1079,7 +1390,7 @@ export class TableRenderer {
      * in it. Smaller and still centred leaves room at both ends, and the scoreboard uses the
      * other one.
      */
-    const FIT = this.chromeless ? 1 : 0.76;
+    const FIT = this.chromeless ? 1 : 0.86;
 
     // A quarter turn swaps which screen dimension each side of the table has to fit inside.
     this.rotated = this.autoRotate && h > w;
@@ -1098,8 +1409,22 @@ export class TableRenderer {
      * Only bites on windows short enough for the deck not to fit already; on a normal one the
      * fit above wins and this changes nothing.
      */
-    if (this.bottomClearance > 0 && !this.rotated) {
-      const wanted = (h - this.bottomClearance * 2) / fitH;
+    /*
+     * When the page says what the top of the screen is already used for, the table fits in the
+     * band between the scoreboard and the deck rather than mirroring the deck's band above it.
+     * The mirrored band was empty floor under a scoreboard that only needed a third of it —
+     * a table a sixth smaller than it had room to be, on every host screen, to keep a margin
+     * symmetrical that nothing was using.
+     */
+    const band =
+      this.bottomClearance > 0 && !this.rotated
+        ? {
+            top: this.topClearance > 0 ? this.topClearance : this.bottomClearance,
+            bottom: this.bottomClearance,
+          }
+        : null;
+    if (band) {
+      const wanted = (h - band.top - band.bottom) / fitH;
       if (wanted < this.scale) this.scale = Math.max(wanted, this.scale * 0.55);
     }
     this.root.scale.set(this.scale);
@@ -1113,7 +1438,9 @@ export class TableRenderer {
       : (w - boardW * this.scale) / 2 - left * this.scale;
     let oy = this.rotated
       ? (h - boardW * this.scale) / 2 - left * this.scale
-      : (h - boardH * this.scale) / 2 - BOARD_TOP * this.scale;
+      : band
+        ? band.top + (h - band.top - band.bottom - boardH * this.scale) / 2 - BOARD_TOP * this.scale
+        : (h - boardH * this.scale) / 2 - BOARD_TOP * this.scale;
 
     // The unzoomed layout, kept aside. The room is painted against *this* rather than against
     // the camera, so pushing in doesn't invalidate its cache — see the transform below.
@@ -1173,11 +1500,18 @@ export class TableRenderer {
       w: (TABLE_LENGTH + RAIL * 2) * baseScale,
       h: (TABLE_WIDTH + RAIL * 2) * baseScale,
     };
+    // Keyed on the theme itself. The backdrop is generated from the theme's own lamp and cloth
+    // rather than picked from a list of drawn rooms, so there is no venue to key on any more —
+    // and a Studio table gets a backdrop that is genuinely its own. Material edits that keep the
+    // same id are handled by setTableTheme clearing this outright.
     const key = sceneCacheKey(this.theme.id, w, h, baseScale);
     if (key !== this.sceneKey) {
       this.sceneKey = key;
       drawScene(this.sceneLayer, this.theme, w, h, table);
     }
+    // The ambient layer stays in screen space — dust hanging in the air has no business
+    // zooming with the replay camera — so it only ever needs the resting footprint.
+    this.ambient.resize(w, h, table);
   }
 
   /**
@@ -1196,10 +1530,20 @@ export class TableRenderer {
   }
 
 /** Hides the pocketed-ball chute — used by the phone's small table preview and the menu. */
+  /**
+   * Strips the furniture, for the small table behind the menu.
+   *
+   * It also switches the atmosphere off. That layer arrived when the effects level started
+   * driving it, which quietly gave the *menu wallpaper* a per-frame particle system — dust and
+   * snow drifting behind an opaque menu, where none of it can be seen and all of it is paid
+   * for. A decorative table does not need weather.
+   */
   setChromeless(enabled: boolean): void {
     this.chromeless = enabled;
     this.chuteLayer.visible = !enabled;
     this.chuteBallLayer.visible = !enabled;
+    this.ambientLayer.visible = !enabled;
+    if (enabled) this.ambient.setIntensity('off');
   }
 
   setColorblindPatterns(enabled: boolean): void {
@@ -1378,6 +1722,18 @@ export class TableRenderer {
     return visual;
   }
 
+  /** This ball's shadow sprite, made the first time it is needed. */
+  private shadowFor(id: number): Sprite {
+    let shadow = this.shadows.get(id);
+    if (!shadow) {
+      shadow = new Sprite(shadowTexture());
+      shadow.anchor.set(0.5);
+      this.shadowLayer.addChild(shadow);
+      this.shadows.set(id, shadow);
+    }
+    return shadow;
+  }
+
   updateBalls(balls: Ball[]): void {
     this.updateChute(balls);
     for (const ball of balls) {
@@ -1438,10 +1794,11 @@ export class TableRenderer {
       }
     }
 
-    const cx = TABLE_LENGTH + RAIL + SIDE_GAP + CHUTE_W / 2;
+    // The same geometry the cups are routed from, so a ball lands *in* one rather than near it.
+    const { cx, pitch, first } = rackGeometry();
     const size = CHUTE_BALL;
-    const step = size + 6;
-    const top = -RAIL + 26 + size / 2;
+    const step = pitch;
+    const top = first;
 
     potted.forEach((id, i) => {
       let entry = this.chuteSprites.get(id);
@@ -1669,8 +2026,14 @@ export class TableRenderer {
    * only when it has run out of give does it need the table to yield some.
    */
   setBottomClearance(px: number): void {
-    if (this.bottomClearance === px) return;
-    this.bottomClearance = px;
+    this.setClearances(this.topClearance, px);
+  }
+
+  /** Both reserved bands at once, so a refit lays the table out (and repaints the room) once. */
+  setClearances(top: number, bottom: number): void {
+    if (this.topClearance === top && this.bottomClearance === bottom) return;
+    this.topClearance = top;
+    this.bottomClearance = bottom;
     this.layout();
   }
 
@@ -2294,12 +2657,12 @@ export class TableRenderer {
       this.camNow = this.camTarget;
     }
     this.layout();
+    this.ambient.update(deltaSeconds);
     this.tickAttract(deltaSeconds);
 
     // Snappy correction toward the (moving) predicted point rather than a slow chase of a
     // stale snapshot — see the extrapolation note above updateBalls/tick.
     const posLerp = 1 - Math.exp(-deltaSeconds / 0.05);
-    this.shadowLayer.clear();
     this.highlightLayer.clear();
     this.trailLayer.clear();
     this.drawPickups();
@@ -2311,6 +2674,8 @@ export class TableRenderer {
       if (visual.pocketed) {
         visual.trail.length = 0;
         for (const marking of visual.markings) marking.holder.visible = false;
+        const gone = this.shadows.get(id);
+        if (gone) gone.visible = false;
 
         if (visual.potStart !== null) {
           const t = (performance.now() - visual.potStart) / POT_ANIM_MS;
@@ -2358,15 +2723,21 @@ export class TableRenderer {
       visual.sprite.width = BALL_RADIUS * 2 * grow;
       visual.sprite.height = BALL_RADIUS * 2 * grow;
 
+      /*
+       * The shadow falls away from the lamp. There is one light, over the middle of the table,
+       * so a ball near a cushion throws its shadow a little further out toward that cushion
+       * than one on the spot — a few units at most, and the difference between balls sitting
+       * *on* the cloth and balls printed on it. Lifted balls throw theirs further and fainter.
+       */
       const drop = Math.min(26, visual.height * 0.5);
-      this.shadowLayer
-        .ellipse(
-          visual.sprite.x + 4 + drop,
-          visual.sprite.y + 6 + drop,
-          BALL_RADIUS * 0.95 * (1 - Math.min(0.45, lift * 0.45)),
-          BALL_RADIUS * 0.7 * (1 - Math.min(0.45, lift * 0.45))
-        )
-        .fill({ color: 0x000000, alpha: 0.3 - Math.min(0.16, lift * 0.16) });
+      const shadow = this.shadowFor(id);
+      const shrink = 1 - Math.min(0.45, lift * 0.45);
+      shadow.visible = visual.sprite.visible;
+      shadow.x = visual.sprite.x + 2 + (visual.sprite.x - TABLE_LENGTH / 2) * 0.008 + drop;
+      shadow.y = visual.sprite.y + 5 + (visual.sprite.y - TABLE_WIDTH / 2) * 0.012 + drop;
+      shadow.width = BALL_RADIUS * 2.5 * shrink;
+      shadow.height = BALL_RADIUS * 2.2 * shrink;
+      shadow.alpha = 1 - Math.min(0.5, lift * 0.5);
 
       this.positionMarkings(visual, grow);
 
@@ -2449,13 +2820,21 @@ export class TableRenderer {
       const a = visual.trail[i - 1];
       const b = visual.trail[i];
       const frac = i / visual.trail.length; // 0 at the tail, 1 at the ball
-      // A comet tapers hard toward the tail; fire flares wide and wobbles.
+      /*
+       * How the width runs from tail to ball. This is what makes a shape a shape: a comet
+       * pinches hard toward the tail, fire flares and wobbles, smoke keeps its bulk all the
+       * way back, and a bolt is thin and even because a discharge has no taper.
+       */
       const shapeWidth =
         style.shape === 'comet'
           ? Math.pow(frac, 1.7)
           : style.shape === 'fire'
             ? frac * (0.8 + 0.35 * Math.sin(this.elapsed * 22 + i))
-            : frac;
+            : style.shape === 'smoke'
+              ? Math.pow(frac, 0.45) * 1.5
+              : style.shape === 'bolt'
+                ? 0.55 + 0.25 * Math.sin(this.elapsed * 40 + i * 2.3)
+                : frac;
       const width = BALL_RADIUS * 1.6 * shapeWidth * (0.45 + t * 0.55) * style.width;
 
       if (style.glow) {
@@ -2478,6 +2857,15 @@ export class TableRenderer {
         g.circle(b.x + jx, b.y + jy, 1.6 + frac * 2.4).fill({
           color: 0xffffff,
           alpha: frac * 0.7 * style.alpha,
+        });
+      }
+
+      // Bubbles are rings, and they grow as they fall behind rather than fading in place.
+      if (style.shape === 'bubbles' && i % 3 === 0) {
+        g.circle(b.x, b.y, BALL_RADIUS * (0.24 + (1 - frac) * 0.5)).stroke({
+          width: 1.6,
+          color,
+          alpha: frac * 0.55 * style.alpha,
         });
       }
     }
@@ -2765,6 +3153,10 @@ export class TableRenderer {
 
   destroy(): void {
     this.particles.clear();
+    if (this.onVisibility) {
+      document.removeEventListener('visibilitychange', this.onVisibility);
+      this.onVisibility = null;
+    }
     this.app.destroy(true, { children: true });
   }
 }

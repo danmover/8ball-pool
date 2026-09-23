@@ -1,6 +1,7 @@
 import { icon, type IconName } from '../render/icons';
 import { backTarget, goBack, navigate } from '../router';
 import { activeTable, forgetTable, isTableAlive, type ActiveTable } from '../net/activeTable';
+import { SECTIONS, type Section } from '../ui/sections';
 
 /**
  * The frame every menu screen sits in.
@@ -22,6 +23,12 @@ export interface PageShellOptions {
   backFallback?: string;
   /** Suppresses the resume strip on pages that are themselves about a table. */
   hideResume?: boolean;
+  /**
+   * Which of the menu's destinations this is. Puts that destination's token — the same disc,
+   * icon and colour as on the hub's dock — at the front of the header, so arriving somewhere
+   * looks like arriving at the thing you pressed.
+   */
+  section?: Section;
 }
 
 /** A human name for a route, so "back" can say where it is going. */
@@ -47,6 +54,11 @@ export function pageShellHtml(opts: PageShellOptions): string {
       <button class="icon-btn back-btn" id="shellBack" title="Back to ${back}">
         ${icon('back', { size: 20 })}
       </button>
+      ${
+        opts.section
+          ? `<span class="page-badge" aria-hidden="true">${icon(SECTIONS[opts.section].icon, { size: 22 })}</span>`
+          : ''
+      }
       <div class="page-title">
         <h1>${opts.title}</h1>
         ${opts.subtitle ? `<p class="tagline">${opts.subtitle}</p>` : ''}

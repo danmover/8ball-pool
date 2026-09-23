@@ -126,21 +126,27 @@ export function reelTiming(rarity: Rarity): { durationMs: number; settleMs: numb
 /**
  * Eased position along the strip, 0..1.
  *
- * A single cubic ease-out gets you a reel that is *smooth*, which is exactly wrong — it should
- * be fast, then slow, then agonising. This spends the last stretch of time on the last sliver
- * of distance, which is where the tension lives.
+ * One curve, and its speed only ever falls. This used to be two curves stitched together, a
+ * run and then a crawl, and the stitch was the bug everybody saw: the run decelerated to a
+ * near-stop exactly at the seam, and the crawl then started from a standing position at
+ * several cells a second. On a 54-cell strip the crawl covered the last two cells, so every
+ * single case slowed to a halt, lurched forward two items, and stopped again.
+ *
+ * A power ease-out is fast, then slow, then agonising without any seam to lurch at: velocity
+ * is `p(1-t)^(p-1)`, which falls continuously to zero at the prize. `settleFraction` sets the
+ * power, so a rarer prize (longer settle) spends proportionally longer on its last cell.
  */
 export function reelEase(t: number, settleFraction: number): number {
   const clamped = Math.max(0, Math.min(1, t));
-  const settle = Math.max(0.05, Math.min(0.9, settleFraction));
-  const cross = 1 - settle;
+  return 1 - Math.pow(1 - clamped, reelPower(settleFraction));
+}
 
-  if (clamped <= cross) {
-    // The main run: quick off the line, decelerating into the last cell or two.
-    const local = clamped / cross;
-    return (1 - Math.pow(1 - local, 2.2)) * 0.965;
-  }
-  // The crawl: the remaining 3.5% of the distance, over the whole settle window.
-  const local = (clamped - cross) / settle;
-  return 0.965 + (1 - Math.pow(1 - local, 3.4)) * 0.035;
+/**
+ * The ease's exponent. About 3.2 for a common and 3.5 for a mystic: at 3.2 the last cell of a
+ * 54-cell strip takes the final ~29% of the run, which is the tension, and the final half
+ * second still visibly moves rather than sitting dead before the reveal.
+ */
+function reelPower(settleFraction: number): number {
+  const settle = Math.max(0.05, Math.min(0.9, settleFraction));
+  return 2.8 + settle * 2.4;
 }

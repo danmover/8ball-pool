@@ -29,6 +29,10 @@ export const TABLE_THEME_IDS = [
   'neon',
   'ice',
   'vintage',
+  'royale',
+  'obsidian',
+  'champagne',
+  'emerald',
 ] as const;
 
 export type VenueId = (typeof TABLE_THEME_IDS)[number];

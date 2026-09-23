@@ -4,6 +4,26 @@ import { DEFAULT_LOADOUT } from '@8ball/shared';
  * Paint data for `TableRenderer.drawCueStick`. The stick's geometry is fixed; a skin only
  * says what colour each section is, plus optional flourishes for the top rarities.
  */
+/**
+ * How a cue is *built*, as opposed to what colour it is.
+ *
+ * Added because twenty-four cues drawn from colour alone are twenty-four of the same cue. The
+ * things that actually distinguish one cue from another in a rack are structural: how many
+ * splice points run up the forearm, whether the grip is bare wood or wrapped in linen, what is
+ * inlaid along it, and how the butt is capped. Those are four cheap numbers and they do more
+ * work than any amount of repainting.
+ */
+export interface CueBuild {
+  /** Splice points running up the forearm — the single most recognisable cue feature. */
+  points: 0 | 4 | 6;
+  /** How the grip is finished. */
+  wrap: 'none' | 'linen' | 'leather' | 'cord';
+  /** Decoration along the forearm. */
+  inlay: 'none' | 'dots' | 'diamonds' | 'chevrons' | 'runes';
+  /** Butt cap treatment. */
+  cap: 'flat' | 'ringed' | 'domed';
+}
+
 export interface CueSkin {
   tip: number;
   ferrule: number;
@@ -20,9 +40,13 @@ export interface CueSkin {
   embers?: boolean;
   /** Cycle the shaft hue over time. */
   shimmer?: boolean;
+  /** Construction. Filled in by `cueSkinFor` from the table below. */
+  build: CueBuild;
 }
 
-const SKINS: Record<string, CueSkin> = {
+type SkinPaint = Omit<CueSkin, 'build'>;
+
+const SKINS: Record<string, SkinPaint> = {
   'cue.house': {
     tip: 0x4aa8ff,
     ferrule: 0xeef2f8,
@@ -233,8 +257,130 @@ const SKINS: Record<string, CueSkin> = {
     shimmer: true,
     embers: true,
   },
+
+  /*
+   * These six are in the catalogue and had no skin at all, so `cueSkinFor` handed every one of
+   * them the house cue — six separately-named, separately-priced items that were, on the table
+   * and in the locker, literally the same object.
+   */
+  'cue.driftwood': {
+    tip: 0x8a7f6a,
+    ferrule: 0xe8e0cc,
+    shaft: 0xc2b49a,
+    collar: 0x9aa89a,
+    ring: 0x2a2a22,
+    forearm: 0x7d7460,
+    wrap: 0x4a4638,
+    butt: 0x9aa89a,
+    inlay: 0xe8e0cc,
+  },
+  'cue.tartan': {
+    tip: 0x2f6fd0,
+    ferrule: 0xf0e6d2,
+    shaft: 0xd8c49a,
+    collar: 0x1f6b3a,
+    ring: 0x11170f,
+    forearm: 0x8a2230,
+    wrap: 0x1f6b3a,
+    butt: 0xd8b43d,
+    inlay: 0xf6f2e6,
+  },
+  'cue.brassneck': {
+    tip: 0x7a5c3a,
+    ferrule: 0xffe9a8,
+    shaft: 0xcdb07a,
+    collar: 0xd1a23c,
+    ring: 0x3a2a10,
+    forearm: 0x8a6a2a,
+    wrap: 0x2e2412,
+    butt: 0xd1a23c,
+    inlay: 0xffe9a8,
+  },
+  'cue.stormglass': {
+    tip: 0x9fd8ff,
+    ferrule: 0xdfeaf4,
+    shaft: 0x6e7f92,
+    collar: 0xaebecd,
+    ring: 0x111820,
+    forearm: 0x33465c,
+    wrap: 0x1b2735,
+    butt: 0xaebecd,
+    inlay: 0xdff0ff,
+    aura: 0x7fb0d8,
+  },
+  'cue.lantern': {
+    tip: 0xffd08a,
+    ferrule: 0xfff0cc,
+    shaft: 0xb5763a,
+    collar: 0xffb45c,
+    ring: 0x2a1608,
+    forearm: 0x6e3a14,
+    wrap: 0x33200e,
+    butt: 0xffb45c,
+    inlay: 0xffe6bd,
+    aura: 0xff9a3d,
+    embers: true,
+  },
+  'cue.oathkeeper': {
+    tip: 0xf0f4ff,
+    ferrule: 0xffffff,
+    shaft: 0xdfe6f2,
+    collar: 0xd1a23c,
+    ring: 0x1a1f2e,
+    forearm: 0x2a3350,
+    wrap: 0x151b2c,
+    butt: 0xd1a23c,
+    inlay: 0xffe9a8,
+    aura: 0xbfd4ff,
+    shimmer: true,
+  },
+};
+
+const DEFAULT_BUILD: CueBuild = { points: 0, wrap: 'linen', inlay: 'none', cap: 'flat' };
+
+/**
+ * Construction per cue.
+ *
+ * Deliberately a separate table from the paint. Adding a build to each of the colour literals
+ * above would have meant editing twenty-four objects to change one idea, and the two are read
+ * at different times anyway — the renderer wants the colours every frame and the geometry only
+ * when it rebuilds.
+ */
+const BUILDS: Record<string, CueBuild> = {
+  // Plain working cues: no splice, nothing inlaid.
+  'cue.house': { points: 0, wrap: 'none', inlay: 'none', cap: 'flat' },
+  'cue.bamboo': { points: 0, wrap: 'cord', inlay: 'none', cap: 'flat' },
+  'cue.driftwood': { points: 0, wrap: 'none', inlay: 'none', cap: 'flat' },
+  'cue.chalkline': { points: 0, wrap: 'linen', inlay: 'dots', cap: 'ringed' },
+  'cue.candystick': { points: 4, wrap: 'cord', inlay: 'dots', cap: 'flat' },
+  'cue.tartan': { points: 0, wrap: 'leather', inlay: 'chevrons', cap: 'ringed' },
+
+  // Rares start to show real cue-making.
+  'cue.jetstream': { points: 4, wrap: 'none', inlay: 'chevrons', cap: 'domed' },
+  'cue.rosewood': { points: 4, wrap: 'linen', inlay: 'diamonds', cap: 'ringed' },
+  'cue.copper': { points: 4, wrap: 'leather', inlay: 'dots', cap: 'ringed' },
+  'cue.snooker': { points: 0, wrap: 'none', inlay: 'none', cap: 'ringed' },
+  'cue.royal': { points: 6, wrap: 'linen', inlay: 'diamonds', cap: 'domed' },
+  'cue.brassneck': { points: 4, wrap: 'cord', inlay: 'dots', cap: 'ringed' },
+
+  // Epics: six points, heavier decoration.
+  'cue.neon': { points: 6, wrap: 'none', inlay: 'chevrons', cap: 'domed' },
+  'cue.obsidian': { points: 6, wrap: 'leather', inlay: 'diamonds', cap: 'domed' },
+  'cue.circuit': { points: 6, wrap: 'none', inlay: 'runes', cap: 'flat' },
+  'cue.bone': { points: 4, wrap: 'none', inlay: 'runes', cap: 'domed' },
+  'cue.tidal': { points: 6, wrap: 'cord', inlay: 'chevrons', cap: 'domed' },
+  'cue.stormglass': { points: 6, wrap: 'leather', inlay: 'dots', cap: 'ringed' },
+  'cue.lantern': { points: 4, wrap: 'leather', inlay: 'runes', cap: 'domed' },
+
+  // Legendaries and above: everything, plus an aura from the paint table.
+  'cue.inferno': { points: 6, wrap: 'leather', inlay: 'runes', cap: 'domed' },
+  'cue.aurora': { points: 6, wrap: 'cord', inlay: 'diamonds', cap: 'domed' },
+  'cue.midas': { points: 6, wrap: 'linen', inlay: 'diamonds', cap: 'domed' },
+  'cue.oathkeeper': { points: 6, wrap: 'leather', inlay: 'runes', cap: 'domed' },
+  'cue.eventhorizon': { points: 6, wrap: 'none', inlay: 'runes', cap: 'domed' },
 };
 
 export function cueSkinFor(id: string | undefined): CueSkin {
-  return SKINS[id ?? ''] ?? SKINS[DEFAULT_LOADOUT.cue];
+  const paint = SKINS[id ?? ''] ?? SKINS[DEFAULT_LOADOUT.cue];
+  return { ...paint, build: BUILDS[id ?? ''] ?? DEFAULT_BUILD };
 }

@@ -6,6 +6,7 @@ import { icon } from '../render/icons';
 import { navigate } from '../router';
 import * as sfx from '../render/sfx';
 import { bindPageShell, pageShellHtml } from './pageShell';
+import { sectionStyle } from '../ui/sections';
 import { runBusyWithTimeout } from '../ui/busy';
 
 /**
@@ -56,8 +57,9 @@ export function renderChallengesPage(root: HTMLElement): () => void {
     const possible = sets.flatMap((s) => s.challenges).length * 3;
 
     root.innerHTML = `
-      <div class="profile-page challenges-page">
+      <div class="profile-page challenges-page menu-page" style="${sectionStyle('challenges')}">
         ${pageShellHtml({
+          section: 'challenges',
           title: 'Trick Shots',
           subtitle: 'Hand-built puzzles about cue ball control. Fewer shots means more stars.',
           actions: `<span class="wallet-chip">${icon('star', { size: 18 })} ${total} / ${possible}</span>`,

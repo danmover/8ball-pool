@@ -8,6 +8,7 @@ import {
   rarityRank,
   reelEase,
   reelTiming,
+  type CosmeticItem,
   type Rarity,
   type ReelCell,
   type WheelResult,
@@ -20,14 +21,26 @@ import * as sfx from '../render/sfx';
 /**
  * Opening a case.
  *
- * Replaces the prize wheel. The wheel showed *rarity words* on twelve wedges, which meant the
- * only thing you could watch was a coloured slice going past — the actual prize was a surprise
- * that arrived after the animation had finished, so the animation carried no tension at all.
+ * The prize is decided up front by `spendSpin`, exactly as it always was — see
+ * `shared/src/reel.ts` for why that separation is load-bearing. Everything here is about the
+ * ninety seconds either side of that decision.
  *
- * A reel of real items fixes that on its own: you can see a legendary coming, you can see it
- * slide past, and by the time it stops you already know how you feel. The prize is still
- * decided up front by `spendSpin`, exactly as before — see `shared/src/reel.ts` for why that
- * separation is load-bearing.
+ * The previous version was a reel and nothing else: a strip of items scrolled past a gold line
+ * inside a violet dialog, and when it stopped a flat panel dropped over the top with the answer
+ * on it. Two things were wrong with that, and they are the whole redesign.
+ *
+ * **There was no case.** The dialog said "Open a Case" and there was no case anywhere on it —
+ * you pressed a button and a list moved. An unopened box that sits there, breathing light
+ * through its seams, is the thing the whole feature is named after and the only thing that
+ * makes the button press feel like an event.
+ *
+ * **The reveal did not arrive, it replaced.** The reel vanished and a panel appeared; nothing
+ * connected the item you watched land to the item you were being shown. Now the prize rises out
+ * of the reel at the marker, the light comes up behind it, and the frame it lands in is built
+ * from its own rarity.
+ *
+ * The sequence is four beats — `crate`, `bursting`, `spinning`, `revealed` — and each one is a
+ * class on the root so the CSS owns the choreography and this file owns the timing.
  */
 
 export const RARITY_COLORS: Record<Rarity, string> = {
@@ -38,8 +51,21 @@ export const RARITY_COLORS: Record<Rarity, string> = {
   mystic: '#c9a8ff',
 };
 
-/** Cell width including its gap, in pixels. Must match the CSS. */
-const CELL = 104;
+/** Cell width including its gap, in pixels: 136 + 12. Must match `.reel-cell` and `.reel-track`. */
+const CELL = 148;
+
+/**
+ * How many cells sit to the left of the marker when the reel starts.
+ *
+ * The old strip began with cell 0 *under* the marker, so the left half of the stage was an
+ * empty black rectangle until the thing started moving — the idle state looked broken. Starting
+ * a few cells in costs nothing and means the strip is a strip from the first frame.
+ */
+const LEAD_CELLS = 4;
+
+/** Beat lengths for the crate, in ms. The reel's own timing comes from `reelTiming`. */
+const SHAKE_MS = 620;
+const BURST_MS = 380;
 
 export interface WheelOutcome {
   result: WheelResult;
@@ -48,9 +74,75 @@ export interface WheelOutcome {
 function cellHtml(cell: ReelCell, index: number): string {
   return `
     <div class="reel-cell rarity-${cell.item.rarity}" data-index="${index}">
-      <div class="reel-art">${cosmeticPreviewHtml(cell.item, 62)}</div>
+      <div class="reel-art">${cosmeticPreviewHtml(cell.item, 72)}</div>
       <div class="reel-name">${cell.item.name}</div>
     </div>`;
+}
+
+/**
+ * The case itself, before it is opened.
+ *
+ * Drawn rather than photographed, in the same flat-with-an-ink-outline language as the balls
+ * and the cue, so it belongs to this game rather than to a generic loot-box. The lid is its own
+ * group because it has to hinge open, and the seam is its own element because it has to glow
+ * before anything else happens — that pulse is the case telling you there is something in it.
+ */
+function crateSvg(): string {
+  return `
+  <svg class="crate-svg" viewBox="0 0 220 176" aria-hidden="true">
+    <defs>
+      <linearGradient id="crateBody" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#3b2a52"/>
+        <stop offset="1" stop-color="#1d1330"/>
+      </linearGradient>
+      <linearGradient id="crateLid" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#4a3566"/>
+        <stop offset="1" stop-color="#2e2046"/>
+      </linearGradient>
+      <linearGradient id="crateBrass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffe9a8"/>
+        <stop offset="0.5" stop-color="#d1a23c"/>
+        <stop offset="1" stop-color="#7a5610"/>
+      </linearGradient>
+    </defs>
+
+    <ellipse class="crate-shadow" cx="110" cy="164" rx="66" ry="10"/>
+
+    <!-- Body -->
+    <g class="crate-body">
+      <rect x="26" y="78" width="168" height="78" rx="10" fill="url(#crateBody)" stroke="#120a1a" stroke-width="5"/>
+      <rect x="38" y="90" width="144" height="54" rx="6" fill="#160e26" opacity="0.55"/>
+      <!-- Corner braces -->
+      <path d="M26 96V88a10 10 0 0 1 10-10h10" fill="none" stroke="url(#crateBrass)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M194 96V88a10 10 0 0 0-10-10h-10" fill="none" stroke="url(#crateBrass)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M26 138v8a10 10 0 0 0 10 10h10" fill="none" stroke="url(#crateBrass)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M194 138v8a10 10 0 0 1-10 10h-10" fill="none" stroke="url(#crateBrass)" stroke-width="6" stroke-linecap="round"/>
+      <!-- The 8-ball emblem, so the case is unmistakably this game's -->
+      <circle cx="110" cy="117" r="21" fill="#0f0f14" stroke="#120a1a" stroke-width="4"/>
+      <circle cx="110" cy="117" r="11" fill="#fbf8ef"/>
+      <text x="110" y="118" font-family="Fredoka, Nunito, sans-serif" font-size="15" font-weight="900"
+            text-anchor="middle" dominant-baseline="central" fill="#14141a">8</text>
+      <ellipse cx="102" cy="108" rx="6" ry="4" fill="#fff" opacity="0.45" transform="rotate(-28 102 108)"/>
+    </g>
+
+    <!--
+      What is inside, seen through the seam.
+
+      Sits just *below* the lid's bottom edge rather than behind the lid: at y=66 the whole
+      thing was hidden under the lid panel drawn after it, so the one element that is supposed
+      to be moving while the case waits was invisible.
+    -->
+    <rect class="crate-glow" x="40" y="76" width="140" height="14" rx="7"/>
+
+    <!-- Lid -->
+    <g class="crate-lid">
+      <rect x="20" y="42" width="180" height="38" rx="10" fill="url(#crateLid)" stroke="#120a1a" stroke-width="5"/>
+      <rect x="20" y="42" width="180" height="12" rx="6" fill="#ffffff" opacity="0.09"/>
+      <path d="M20 62h180" stroke="#120a1a" stroke-width="3" opacity="0.5"/>
+      <rect x="96" y="62" width="28" height="22" rx="5" fill="url(#crateBrass)" stroke="#120a1a" stroke-width="4"/>
+      <circle cx="110" cy="73" r="3.4" fill="#120a1a"/>
+    </g>
+  </svg>`;
 }
 
 /**
@@ -69,72 +161,166 @@ export function openCase(parent: HTMLElement): Promise<WheelOutcome | null> {
     }
 
     const overlay = document.createElement('div');
-    overlay.className = 'case-overlay';
+    overlay.className = 'case-overlay phase-crate';
     overlay.innerHTML = `
-      <div class="case-card">
-        <h2>Open a Case</h2>
-        <p class="case-sub" id="caseSub"></p>
-        <div class="reel-stage">
-          <div class="reel-marker"></div>
-          <div class="reel-track" id="reelTrack"></div>
-          <div class="reel-fade left"></div>
-          <div class="reel-fade right"></div>
+      <div class="case-shell" role="dialog" aria-modal="true" aria-label="Open a case">
+        <header class="case-head">
+          <div class="case-title">
+            <span class="case-kicker">Locker</span>
+            <h2>Case</h2>
+          </div>
+          <span class="case-spins" id="caseSpins"></span>
+          <button class="icon-btn case-x" id="caseCloseBtn" title="Close" aria-label="Close">&#215;</button>
+        </header>
+
+        <div class="case-stage" id="caseStage">
+          <div class="crate" id="crate">${crateSvg()}</div>
+
+          <div class="reel-stage" id="reelStage">
+            <div class="reel-track" id="reelTrack"></div>
+            <div class="reel-fade left"></div>
+            <div class="reel-fade right"></div>
+            <div class="reel-marker" aria-hidden="true"><i></i><i></i></div>
+          </div>
+
+          <div class="case-reveal" id="caseReveal" aria-live="polite"></div>
         </div>
-        <div class="case-actions">
-          <button id="caseOpenBtn">OPEN</button>
-          <button id="caseCloseBtn" class="secondary">Close</button>
-        </div>
-        <div class="case-odds" id="caseOdds"></div>
+
+        <footer class="case-foot">
+          <button class="case-open" id="caseOpenBtn"><span>Open case</span></button>
+          <div class="case-odds" id="caseOdds"></div>
+        </footer>
       </div>`;
     parent.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('open'));
 
-    const card = overlay.querySelector<HTMLElement>('.case-card')!;
+    const shell = overlay.querySelector<HTMLElement>('.case-shell')!;
     const track = overlay.querySelector<HTMLElement>('#reelTrack')!;
-    const stage = overlay.querySelector<HTMLElement>('.reel-stage')!;
+    const stage = overlay.querySelector<HTMLElement>('#reelStage')!;
+    const crate = overlay.querySelector<HTMLElement>('#crate')!;
+    const revealEl = overlay.querySelector<HTMLElement>('#caseReveal')!;
     const openBtn = overlay.querySelector<HTMLButtonElement>('#caseOpenBtn')!;
     const closeBtn = overlay.querySelector<HTMLButtonElement>('#caseCloseBtn')!;
-    const sub = overlay.querySelector<HTMLElement>('#caseSub')!;
+    const spinsEl = overlay.querySelector<HTMLElement>('#caseSpins')!;
     const odds = overlay.querySelector<HTMLElement>('#caseOdds')!;
 
     let last: WheelOutcome | null = null;
-    let spinning = false;
+    let busy = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const after = (ms: number, fn: () => void): void => {
+      timers.push(setTimeout(fn, ms));
+    };
 
-    // The odds, stated plainly and permanently. A case that hides its own distribution is
-    // doing something it does not want looked at.
+    /*
+     * The odds, stated plainly and permanently, as a bar rather than a row of chips.
+     *
+     * A case that hides its own distribution is doing something it does not want looked at —
+     * that was true of the chips too. The bar says the same thing and also *shows* it: the
+     * common band is half the width because commons are half the outcomes, which is a fact you
+     * can take in without reading five percentages.
+     */
     const totalWeight = Object.values(RARITY_WEIGHTS).reduce((a, b) => a + b, 0);
-    odds.innerHTML = (Object.keys(RARITY_WEIGHTS) as Rarity[])
-      .sort((a, b) => rarityRank(a) - rarityRank(b))
-      .map(
-        (r) =>
-          `<span class="odds-chip" style="--c:${RARITY_COLORS[r]}">${RARITY_LABELS[r]} ${Math.round(
-            (RARITY_WEIGHTS[r] / totalWeight) * 100
-          )}%</span>`
-      )
-      .join('');
+    const tiers = (Object.keys(RARITY_WEIGHTS) as Rarity[]).sort(
+      (a, b) => rarityRank(a) - rarityRank(b)
+    );
+    odds.innerHTML = `
+      <div class="odds-bar">
+        ${tiers
+          .map(
+            (r) =>
+              `<span class="odds-seg" style="--c:${RARITY_COLORS[r]};flex:${RARITY_WEIGHTS[r]}"
+                     title="${RARITY_LABELS[r]} ${Math.round((RARITY_WEIGHTS[r] / totalWeight) * 100)}%"></span>`
+          )
+          .join('')}
+      </div>
+      <div class="odds-keys">
+        ${tiers
+          .map(
+            (r) =>
+              `<span class="odds-key" style="--c:${RARITY_COLORS[r]}">${RARITY_LABELS[r]}
+                 <b>${Math.round((RARITY_WEIGHTS[r] / totalWeight) * 100)}%</b></span>`
+          )
+          .join('')}
+      </div>`;
 
     const refresh = (): void => {
       const spins = getProfile().spins;
-      sub.textContent = spins > 0 ? `${spins} spin${spins === 1 ? '' : 's'} left` : 'No spins left';
-      openBtn.disabled = spins <= 0;
-      openBtn.textContent = spins > 0 ? 'OPEN' : 'NO SPINS';
+      spinsEl.textContent = `${spins} ${spins === 1 ? 'key' : 'keys'}`;
+      spinsEl.classList.toggle('empty', spins <= 0);
+      openBtn.disabled = spins <= 0 || busy;
+      openBtn.querySelector('span')!.textContent = spins > 0 ? 'Open case' : 'No keys left';
     };
+
+    /** Fills the strip so the stage is never an empty box. */
+    const layIdleStrip = (): void => {
+      const idle = buildReel(seedItem());
+      track.innerHTML = idle.map(cellHtml).join('');
+      track.style.transition = 'none';
+      track.style.transform = `translateX(${LEAD_CELLS * CELL}px)`;
+    };
+    layIdleStrip();
     refresh();
 
-    // Idle state: a still strip, so the stage isn't an empty box before the first open.
-    const idle = buildReel(getProfile().spins > 0 ? seedItem() : seedItem());
-    track.innerHTML = idle.map(cellHtml).join('');
-    track.style.transform = `translateX(0px)`;
+    // ---- Dismissal ----------------------------------------------------------------
 
     const finish = (): void => {
-      overlay.remove();
-      resolve(last);
+      for (const t of timers) clearTimeout(t);
+      document.removeEventListener('keydown', onKey, true);
+      overlay.classList.remove('open');
+      // Let the fade out play before the node goes; the promise resolves with it.
+      setTimeout(() => {
+        overlay.remove();
+        resolve(last);
+      }, 180);
     };
+
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === 'Escape') {
+        // Never mid-spin: the prize is already spent, and vanishing the dialog on the way to
+        // showing it looks exactly like losing it.
+        if (busy) {
+          e.preventDefault();
+          return;
+        }
+        e.preventDefault();
+        finish();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const items = [...shell.querySelectorAll<HTMLElement>('button:not([disabled])')];
+        if (items.length === 0) return;
+        const first = items[0];
+        const lastEl = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey, true);
+
     closeBtn.addEventListener('click', () => {
-      if (!spinning) finish();
+      if (!busy) finish();
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay && !busy) finish();
     });
 
-    openBtn.addEventListener('click', () => {
-      if (spinning) return;
+    // ---- The sequence -------------------------------------------------------------
+
+    /**
+     * The whole sequence, from a closed case to a revealed prize.
+     *
+     * Extracted because two buttons start it: the one in the footer, and "Open another" on the
+     * reveal. That second one used to merely put a closed case back on the stage, so a button
+     * that said "open another" cost two presses to open another — the label promised an action
+     * and delivered a navigation.
+     */
+    function runOpen(): void {
+      if (busy) return;
       sfx.unlockAudio();
 
       const result = spendSpin();
@@ -143,12 +329,49 @@ export function openCase(parent: HTMLElement): Promise<WheelOutcome | null> {
         return;
       }
       last = { result };
-      spinning = true;
-      openBtn.disabled = true;
+      busy = true;
+      refresh();
       closeBtn.disabled = true;
-      card.classList.remove('revealed');
-      overlay.querySelector('.case-reveal')?.remove();
+      revealEl.innerHTML = '';
+      overlay.className = 'case-overlay open phase-crate shaking';
+      setRarity(result.item.rarity);
 
+      sfx.playUiHero(volume);
+
+      if (stillMotion) {
+        // Reduce motion: no shake, no scroll. Straight to the answer, which is the only part
+        // that was ever information rather than theatre.
+        overlay.className = 'case-overlay open phase-spinning';
+        const cells = buildReel(result.item);
+        track.innerHTML = cells.map(cellHtml).join('');
+        track.style.transition = 'none';
+        track.style.transform = `translateX(${-(REEL_WINNER_INDEX * CELL)}px)`;
+        landed(result);
+        return;
+      }
+
+      // Beat 1: the case rattles, and the light through the seam builds with it.
+      after(SHAKE_MS, () => {
+        overlay.className = 'case-overlay open phase-bursting';
+        sfx.playReveal(volume, 0);
+
+        // Beat 2: the lid goes, the flash covers the swap, and the reel is already running
+        // underneath by the time the flash clears.
+        after(BURST_MS, () => {
+          overlay.className = 'case-overlay open phase-spinning';
+          spinReel(result);
+        });
+      });
+    }
+
+    openBtn.addEventListener('click', runOpen);
+
+    function setRarity(rarity: Rarity): void {
+      shell.style.setProperty('--rc', RARITY_COLORS[rarity]);
+      shell.dataset.rarity = rarity;
+    }
+
+    function spinReel(result: WheelResult): void {
       const cells = buildReel(result.item);
       track.innerHTML = cells.map(cellHtml).join('');
 
@@ -156,34 +379,32 @@ export function openCase(parent: HTMLElement): Promise<WheelOutcome | null> {
       const settleFraction = timing.settleMs / timing.durationMs;
       // Land the winning cell under the marker, with a small random offset inside the cell so
       // it never stops at exactly the same pixel twice.
-      const jitter = (Math.random() - 0.5) * CELL * 0.4;
-      const distance = REEL_WINNER_INDEX * CELL + jitter;
+      const jitter = (Math.random() - 0.5) * CELL * 0.34;
+      const from = -LEAD_CELLS * CELL;
+      const to = REEL_WINNER_INDEX * CELL + jitter;
 
-      if (stillMotion) {
-        // Reduce motion: no scroll at all, straight to the answer.
-        track.style.transform = `translateX(${-distance}px)`;
-        landed(cells, result);
-        return;
-      }
-
+      track.style.transition = 'none';
       const start = performance.now();
-      let lastCell = -1;
+      let lastCell = -999;
+
       const step = (): void => {
         const t = Math.min(1, (performance.now() - start) / timing.durationMs);
-        const eased = reelEase(t, settleFraction);
-        const x = distance * eased;
+        const x = from + (to - from) * reelEase(t, settleFraction);
         track.style.transform = `translateX(${-x}px)`;
 
         // A tick per cell crossing the marker. The gaps widen on their own as it slows, which
         // is the sound of the thing decelerating rather than a separate effect.
-        const cellIndex = Math.floor(x / CELL);
+        //
+        // Rounded, not floored: cell i is centred under the marker at x = i·CELL, so the cell
+        // *under* the marker is the nearest one. Flooring lit the near-miss for the half cell
+        // after it had already gone past, and ticked on cell centres instead of on the gaps
+        // between them, where a real reel's pawl clicks.
+        const cellIndex = Math.round(x / CELL);
         if (cellIndex !== lastCell) {
           lastCell = cellIndex;
           sfx.playWheelTick(volume);
-          // Light the near-miss as it goes past, so the tease is seen and not just present.
-          const passing = cells[cellIndex];
-          if (passing?.nearMiss) stage.classList.add('teasing');
-          else stage.classList.remove('teasing');
+          // Light the near-miss as it goes past, so the tease is seen and not merely present.
+          stage.classList.toggle('teasing', Boolean(cells[cellIndex]?.nearMiss));
         }
 
         if (t < 1) {
@@ -191,41 +412,90 @@ export function openCase(parent: HTMLElement): Promise<WheelOutcome | null> {
           return;
         }
         stage.classList.remove('teasing');
-        landed(cells, result);
+        landed(result);
       };
       requestAnimationFrame(step);
-    });
+    }
 
-    function landed(cells: ReelCell[], result: WheelResult): void {
-      spinning = false;
-      closeBtn.disabled = false;
-      refresh();
-
+    function landed(result: WheelResult): void {
       const rank = rarityRank(result.item.rarity);
       sfx.playReveal(volume, rank);
 
-      // Rarity-scaled celebration. A common gets a nudge; a mystic takes over the screen.
-      stage.classList.add('landed', `landed-${result.item.rarity}`);
-      if (!stillMotion && rank >= 2) burst(overlay, result.item.rarity, rank);
+      stage.classList.add('landed');
+      track.querySelector<HTMLElement>(`[data-index="${REEL_WINNER_INDEX}"]`)?.classList.add('is-winner');
 
-      const winnerEl = track.querySelector<HTMLElement>(`[data-index="${REEL_WINNER_INDEX}"]`);
-      winnerEl?.classList.add('is-winner');
-      void cells;
-
-      showReveal(overlay, result, () => {
-        stage.classList.remove('landed', `landed-${result.item.rarity}`);
-        winnerEl?.classList.remove('is-winner');
-        // Straight back to the reel with a spin still in hand — five spins should not mean
-        // opening and closing this dialog five times.
-        if (getProfile().spins > 0) {
-          overlay.querySelector('.case-reveal')?.remove();
-          card.classList.remove('revealed');
-          refresh();
-        } else {
-          finish();
-        }
-      }, finish);
+      // A rarer prize gets a longer look at the reel before the reveal comes up over it. The
+      // pause is the game telling you something is coming; making it constant tells you nothing.
+      const hold = stillMotion ? 0 : 320 + rank * 190;
+      after(hold, () => {
+        if (!stillMotion && rank >= 2) burst(overlay, result.item.rarity, rank);
+        showReveal(result);
+      });
     }
+
+    function showReveal(result: WheelResult): void {
+      const { item, duplicate } = result;
+      overlay.classList.add('phase-revealed');
+      revealEl.innerHTML = revealHtml(item, duplicate);
+
+      busy = false;
+      closeBtn.disabled = false;
+      refresh();
+
+      const again = revealEl.querySelector<HTMLButtonElement>('#revealAgain');
+      const done = revealEl.querySelector<HTMLButtonElement>('#revealDone');
+      again?.focus();
+
+      again?.addEventListener('click', () => {
+        if (getProfile().spins <= 0) {
+          finish();
+          return;
+        }
+        // Reset the stage to a closed case and immediately open it again — five keys should
+        // not mean opening and closing this dialog five times, nor pressing twice per case.
+        overlay.className = 'case-overlay open phase-crate';
+        stage.classList.remove('landed');
+        revealEl.innerHTML = '';
+        layIdleStrip();
+        refresh();
+        // A frame's gap so the crate is actually on screen before it starts shaking; without
+        // it the reset and the shake land in the same paint and the case never appears closed.
+        requestAnimationFrame(() => requestAnimationFrame(runOpen));
+      });
+      done?.addEventListener('click', finish);
+    }
+
+    function revealHtml(item: CosmeticItem, duplicate: boolean): string {
+      const spins = getProfile().spins;
+      return `
+        <div class="case-rays" aria-hidden="true"></div>
+        <div class="reveal-halo" aria-hidden="true"></div>
+        <div class="reveal-card">
+          <div class="reveal-frame">
+            <div class="reveal-art">${cosmeticPreviewHtml(item, 124)}</div>
+          </div>
+          <div class="reveal-tier">${RARITY_LABELS[item.rarity]}</div>
+          <h3 class="reveal-name">${item.name}</h3>
+          <div class="reveal-slot">${SLOT_LABELS[item.slot]}</div>
+          <p class="reveal-blurb">${item.blurb}</p>
+          ${
+            duplicate
+              ? `<div class="reveal-status dupe">
+                   <span class="reveal-chalk">+${chalkForDuplicate(item.rarity)}</span>
+                   <span>Already yours — traded for chalk</span>
+                 </div>`
+              : `<div class="reveal-status new">Added to your locker</div>`
+          }
+        </div>
+        <div class="reveal-actions">
+          <button class="case-open" id="revealAgain"><span>${
+            spins > 0 ? `Open another · ${spins}` : 'Nice'
+          }</span></button>
+          ${spins > 0 ? '<button class="secondary" id="revealDone">Done</button>' : ''}
+        </div>`;
+    }
+
+    openBtn.focus();
   });
 }
 
@@ -245,53 +515,18 @@ function seedItem(): Parameters<typeof buildReel>[0] {
 function burst(overlay: HTMLElement, rarity: Rarity, rank: number): void {
   const layer = document.createElement('div');
   layer.className = `case-burst burst-${rarity}`;
-  const count = 18 + rank * 14;
+  const count = 18 + rank * 16;
   for (let i = 0; i < count; i++) {
     const bit = document.createElement('i');
-    bit.style.setProperty('--x', `${(Math.random() - 0.5) * 620}px`);
-    bit.style.setProperty('--y', `${-140 - Math.random() * 320}px`);
+    bit.style.setProperty('--x', `${(Math.random() - 0.5) * 640}px`);
+    bit.style.setProperty('--y', `${-160 - Math.random() * 340}px`);
     bit.style.setProperty('--r', `${Math.random() * 720 - 360}deg`);
-    bit.style.setProperty('--d', `${420 + Math.random() * 700}ms`);
+    bit.style.setProperty('--d', `${480 + Math.random() * 740}ms`);
     bit.style.setProperty('--c', RARITY_COLORS[rarity]);
     layer.appendChild(bit);
   }
   overlay.appendChild(layer);
-  setTimeout(() => layer.remove(), 1800);
-}
-
-function showReveal(
-  overlay: HTMLElement,
-  result: WheelResult,
-  onAgain: () => void,
-  onDone: () => void
-): void {
-  const { item, duplicate } = result;
-  const card = overlay.querySelector<HTMLElement>('.case-card')!;
-  card.classList.add('revealed');
-
-  const panel = document.createElement('div');
-  panel.className = `case-reveal rarity-${item.rarity}`;
-  panel.innerHTML = `
-    <div class="reveal-burst"></div>
-    <div class="reveal-preview">${cosmeticPreviewHtml(item, 110)}</div>
-    <div class="reveal-rarity">${RARITY_LABELS[item.rarity]} · ${SLOT_LABELS[item.slot]}</div>
-    <h2 class="reveal-name">${item.name}</h2>
-    <p class="reveal-blurb">${item.blurb}</p>
-    ${
-      duplicate
-        ? `<p class="reveal-dupe">Already owned — converted to <b>${chalkForDuplicate(
-            item.rarity
-          )} chalk</b></p>`
-        : `<p class="reveal-new">UNLOCKED</p>`
-    }
-    <div class="reveal-actions">
-      <button id="revealAgain">${getProfile().spins > 0 ? 'OPEN ANOTHER' : 'Nice'}</button>
-      ${getProfile().spins > 0 ? '<button class="secondary" id="revealDone">Done</button>' : ''}
-    </div>`;
-  card.appendChild(panel);
-
-  panel.querySelector('#revealAgain')!.addEventListener('click', onAgain);
-  panel.querySelector('#revealDone')?.addEventListener('click', onDone);
+  setTimeout(() => layer.remove(), 1900);
 }
 
 /** Exposed for the profile page's odds readout. */
