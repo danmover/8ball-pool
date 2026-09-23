@@ -185,7 +185,6 @@ export const MAX_SHOT_SPEED = 4200; // tu/s at full power
 export const MIN_SHOT_SPEED = 150;
 
 export const SIM_HZ = 240; // physics substep rate
-export const BROADCAST_HZ = 45; // network tick rate while balls are moving
 
 /**
  * The head string — the line across the table a quarter of the way down, behind which the cue
@@ -197,19 +196,3 @@ export const HEAD_STRING_X = TABLE_LENGTH * 0.25;
 
 export const CUE_BALL_ID = 0;
 export const EIGHT_BALL_ID = 8;
-
-/**
- * How long an online player has to get back before their seat is forfeited.
- *
- * Long enough to cover a tab reload, a train tunnel or a phone locking; short enough that the
- * people who stayed are not held hostage by someone who has simply left.
- */
-export const ABANDON_GRACE_MS = 30_000;
-
-/**
- * How long an open table pauses on a result before moving to the next frame.
- *
- * Long enough to read who won and what it did to your rating. A tournament that jumped straight
- * to the next match would leave people wondering whether they had won the last one.
- */
-export const OPEN_TABLE_ADVANCE_MS = 8000;

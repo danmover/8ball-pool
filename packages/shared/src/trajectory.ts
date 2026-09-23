@@ -2,7 +2,7 @@ import { Vec2 } from './vector.js';
 import type { Ball, TrajectoryPreview, TrajectorySegment } from './types.js';
 import { CUSHIONS, JAWS, POCKETS, inPocketApproach, mouthDepth, pocketContaining } from './table.js';
 import { applyCueStrike, stepSimulation, strikeAngle } from './physics.js';
-import type { ShotModifiers } from './pickups.js';
+import type { PhysicsMods } from './powers.js';
 import { BALL_RADIUS } from './constants.js';
 
 /**
@@ -156,7 +156,7 @@ function simulatePaths(
   power: number,
   tip: { x: number; y: number },
   elevation: number,
-  modifiers?: ShotModifiers
+  modifiers?: PhysicsMods
 ): SimulatedPaths {
   const clone: Ball[] = balls.map((b) => ({
     ...b,
@@ -172,12 +172,14 @@ function simulatePaths(
   // off*, and a line that changed on every redraw would be worse than no line. The risk is
   // communicated by the pad's danger band instead.
   applyCueStrike(cue, angle, power, tip, () => 1, elevation);
+  // A private copy: the bomb flag is spent by the simulation, and the caller's must survive.
+  const mods = modifiers ? { ...modifiers } : undefined;
 
   let struck: Ball | null = null;
   let elapsed = 0;
 
   while (elapsed < PREVIEW_SECONDS) {
-    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT, { modifiers });
+    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT, { mods });
     elapsed += PREVIEW_SAMPLE_DT;
 
     if (!struck) {
@@ -250,7 +252,7 @@ function traceCuePath(
   power: number,
   tip: { x: number; y: number },
   elevation: number,
-  modifiers?: ShotModifiers
+  modifiers?: PhysicsMods
 ): CueTrace {
   const clone: Ball[] = balls.map((b) => ({
     ...b,
@@ -265,6 +267,8 @@ function traceCuePath(
   // Never miscue in the preview, for the same reason the post-contact simulation doesn't: the
   // guide shows what the shot does if it comes off.
   applyCueStrike(cue, angle, power, tip, () => 1, elevation);
+  // A private copy: the bomb flag is spent by the simulation, and the caller's must survive.
+  const mods = modifiers ? { ...modifiers } : undefined;
 
   let elapsed = 0;
   let travelled = 0;
@@ -272,7 +276,7 @@ function traceCuePath(
   let wasAirborne = cue.z > 1e-4;
 
   while (elapsed < PREVIEW_SECONDS && travelled < MAX_PREVIEW_LENGTH) {
-    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT, { modifiers });
+    const { events, settled } = stepSimulation(clone, PREVIEW_SAMPLE_DT, { mods });
     elapsed += PREVIEW_SAMPLE_DT;
     if (cue.pocketed) break;
 
@@ -350,7 +354,9 @@ export function computeTrajectoryPreview(
    * all: a line that showed a ball dropping into a pocket the blocker is covering would be
    * worse than no line, because the player would trust it.
    */
-  modifiers?: ShotModifiers
+  modifiers?: PhysicsMods,
+  /** Cushion rebounds to draw ahead of the cue ball; the Long Guide power asks for more. */
+  bounceLimit?: number
 ): TrajectoryPreview {
   const cue = balls.find((b) => b.id === cueBallId);
   const path: TrajectorySegment[] = [];
@@ -403,7 +409,7 @@ export function computeTrajectoryPreview(
   }
 
   let remaining = MAX_PREVIEW_LENGTH;
-  const maxBounces = mode === 'full' ? MAX_BOUNCES_FULL : 0;
+  const maxBounces = bounceLimit ?? (mode === 'full' ? MAX_BOUNCES_FULL : 0);
   let bounces = 0;
 
   while (remaining > 0) {

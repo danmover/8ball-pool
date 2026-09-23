@@ -131,7 +131,7 @@ export function factsFromEvents(
       pots++;
       const from = startPositions.get(ev.ballId);
       if (from) {
-        potDistance = Math.max(potDistance, Math.hypot(ev.pos.x - from.x, ev.pos.y - from.y));
+        potDistance = Math.max(potDistance, Math.sqrt((ev.pos.x - from.x) ** 2 + (ev.pos.y - from.y) ** 2));
       }
     }
   }

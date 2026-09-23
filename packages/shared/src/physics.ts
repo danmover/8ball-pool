@@ -1,19 +1,29 @@
-import { Vec2 } from './vector.js';
+import { Vec2, hypot2 } from './vector.js';
 import type { Ball, SimEvent, Vec3 } from './types.js';
 import { CUSHIONS, JAWS, POCKETS, mouthDepth, pocketContaining } from './table.js';
-import { MAGNET_BONUS, pickupsUnder, type Pickup, type ShotModifiers } from './pickups.js';
+import {
+  BIG_POCKET_BONUS,
+  BOMB_RADIUS,
+  BOMB_SPEED,
+  orbsUnder,
+  type Orb,
+  type PhysicsMods,
+} from './powers.js';
 
 /**
  * Optional extras for a single simulation run.
  *
  * Optional on purpose: the aim guide and the bot's shot search call `stepSimulation` without
- * them and get exactly the engine they always got. Only the party mode passes anything.
+ * them and get exactly the engine they always got. Only Power Pool passes anything.
  */
 export interface SimOptions {
-  /** Pickups on the cloth. Mutated in place as the cue ball collects them. */
-  pickups?: Pickup[];
-  /** Effects in force for this shot only. */
-  modifiers?: ShotModifiers;
+  /** Power orbs on the cloth. Mutated in place as the cue ball collects them. */
+  orbs?: Orb[];
+  /**
+   * Physical effects in force for this shot. Mutated: a bomb is spent by its first contact,
+   * which is why every device replaying a shot must start from its own copy.
+   */
+  mods?: PhysicsMods;
 }
 import {
   BALL_RADIUS,
@@ -293,40 +303,25 @@ function resolveCushions(ball: Ball, events: SimEvent[]): void {
  * circle around a point, so a ball passing through the visible middle of a mouth was ruled
  * still-in-play and then bounced off the phantom cushion behind it.
  */
-function resolvePocket(ball: Ball, events: SimEvent[], mods?: ShotModifiers): boolean {
+function resolvePocket(ball: Ball, events: SimEvent[], mods?: PhysicsMods): boolean {
   let pocket = pocketContaining(ball.pos);
 
-  // A magnet pocket reads wider than it is: a ball passing close enough across its mouth gets
-  // drawn in. Tested only when the ball isn't already going down, so it can never *stop* a pot.
-  if (!pocket && mods?.magnetPocket !== null && mods?.magnetPocket !== undefined) {
-    const magnet = POCKETS[mods.magnetPocket];
-    if (magnet && mouthDepth(magnet, ball.pos) > -MAGNET_BONUS) {
-      const along = Vec2.sub(ball.pos, magnet.mid);
-      const axis = Vec2.normalize(Vec2.sub(magnet.b, magnet.a));
-      if (Math.abs(Vec2.dot(along, axis)) <= magnet.halfWidth + BALL_RADIUS) pocket = magnet;
+  // Big Pockets: every mouth reads wider than it is, so a ball passing close enough across one
+  // gets drawn in. Tested only when the ball isn't already going down, so it can never *stop* a
+  // pot.
+  if (!pocket && mods?.bigPockets) {
+    for (const p of POCKETS) {
+      if (mouthDepth(p, ball.pos) <= -BIG_POCKET_BONUS) continue;
+      const along = Vec2.sub(ball.pos, p.mid);
+      const axis = Vec2.normalize(Vec2.sub(p.b, p.a));
+      if (Math.abs(Vec2.dot(along, axis)) <= p.halfWidth + BALL_RADIUS) {
+        pocket = p;
+        break;
+      }
     }
   }
 
   if (!pocket) return false;
-
-  // A blocked pocket spits the ball back out. Handled here rather than as a cushion so it
-  // can't be jumped, banked around or squeezed past — a bumper is a bumper.
-  if (mods?.blockedPocket === pocket.index) {
-    // Back onto the *table*, which is the direction `out` points away from — pushing along
-    // (pos - mid) instead sends a ball that is already deep in the bag further into the corner,
-    // where it sticks.
-    const n = Vec2.scale(pocket.out, -1);
-    ball.pos = Vec2.add(pocket.mid, Vec2.scale(n, BALL_RADIUS * 2.2));
-    ball.vel = Vec2.scale(Vec2.reflect(ball.vel, n), 0.55);
-    events.push({
-      type: 'cushion',
-      ballId: ball.id,
-      pos: { ...ball.pos },
-      speed: Vec2.length(ball.vel),
-      normal: n,
-    });
-    return false;
-  }
 
   const pos = { ...ball.pos };
   ball.pocketed = true;
@@ -343,12 +338,8 @@ function resolvePocket(ball: Ball, events: SimEvent[], mods?: ShotModifiers): bo
  * far over the edge drop. `mouthDepth` is negative outside, so this only bites in the last
  * ball-radius of approach.
  */
-function applyBagGravity(ball: Ball, dt: number, blockedPocket?: number | null): void {
+function applyBagGravity(ball: Ball, dt: number): void {
   for (const p of POCKETS) {
-    // A blocked pocket doesn't just refuse the ball, it stops reaching for it. Without this
-    // the bumper spits the ball out and the bag immediately drags it back, so it hovers in
-    // the jaws for ever instead of being played out of them.
-    if (p.index === blockedPocket) continue;
     const depth = mouthDepth(p, ball.pos);
     if (depth < -BALL_RADIUS || depth >= 0) continue;
     const pull = Vec2.normalize(Vec2.sub(p.capture, ball.pos));
@@ -448,7 +439,7 @@ function resolveBallCollision(a: Ball, b: Ball, events: SimEvent[]): void {
  * in two places is how a guide starts quietly lying about where the ball is going.
  */
 export function strikeAngle(angle: number, tip: { x: number; y: number }, elevation = 0): number {
-  const mag = Math.hypot(tip.x, tip.y);
+  const mag = hypot2(tip.x, tip.y);
   const tx = mag > 1 ? tip.x / mag : tip.x;
   const lift = Math.max(0, Math.min(MAX_ELEVATION, elevation));
   return angle + SQUIRT_MAX * tx * Math.cos(lift);
@@ -467,7 +458,7 @@ export function applyCueStrike(
 
   let tx = tip.x;
   let ty = tip.y;
-  const mag = Math.hypot(tx, ty);
+  const mag = hypot2(tx, ty);
   if (mag > 1) {
     tx /= mag;
     ty /= mag;
@@ -560,8 +551,8 @@ const MIN_SUBSTEP_DT = 1 / 20000;
  */
 export function stepSimulation(balls: Ball[], dt: number, opts?: SimOptions): StepResult {
   const events: SimEvent[] = [];
-  const mods = opts?.modifiers;
-  const pickups = opts?.pickups;
+  const mods = opts?.mods;
+  const orbs = opts?.orbs;
   let remaining = dt;
 
   while (remaining > 1e-9) {
@@ -581,22 +572,36 @@ export function stepSimulation(balls: Ball[], dt: number, opts?: SimOptions): St
       ball.pos = Vec2.add(ball.pos, Vec2.scale(ball.vel, h));
     }
 
-    // Pickups arm when the *cue* ball rolls over them — an object ball clipping one on its way
-    // to a pocket would be luck rather than a decision, and the whole appeal is choosing to
+    // Orbs are collected when the *cue* ball rolls over them — an object ball clipping one on its
+    // way to a pocket would be luck rather than a decision, and the whole appeal is choosing to
     // route the cue ball through one.
-    if (pickups) {
+    if (orbs) {
       const cue = active.find((b) => b.id === CUE_BALL_ID);
       if (cue && !isAirborne(cue)) {
-        for (const pickup of pickupsUnder(pickups, cue.pos)) {
-          pickup.taken = true;
-          events.push({ type: 'pickup', kind: pickup.kind, pos: { ...pickup.pos } });
+        for (const orb of orbsUnder(orbs, cue.pos)) {
+          orb.taken = true;
+          events.push({ type: 'orb', power: orb.power, orbId: orb.id, pos: { ...orb.pos } });
         }
       }
     }
 
+    const before = events.length;
     for (let i = 0; i < active.length; i++) {
       for (let j = i + 1; j < active.length; j++) {
         resolveBallCollision(active[i], active[j], events);
+      }
+    }
+
+    // Bomb: the cue ball's first contact detonates, throwing every ball nearby outward. Spent on
+    // the spot, so it can only ever go off once per shot.
+    if (mods?.bomb) {
+      for (let k = before; k < events.length; k++) {
+        const ev = events[k];
+        if (ev.type !== 'ballCollision' || (ev.a !== CUE_BALL_ID && ev.b !== CUE_BALL_ID)) continue;
+        detonate(active, ev.pos);
+        mods.bomb = false;
+        events.push({ type: 'bomb', pos: { ...ev.pos } });
+        break;
       }
     }
 
@@ -616,7 +621,7 @@ export function stepSimulation(balls: Ball[], dt: number, opts?: SimOptions): St
       if (resolvePocket(ball, events, mods)) continue;
       resolveCushions(ball, events);
       // After the cushions, so a ball nudged over the lip by a jaw still gets drawn in.
-      applyBagGravity(ball, h, mods?.blockedPocket);
+      applyBagGravity(ball, h);
       applyClothFriction(ball, h);
     }
   }
@@ -624,6 +629,93 @@ export function stepSimulation(balls: Ball[], dt: number, opts?: SimOptions): St
   const settled = allBallsAtRest(balls);
   if (settled) events.push({ type: 'shotSettled' });
   return { events, settled };
+}
+
+/**
+ * Throws every object ball near `at` outward, harder the closer it is.
+ *
+ * Linear falloff and no randomness: the blast has to replay identically on every device, and a
+ * predictable shape is also what lets a player aim a bomb at a cluster on purpose.
+ */
+function detonate(balls: Ball[], at: Vec2): void {
+  for (const ball of balls) {
+    if (ball.id === CUE_BALL_ID || ball.pocketed) continue;
+    const delta = Vec2.sub(ball.pos, at);
+    const dist = Vec2.length(delta);
+    if (dist >= BOMB_RADIUS || dist < 1e-6) continue;
+    const push = BOMB_SPEED * (1 - dist / BOMB_RADIUS);
+    ball.vel = Vec2.add(ball.vel, Vec2.scale(delta, push / dist));
+  }
+}
+
+/**
+ * The fixed step every device replays a shot at.
+ *
+ * `stepSimulation` is only deterministic for an identical sequence of `dt`s, so the host and
+ * every client step shots in exactly these increments, whatever their display is doing.
+ */
+export const SHOT_STEP = 1 / 120;
+
+/** A shot still moving after this long is stopped where it is — a guard against runaways. */
+export const MAX_SHOT_STEPS = 120 * 25;
+
+/** Deep copy of a ball list, so a simulation can run without touching the original. */
+export function cloneBalls(balls: readonly Ball[]): Ball[] {
+  return balls.map((b) => ({
+    ...b,
+    pos: { ...b.pos },
+    vel: { ...b.vel },
+    angVel: { ...b.angVel },
+  }));
+}
+
+export interface ShotRun {
+  /** Every event the shot produced, in order. */
+  events: SimEvent[];
+  /** How many `SHOT_STEP`s it took to come to rest (or hit the cap). */
+  steps: number;
+}
+
+/**
+ * Plays a shot that has already been struck all the way to rest, mutating `balls`.
+ *
+ * This is the one routine both the host (to referee) and every client (to animate) run, which is
+ * the whole contract that keeps a room in agreement: same balls in, same steps, same balls out.
+ */
+export function runShot(balls: Ball[], opts?: SimOptions, maxSteps = MAX_SHOT_STEPS): ShotRun {
+  const events: SimEvent[] = [];
+  let steps = 0;
+  while (steps < maxSteps) {
+    const res = stepSimulation(balls, SHOT_STEP, opts);
+    steps++;
+    for (const ev of res.events) events.push(ev);
+    if (res.settled) return { events, steps };
+  }
+  // Out of time: freeze everything where it stands.
+  for (const b of balls) if (!b.pocketed) stop(b);
+  events.push({ type: 'shotSettled' });
+  return { events, steps };
+}
+
+/** The cue ball's state straight after the strike — everything a replay needs to reproduce it. */
+export interface StrikeState {
+  vel: Vec2;
+  angVel: Vec3;
+  vz: number;
+  miscued: boolean;
+}
+
+/** Reads the cue ball's post-strike state off the ball it was applied to. */
+export function readStrike(cue: Ball, miscued: boolean): StrikeState {
+  return { vel: { ...cue.vel }, angVel: { ...cue.angVel }, vz: cue.vz, miscued };
+}
+
+/** Puts a recorded strike back onto the cue ball, ready to replay. */
+export function applyStrikeState(cue: Ball, strike: StrikeState): void {
+  cue.vel = { ...strike.vel };
+  cue.angVel = { ...strike.angVel };
+  cue.vz = strike.vz;
+  cue.z = 0;
 }
 
 /** Re-exported so callers can zero a ball without knowing the shape of its angular state. */

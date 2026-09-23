@@ -1,75 +1,43 @@
 import type { GameMode } from '../types.js';
-import { classicMode, teamsMode } from './classic.js';
-import { rotationMode } from './rotation.js';
+import { eightBallMode } from './eightball.js';
 import { nineBallMode } from './nineball.js';
-import { cutthroatMode } from './cutthroat.js';
 import { killerMode } from './killer.js';
-import { sandboxMode } from './sandbox.js';
-import { ghostMode } from './ghost.js';
-import { speedMode } from './speed.js';
-import { powerupMode } from './powerup.js';
-import { challengeMode } from './challenge.js';
+import { powerMode } from './power.js';
+import { practiceMode, timeAttackMode, trickShotMode } from './solo.js';
 import type { ModeDescriptor } from './types.js';
 
 export * from './types.js';
 export * from './shared.js';
-export { isGroupCleared } from './classic.js';
-export { STARTING_LIVES } from './killer.js';
-export { activeChallenge } from './challenge.js';
+export { isGroupCleared } from './eightball.js';
+export { STARTING_LIVES, MAX_LIVES } from './killer.js';
+export { armPower, canArm, spendArmed } from './power.js';
 export {
-  formatSpeedTime,
-  speedStars,
-  speedTotalMs,
-  SPEED_FOUL_PENALTY_MS,
-  SPEED_PAR_MS,
-} from './speed.js';
-export type { ChallengeState } from './challenge.js';
+  activeChallenge,
+  formatRunTime,
+  timeAttackStars,
+  TIME_ATTACK_PAR_MS,
+  TIME_ATTACK_PENALTY_MS,
+} from './solo.js';
 
 /**
- * The mode registry. Adding a game mode means adding a module and one entry here — nothing
- * else in the engine, the server or the client needs a new branch.
+ * The mode registry. Adding a game mode means adding a module and one entry here — nothing else
+ * in the engine, the relay or the client needs a new branch.
  */
 export const MODES: Record<GameMode, ModeDescriptor> = {
-  classic: classicMode,
-  teams: teamsMode,
-  rotation: rotationMode,
+  eightball: eightBallMode,
   nineball: nineBallMode,
-  cutthroat: cutthroatMode,
   killer: killerMode,
-  sandbox: sandboxMode,
-  ghost: ghostMode,
-  speed: speedMode,
-  powerup: powerupMode,
-  challenge: challengeMode,
+  power: powerMode,
+  practice: practiceMode,
+  timeattack: timeAttackMode,
+  trickshot: trickShotMode,
 };
 
-/**
- * Menu order — the two everyone knows first, the party modes after, practice last.
- * Modes offered in the lobby's picker. `challenge` is deliberately absent — trick shots are
- * launched from their own browser, not chosen as a lobby mode.
- */
-export const MODE_ORDER: GameMode[] = [
-  'classic',
-  'nineball',
-  'teams',
-  'cutthroat',
-  'killer',
-  'powerup',
-  'rotation',
-  'ghost',
-  'speed',
-  'sandbox',
-];
-
 export function modeDescriptor(mode: GameMode): ModeDescriptor {
-  return MODES[mode] ?? MODES.classic;
+  return MODES[mode] ?? MODES.eightball;
 }
 
-export function allModes(): ModeDescriptor[] {
-  return MODE_ORDER.map((id) => MODES[id]);
-}
-
-/** Clamps a requested lobby size to what the mode can actually seat. */
+/** Clamps a requested player count to what the mode can actually seat. */
 export function clampPlayerCount(mode: GameMode, count: number): number {
   const desc = modeDescriptor(mode);
   return Math.max(desc.minPlayers, Math.min(desc.maxPlayers, Math.round(count)));

@@ -1,102 +1,99 @@
-import type { GameMode, GameState, PlayerInfo, Seat, SimEvent, Team } from './types.js';
-import { seatId } from './types.js';
+import type { GameMode, GameState, PlayerInfo, Seat, ShotSummary, SimEvent } from './types.js';
+import { emptyFrameStats, seatId } from './types.js';
 import { CUE_BALL_ID, EIGHT_BALL_ID } from './constants.js';
 import { modeDescriptor } from './modes/index.js';
 import { endGame } from './modes/shared.js';
 import { DEFAULT_RULE_SET, FOUL_LIMIT, ruleOptions, type RuleSetId } from './ruleSets.js';
-import { isGroupCleared, lowestBallId, nextActiveSeat } from './modes/index.js';
-import type { ShotContext, ShotOutcome } from './modes/types.js';
+import { isGroupCleared, lowestBallId } from './modes/index.js';
+import type { CallRequirement, ShotContext, ShotOutcome } from './modes/types.js';
+import type { PowerId } from './powers.js';
 
 /**
- * The rules front door. Every mode's actual logic lives in `modes/`; this module keeps the
- * long-standing public API (`createInitialGameState`, `legalTargetBallIds`, `resolveShot`,
- * `summarizeShot`) so the server and both client views never have to know which mode is in
- * play.
+ * The rules front door. Every mode's logic lives in `modes/`; this module builds frames, reads
+ * shots out of simulation events, and wraps each mode's verdict with the bookkeeping every mode
+ * shares — frame stats, the visit run, the shot summary and the three-foul rule.
  */
 
-export type { ShotContext, ShotOutcome };
+export type { ShotContext, ShotOutcome, CallRequirement };
 export { isGroupCleared, lowestBallId };
 
-/** Next seat in turn order, wrapping around. Skips players who are out of the frame. */
-function nextSeat(state: GameState, seat: Seat): Seat {
-  return nextActiveSeat(state, seat);
-}
-
-/** In teams mode seats alternate teams around the table, exactly like real doubles. */
-function teamForIndex(index: number): Team {
-  return index % 2 === 0 ? 'a' : 'b';
+export interface NewFrameOptions {
+  /** Index into the seat order of whoever breaks. */
+  breaker?: number;
+  ruleSet?: RuleSetId;
+  rand?: () => number;
+  /**
+   * Seat ids to use, in turn order. Defaults to p1..pN; a tournament match passes the two
+   * seats actually playing so the frame's seats line up with the room's.
+   */
+  seatIds?: Seat[];
 }
 
 export function createInitialGameState(
   mode: GameMode,
   names: string[],
-  startingIndex = 0,
-  ruleSet: RuleSetId = DEFAULT_RULE_SET
+  opts: NewFrameOptions = {}
 ): GameState {
   const descriptor = modeDescriptor(mode);
-  const count = Math.max(descriptor.minPlayers, names.length);
-  const seatOrder: Seat[] = Array.from({ length: count }, (_, i) => seatId(i));
+  const rand = opts.rand ?? Math.random;
+  const count = Math.max(descriptor.minPlayers, opts.seatIds?.length ?? names.length);
+  const seatOrder: Seat[] = opts.seatIds ?? Array.from({ length: count }, (_, i) => seatId(i));
   const players: Record<Seat, PlayerInfo> = {};
 
   seatOrder.forEach((seat, i) => {
     players[seat] = {
       seat,
       name: names[i] ?? `Player ${i + 1}`,
-      connected: false,
-      isHost: false,
       group: null,
-      team: mode === 'teams' ? teamForIndex(i) : null,
+      team: null,
       score: 0,
-      loadout: {},
       lives: null,
-      ownedBalls: [],
       eliminated: false,
       isBot: false,
-      botDifficulty: null,
-      spotsLeft: 0,
+      frame: emptyFrameStats(),
     };
   });
 
   const state: GameState = {
     mode,
-    balls: descriptor.rack(count),
+    ruleSet: opts.ruleSet ?? DEFAULT_RULE_SET,
+    balls: descriptor.rack(count, rand),
     seatOrder,
     players,
-    currentShooter: seatOrder[startingIndex % seatOrder.length],
-    phase: 'break',
+    currentShooter: seatOrder[(opts.breaker ?? 0) % seatOrder.length],
+    phase: descriptor.solo ? 'aiming' : 'break',
     winner: null,
     winningTeam: null,
     lastFoulReason: null,
     lastShooter: null,
     consecutiveFouls: {},
-    ruleSet,
     ballInHandBehindLine: false,
     turnNumber: 0,
-    shotClock: null,
-    series: null,
-    tournament: null,
-    king: null,
-    pickups: null,
-    modifiers: null,
-    speedRun: null,
-    challenge: null,
+    visitRun: 0,
+    clock: null,
+    lastShot: null,
+    power: null,
+    timeAttack: null,
+    trick: null,
   };
 
-  // Groups, lives and owned balls are the mode's business, not this function's.
-  descriptor.assignSeats(state);
+  descriptor.assignSeats(state, rand);
   return state;
 }
 
+/** Reads the facts the rules need out of a shot's raw simulation events. */
 export function summarizeShot(events: SimEvent[]): ShotOutcome {
   let firstBallContacted: number | null = null;
   let anyCushionAfterContact = false;
   let cushionsBeforeContact = 0;
   const potted: number[] = [];
   const pottedIn: Record<number, number> = {};
+  const collected: PowerId[] = [];
   let cueBallPocketed = false;
   let eightBallPocketed = false;
-  // Distinct balls, not rail hits: one ball rattling round a corner would otherwise satisfy
-  // the break requirement on its own.
+  let jumped = false;
+  // Distinct balls, not rail hits: one ball rattling round a corner would otherwise satisfy the
+  // break requirement on its own.
   const railed = new Set<number>();
 
   for (const ev of events) {
@@ -117,6 +114,10 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
       pottedIn[ev.ballId] = ev.pocketIndex;
       if (ev.ballId === CUE_BALL_ID) cueBallPocketed = true;
       if (ev.ballId === EIGHT_BALL_ID) eightBallPocketed = true;
+    } else if (ev.type === 'orb') {
+      collected.push(ev.power);
+    } else if (ev.type === 'land' && ev.ballId === CUE_BALL_ID) {
+      jumped = true;
     }
   }
 
@@ -129,67 +130,120 @@ export function summarizeShot(events: SimEvent[]): ShotOutcome {
     anyCushionAfterContact,
     cushionsBeforeContact,
     objectBallsToRail: railed.size,
+    collected,
+    jumped,
   };
 }
 
 /** Which balls are currently legal for the shooter to hit first — for UI highlighting only. */
 export function legalTargetBallIds(state: GameState): number[] {
-  if (state.phase !== 'aiming' && state.phase !== 'break') return [];
+  if (state.phase !== 'aiming' && state.phase !== 'break' && state.phase !== 'ball_in_hand') return [];
   return modeDescriptor(state.mode).legalTargetBallIds(state);
+}
+
+/** What the shooter must nominate before the next shot. */
+export function callRequirement(state: GameState): CallRequirement {
+  return modeDescriptor(state.mode).callRequirement(state, ruleOptions(state.ruleSet));
+}
+
+export interface ResolveInput {
+  /** Captured before the shot: was the shooter's group already cleared? */
+  groupCleared: boolean;
+  /** Captured before the shot: lowest ball on the table. */
+  lowestBefore: number | null;
+  timedOut?: boolean;
+  call?: { ballId: number; pocketIndex: number } | null;
+  armed?: PowerId | null;
+  now?: number;
+  rand?: () => number;
 }
 
 /**
  * Applies the active mode's rules to a settled shot, mutating and returning `state`.
  *
- * `preShotGroupCleared` must be captured by the caller *before* stepping the simulation,
- * since potting your last group ball and the 8-ball in the same shot is illegal even
- * though both are "pocketed" by the time we get here. `lowestBefore` is likewise the
- * lowest ball on the table before the shot, needed by the lowest-ball-first modes.
+ * `groupCleared` and `lowestBefore` must be captured by the caller *before* stepping the
+ * simulation — potting your last group ball and the 8 in the same shot is illegal even though
+ * both read as "pocketed" by the time we get here.
  */
-export function resolveShot(
-  state: GameState,
-  outcome: ShotOutcome,
-  preShotGroupCleared: boolean,
-  lowestBefore: number | null = null,
-  timedOut = false,
-  call: { ballId: number; pocketIndex: number } | null = null,
-  now: number = Date.now()
-): GameState {
+export function resolveShot(state: GameState, outcome: ShotOutcome, input: ResolveInput): GameState {
   const ctx: ShotContext = {
-    groupCleared: preShotGroupCleared,
-    lowestBefore,
-    timedOut,
+    groupCleared: input.groupCleared,
+    lowestBefore: input.lowestBefore,
+    timedOut: input.timedOut ?? false,
     rules: ruleOptions(state.ruleSet),
-    call,
-    now,
+    call: input.call ?? null,
+    armed: input.armed ?? null,
+    now: input.now ?? Date.now(),
+    rand: input.rand ?? Math.random,
   };
   const shooter = state.currentShooter;
-  modeDescriptor(state.mode).resolveShot(state, outcome, ctx);
+  const player = state.players[shooter];
+  const potted = outcome.potted.filter((id) => id !== CUE_BALL_ID);
+
+  const result = modeDescriptor(state.mode).resolveShot(state, outcome, ctx);
   state.lastShooter = shooter;
-  applyThreeFoulRule(state, ctx);
+  state.turnNumber++;
+  state.lastFoulReason = result.foul ?? result.note ?? null;
+
+  // Frame stats and the visit run. A visit is broken by a foul or by the table changing hands.
+  const kept = state.currentShooter === shooter && state.phase !== 'game_over' && !result.foul;
+  if (player && !ctx.timedOut) player.frame.shots++;
+  if (player) {
+    player.frame.pots += result.foul ? 0 : potted.length;
+    if (result.foul) player.frame.fouls++;
+    player.frame.bestShot = Math.max(player.frame.bestShot, result.foul ? 0 : potted.length);
+  }
+  const run = result.foul ? 0 : state.visitRun + potted.length;
+  if (player) player.frame.bestRun = Math.max(player.frame.bestRun, run);
+  state.visitRun = kept ? run : 0;
+
+  const summary: ShotSummary = {
+    seat: shooter,
+    potted,
+    foul: result.foul,
+    kept,
+    run,
+    railsFirst: outcome.cushionsBeforeContact,
+    jumped: outcome.jumped,
+    power: ctx.armed,
+    collected: outcome.collected,
+    points: result.points ?? 0,
+    lifeDelta: result.lifeDelta ?? 0,
+    wonFrame: state.phase === 'game_over' && state.winner === shooter,
+  };
+  state.lastShot = summary;
+
+  applyThreeFoulRule(state, ctx, result.foul !== null, shooter);
   return state;
 }
 
 /**
- * Three consecutive fouls loses the frame.
- *
- * Applied here rather than inside each mode: every mode already sets `lastFoulReason`, so the
- * counter can be driven off that in one place instead of being threaded through seven files.
- * The warning matters as much as the rule — being dumped out of a frame by a rule nobody
- * mentioned is the worst possible way to learn it — so the count rides along in state.
+ * Three consecutive fouls loses the frame — when the rules say so. Applied here once rather
+ * than inside each mode, and the count rides along in state so the table can warn you.
  */
-function applyThreeFoulRule(state: GameState, ctx: ShotContext): void {
-  if (!ctx.rules.threeFoul || state.phase === 'game_over') return;
-
-  // `resolveShot` has already passed the turn on, so the seat that just fouled is whoever the
-  // shot belonged to — tracked by the mode as the previous shooter.
-  const fouled = state.lastFoulReason !== null;
-  const seat = state.lastShooter ?? state.currentShooter;
+function applyThreeFoulRule(state: GameState, ctx: ShotContext, fouled: boolean, seat: Seat): void {
+  if (!ctx.rules.threeFoul || !modeDescriptor(state.mode).usesRuleSet) return;
   const next = fouled ? (state.consecutiveFouls[seat] ?? 0) + 1 : 0;
   state.consecutiveFouls[seat] = next;
-
+  if (state.phase === 'game_over') return;
   if (next >= FOUL_LIMIT) {
-    const others = state.seatOrder.filter((s) => s !== seat && !state.players[s].eliminated);
-    endGame(state, others[0] ?? null, `${FOUL_LIMIT} fouls in a row`);
+    const mine = state.players[seat];
+    const winner =
+      state.seatOrder.find(
+        (s) =>
+          s !== seat &&
+          !state.players[s].eliminated &&
+          (!mine?.team || state.players[s].team !== mine.team)
+      ) ?? null;
+    endGame(state, winner, `${FOUL_LIMIT} fouls in a row`);
+    if (state.lastShot) state.lastShot.wonFrame = false;
   }
+}
+
+/** The captured-before-the-shot facts `resolveShot` needs. */
+export function preShotFacts(state: GameState): { groupCleared: boolean; lowestBefore: number | null } {
+  return {
+    groupCleared: isGroupCleared(state, state.currentShooter),
+    lowestBefore: lowestBallId(state),
+  };
 }

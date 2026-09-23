@@ -77,7 +77,7 @@ export function rackScattered(seed = 1): Ball[] {
         y: margin + rand() * (TABLE_WIDTH - margin * 2),
       };
       const clash = balls.some(
-        (b) => Math.hypot(b.pos.x - pos.x, b.pos.y - pos.y) < BALL_DIAMETER * 1.9
+        (b) => Math.sqrt((b.pos.x - pos.x) ** 2 + (b.pos.y - pos.y) ** 2) < BALL_DIAMETER * 1.9
       );
       if (!clash) break;
     }

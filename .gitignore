@@ -8,3 +8,7 @@ dist/
 # Local profile database (dev)
 profiles.db
 profiles.db-*
+
+# Cloudflare
+.wrangler/
+.dev.vars

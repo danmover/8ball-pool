@@ -1,0 +1,17 @@
+{
+  "name": "@8ball/worker",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Free hosting on Cloudflare: the built client as static assets, plus the relay as Durable Objects.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250901.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.30.0"
+  }
+}

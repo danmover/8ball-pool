@@ -1,45 +1,22 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import express from 'express';
-import { createServer } from 'node:http';
-import { Server } from 'socket.io';
-import cors from 'cors';
-import type { ClientToServerEvents, ServerToClientEvents } from '@8ball/shared';
-import { RoomManager } from './roomManager.js';
-import { registerSocketHandlers } from './socketHandlers.js';
-import { registerOnlineHandlers } from './onlineHandlers.js';
-import { SqlitePlayerRepository } from './players/repository.js';
-import { SqliteProfileRepository } from './profiles/sqliteRepository.js';
-import { registerProfileRoutes } from './profiles/routes.js';
+import { createApp } from './app.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const app = express();
-app.use(cors());
-const httpServer = createServer(app);
-const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
-  cors: { origin: '*' },
-});
-
-const rooms = new RoomManager();
-registerSocketHandlers(io, rooms);
-const players = new SqlitePlayerRepository();
-registerOnlineHandlers(io, rooms, players);
-
-const profiles = new SqliteProfileRepository();
-registerProfileRoutes(app, profiles);
-
-app.get('/healthz', (_req, res) => {
-  res.json({ ok: true });
-});
-
-const clientDist = path.resolve(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'));
-});
+const here = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(here, '../../client/dist');
+const staticDir = fs.existsSync(path.join(clientDist, 'index.html')) ? clientDist : null;
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
-httpServer.listen(PORT, () => {
-  console.log(`8ball-pool server listening on :${PORT}`);
+const app = createApp({ staticDir });
+
+app.server.listen(PORT, () => {
+  const what = staticDir ? 'game + relay' : 'relay only (client not built)';
+  console.log(`8-ball pool ${what} on :${PORT}`);
 });
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    void app.close().then(() => process.exit(0));
+  });
+}

@@ -37,7 +37,7 @@ export interface Challenge {
   /** Object ball positions, in table units. The cue ball is placed separately. */
   balls: { id: number; pos: Vec2 }[];
   cue: Vec2;
-  reward: { xp: number; chalk: number };
+  reward: { xp: number; coins: number };
 }
 
 const MID_Y = TABLE_WIDTH / 2;
@@ -60,7 +60,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 1, two: 2 },
     balls: [at(1, TABLE_LENGTH * 0.7, MID_Y)],
     cue: { x: TABLE_LENGTH * 0.25, y: MID_Y },
-    reward: { xp: 60, chalk: 25 },
+    reward: { xp: 60, coins: 25 },
   },
   {
     id: 'ch.cut',
@@ -73,7 +73,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 1, two: 2 },
     balls: [at(3, TABLE_LENGTH * 0.5, MID_Y - 190)],
     cue: { x: TABLE_LENGTH * 0.22, y: MID_Y - 60 },
-    reward: { xp: 70, chalk: 30 },
+    reward: { xp: 70, coins: 30 },
   },
   {
     id: 'ch.stun',
@@ -86,7 +86,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 1, two: 2 },
     balls: [at(2, TABLE_LENGTH * 0.62, MID_Y)],
     cue: { x: TABLE_LENGTH * 0.3, y: MID_Y },
-    reward: { xp: 70, chalk: 30 },
+    reward: { xp: 70, coins: 30 },
   },
 
   // ---- Set 2: cue ball control ----
@@ -101,7 +101,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 2, two: 3 },
     balls: [at(4, TABLE_LENGTH * 0.55, MID_Y), at(5, TABLE_LENGTH * 0.82, MID_Y - 40)],
     cue: { x: TABLE_LENGTH * 0.22, y: MID_Y },
-    reward: { xp: 110, chalk: 45 },
+    reward: { xp: 110, coins: 45 },
   },
   {
     id: 'ch.draw',
@@ -114,7 +114,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 2, two: 3 },
     balls: [at(6, TABLE_LENGTH * 0.62, MID_Y), at(7, TABLE_LENGTH * 0.2, MID_Y + 150)],
     cue: { x: TABLE_LENGTH * 0.42, y: MID_Y },
-    reward: { xp: 130, chalk: 55 },
+    reward: { xp: 130, coins: 55 },
   },
   {
     id: 'ch.threading',
@@ -131,7 +131,7 @@ export const CHALLENGES: Challenge[] = [
       at(12, TABLE_LENGTH * 0.5, MID_Y + BALL_RADIUS * 3.4),
     ],
     cue: { x: TABLE_LENGTH * 0.2, y: MID_Y },
-    reward: { xp: 140, chalk: 60 },
+    reward: { xp: 140, coins: 60 },
   },
 
   // ---- Set 3: off the rails ----
@@ -146,7 +146,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 2, two: 4 },
     balls: [at(10, TABLE_LENGTH * 0.7, MID_Y + 240)],
     cue: { x: TABLE_LENGTH * 0.3, y: MID_Y + 200 },
-    reward: { xp: 150, chalk: 65 },
+    reward: { xp: 150, coins: 65 },
   },
   {
     id: 'ch.bank2',
@@ -159,7 +159,7 @@ export const CHALLENGES: Challenge[] = [
     stars: { three: 3, two: 5 },
     balls: [at(13, TABLE_LENGTH * 0.28, MID_Y - 220)],
     cue: { x: TABLE_LENGTH * 0.62, y: MID_Y + 150 },
-    reward: { xp: 200, chalk: 90 },
+    reward: { xp: 200, coins: 90 },
   },
 
   // ---- Set 4: the showpieces ----
@@ -177,7 +177,7 @@ export const CHALLENGES: Challenge[] = [
       at(2, TABLE_LENGTH * 0.74, MID_Y - 120 - BALL_RADIUS * 2.05),
     ],
     cue: { x: TABLE_LENGTH * 0.3, y: MID_Y + 60 },
-    reward: { xp: 220, chalk: 100 },
+    reward: { xp: 220, coins: 100 },
   },
   {
     id: 'ch.triple',
@@ -194,7 +194,7 @@ export const CHALLENGES: Challenge[] = [
       at(3, TABLE_LENGTH - 150, 210),
     ],
     cue: { x: TABLE_LENGTH * 0.4, y: MID_Y },
-    reward: { xp: 300, chalk: 140 },
+    reward: { xp: 300, coins: 140 },
   },
   {
     id: 'ch.runout',
@@ -213,7 +213,7 @@ export const CHALLENGES: Challenge[] = [
       at(5, TABLE_LENGTH * 0.9, MID_Y - 60),
     ],
     cue: { x: TABLE_LENGTH * 0.18, y: MID_Y },
-    reward: { xp: 400, chalk: 200 },
+    reward: { xp: 400, coins: 200 },
   },
 ];
 
