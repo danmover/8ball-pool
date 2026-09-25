@@ -50,6 +50,8 @@ export interface CueStyle {
   metalness: number;
   /** Glowing parts, or null. */
   glow: string | null;
+  /** Joint collar and ferrule metal; defaults to `accent`. */
+  collar?: string;
 }
 
 export type BallFinish = 'gloss' | 'satin' | 'marble' | 'neon' | 'chrome' | 'planet' | 'gold';
@@ -67,6 +69,9 @@ export interface BallSetStyle {
   /** Dots on the cue ball, as on a TV set, or null. */
   cueDots: string | null;
 }
+
+/** The mark printed in the middle of the cloth. */
+export type TableEmblem = 'none' | 'roundel' | 'target' | 'diamond' | 'star' | 'bolt' | 'flake' | 'sun' | 'crown';
 
 export interface TableStyle {
   cloth: string;
@@ -89,6 +94,12 @@ export interface TableStyle {
   room: string;
   /** Edge lighting under the rails, or null. */
   neon: string | null;
+  /** Centre mark on the cloth; defaults to none. */
+  emblem?: TableEmblem;
+  /** Pocket liner leather. */
+  liner?: string;
+  /** Apron below the rail; defaults to `rail`. */
+  apron?: string;
 }
 
 export type TrailKind = 'none' | 'streak' | 'comet' | 'fire' | 'frost' | 'bolt' | 'party' | 'void';

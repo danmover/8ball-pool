@@ -17,9 +17,10 @@ import { CUSHION_DEPTH, HALF_L, HALF_W, R, RAIL_HEIGHT, RAIL_WIDTH, S, toTableX,
 import { buildTable, POCKET_HOLES, type TableModel } from './tableModel';
 import { BallMeshes } from './balls';
 import { Cue } from './cue';
-import { Guide, type GuideLength } from './guide';
+import { GOLD, GOLD_HI, Guide, Ring, type GuideLength } from './guide';
 import { Effects } from './fx';
 import { buildEnvironment } from './env';
+import { Backdrop } from './backdrop';
 import { paintGlyph } from './textures';
 import type { ShotPlayer } from '../game/shotPlayer';
 
@@ -49,6 +50,17 @@ interface Drop {
 }
 
 const FOV = 26;
+/** The menus' background (`--bg-0`); the scene fades out to it. */
+const BG = '#04070c';
+const CORAL = '#ff6352';
+/**
+ * Where the lamp hangs relative to the table's centre, in screen terms: a little left of and
+ * above centre, so shadows fall down and to the right and every glint sits up and to the left,
+ * clear of the ball's number.
+ */
+const LAMP_LEFT = 0.42;
+const LAMP_UP = 0.3;
+const LAMP_HEIGHT = 2.2;
 
 /**
  * The table on screen. It knows nothing about rules or turns — it draws balls where it is told,
@@ -64,6 +76,7 @@ export class TableView {
   private table: TableModel | null = null;
   private tableKey = '';
   private env: THREE.Texture | null = null;
+  private backdrop = new Backdrop();
   private balls: BallMeshes;
   private ballSetKey = '';
   private ballSet: BallSetStyle;
@@ -72,17 +85,18 @@ export class TableView {
   private fx = new Effects();
   private spot: THREE.SpotLight;
   private hemi: THREE.HemisphereLight;
-  private fills: THREE.PointLight[] = [];
-  private targets: THREE.Mesh[] = [];
-  private targetMat: THREE.MeshBasicMaterial;
+  /** Soft gold glows under the balls that may legally be hit first. */
+  private targets: Ring[] = [];
   private ghost: THREE.Group;
-  private ghostMat: THREE.MeshBasicMaterial;
+  private ghostBall: THREE.MeshBasicMaterial;
+  private ghostRing: Ring;
   private orbGroup = new THREE.Group();
   private orbSprites = new Map<string, THREE.Texture>();
-  private pocketMarks: THREE.Mesh[] = [];
-  private pocketMat: THREE.MeshBasicMaterial;
-  private pocketChosenMat: THREE.MeshBasicMaterial;
+  /** Per pocket: the white ring offered while calling a shot, and the gold one once chosen. */
+  private pocketMarks: { offer: Ring; chosen: Ring }[] = [];
 
+  private quality: Quality;
+  private effects: boolean;
   private rest: Ball[] = [];
   private player: ShotPlayer | null = null;
   private onShotEvent: ((ev: SimEvent) => void) | null = null;
@@ -105,6 +119,11 @@ export class TableView {
   private fadeCue = 0;
   private shake = 0;
   private focus: { x: number; z: number; zoom: number } | null = null;
+  private tmp = new THREE.Vector3();
+  private at = new THREE.Vector3();
+  private tip = new THREE.Vector3();
+  private down = new THREE.Vector2();
+  private buffer = new THREE.Vector2();
 
   /** Hook for per-frame work the screen wants to do (e.g. clocks). */
   onFrame: ((dt: number) => void) | null = null;
@@ -114,77 +133,83 @@ export class TableView {
     opts: { quality: Quality; table: TableStyle; balls: BallSetStyle; cue: CueStyle; fx: FxStyle; effects: boolean; tilt: boolean }
   ) {
     const quality = opts.quality;
+    this.quality = quality;
+    this.effects = opts.effects;
     this.renderer = new THREE.WebGLRenderer({ antialias: quality !== 'low', powerPreference: 'high-performance', alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : quality === 'medium' ? 1.5 : 1));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.92;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = quality !== 'low';
+    // The cue's glow on the cloth is clipped to the cloth.
+    this.renderer.localClippingEnabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.canvas = this.renderer.domElement;
     this.canvas.className = 'table-canvas';
     host.appendChild(this.canvas);
     this.tilt = opts.tilt;
+    this.scene.background = new THREE.Color(BG);
 
-    this.hemi = new THREE.HemisphereLight('#ffffff', '#101010', 0.28);
+    // One lamp over the table does the work — its pool of light, its shadows, the glint on every
+    // ball — with a faint sky/ground fill so nothing in its falloff goes dead. Everything else
+    // the eye reads as light comes from the environment map.
+    this.hemi = new THREE.HemisphereLight('#ffffff', '#101010', 0.3);
     this.scene.add(this.hemi);
-    this.spot = new THREE.SpotLight('#ffffff', 20, 0, 0.72, 0.85, 2);
-    this.spot.position.set(0, 2.1, 0);
+    this.spot = new THREE.SpotLight('#ffffff', 20, 0, 0.74, 0.9, 2);
     this.spot.target.position.set(0, 0, 0);
     this.spot.castShadow = quality !== 'low';
     this.spot.shadow.mapSize.setScalar(quality === 'high' ? 2048 : 1024);
     this.spot.shadow.bias = -0.0004;
     this.spot.shadow.normalBias = 0.002;
     this.spot.shadow.radius = 5;
-    this.spot.shadow.camera.near = 1.2;
-    this.spot.shadow.camera.far = 2.4;
+    this.spot.shadow.camera.near = 1.4;
+    this.spot.shadow.camera.far = 3;
     this.scene.add(this.spot, this.spot.target);
-    for (const x of [-0.95, 0.95]) {
-      const p = new THREE.PointLight('#ffffff', 1.4, 0, 2);
-      p.position.set(x, 1.3, 0);
-      this.fills.push(p);
-      this.scene.add(p);
-    }
 
     this.ballSet = opts.balls;
-    this.balls = new BallMeshes(opts.balls, quality);
+    this.balls = new BallMeshes(opts.balls, quality, this.camera);
     this.ballSetKey = JSON.stringify(opts.balls);
-    this.cue = new Cue(opts.cue);
-    this.scene.add(this.balls.group, this.cue.group, this.guide.group, this.fx.group, this.orbGroup);
+    this.cue = new Cue(opts.cue, quality);
+    this.scene.add(this.backdrop.group, this.balls.group, this.cue.group, this.guide.group, this.fx.group, this.orbGroup);
     this.fx.setStyle(opts.fx);
     this.fx.enabled = opts.effects;
 
-    this.targetMat = new THREE.MeshBasicMaterial({ color: '#ffd35a', transparent: true, opacity: 0.6, depthWrite: false });
-    const ringGeo = new THREE.RingGeometry(R * 1.22, R * 1.42, 40).rotateX(-Math.PI / 2);
+    // Legal targets glow softly from underneath rather than each wearing a ring: in a full rack
+    // the glows run together into one calm halo instead of fifteen overlapping circles.
     for (let i = 0; i < 16; i++) {
-      const m = new THREE.Mesh(ringGeo, this.targetMat);
-      m.visible = false;
-      m.renderOrder = 2;
-      this.targets.push(m);
-      this.scene.add(m);
+      const glow = new Ring(R, { color: GOLD_HI, px: 0, halo: 0.75, haloColor: GOLD, haloWidth: 0.26 });
+      glow.mesh.visible = false;
+      // Under the balls' contact shadows, which draw at renderOrder 1.
+      glow.mesh.renderOrder = 0;
+      this.targets.push(glow);
+      this.scene.add(glow.mesh);
     }
 
-    this.ghostMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.45, depthWrite: false });
+    this.ghostBall = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, depthWrite: false });
     this.ghost = new THREE.Group();
-    this.ghost.add(new THREE.Mesh(new THREE.SphereGeometry(R, 24, 16), this.ghostMat));
-    const ghostRing = new THREE.Mesh(new THREE.RingGeometry(R * 1.3, R * 1.5, 40).rotateX(-Math.PI / 2), this.ghostMat);
-    ghostRing.position.y = -R + 0.001;
-    this.ghost.add(ghostRing);
+    this.ghost.add(new THREE.Mesh(new THREE.SphereGeometry(R, 24, 16), this.ghostBall));
+    this.ghostRing = new Ring(R * 1.4, { color: '#ffffff', px: 2, fill: 0.08, halo: 0.35 });
+    this.ghostRing.mesh.position.y = -R + 0.0015;
+    this.ghost.add(this.ghostRing.mesh);
     this.ghost.visible = false;
     this.scene.add(this.ghost);
 
-    this.pocketMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false });
-    this.pocketChosenMat = new THREE.MeshBasicMaterial({ color: '#ffd35a', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false });
     for (const hole of POCKET_HOLES) {
-      const m = new THREE.Mesh(new THREE.RingGeometry(hole.radius + 0.004, hole.radius + 0.016, 48).rotateX(-Math.PI / 2), this.pocketMat);
-      m.position.set(hole.x, RAIL_HEIGHT + 0.012, hole.z);
-      m.visible = false;
-      m.renderOrder = 6;
-      this.pocketMarks.push(m);
-      this.scene.add(m);
+      const offer = new Ring(hole.radius + 0.012, { color: '#ffffff', px: 2, fill: 0.06, halo: 0.45, haloWidth: 0.12 });
+      const chosen = new Ring(hole.radius + 0.014, { color: GOLD, px: 3, fill: 0.22, halo: 0.6, haloColor: GOLD, haloWidth: 0.22 });
+      for (const m of [offer, chosen]) {
+        m.mesh.position.set(hole.x, RAIL_HEIGHT + 0.012, hole.z);
+        m.mesh.visible = false;
+        // A call is an instruction, so it sits over whatever the pocket's rim is made of.
+        m.mesh.material.depthTest = false;
+        m.mesh.renderOrder = 6;
+        this.scene.add(m.mesh);
+      }
+      this.pocketMarks.push({ offer, chosen });
     }
 
     this.setTable(opts.table, quality);
+    this.backdrop.setMotion(this.motion);
 
     this.resize = new ResizeObserver(() => this.fit());
     this.resize.observe(host);
@@ -195,28 +220,25 @@ export class TableView {
 
   // ================================================================ styles
 
-  setTable(style: TableStyle, quality: Quality = 'high'): void {
+  setTable(style: TableStyle, quality: Quality = this.quality): void {
     const key = JSON.stringify(style);
     if (key === this.tableKey) return;
     this.tableKey = key;
+    this.quality = quality;
     if (this.table) {
       this.scene.remove(this.table.group);
       this.table.dispose();
     }
     this.table = buildTable(style, quality);
     this.scene.add(this.table.group);
+    this.backdrop.setStyle(style, quality);
+    this.backdrop.setMotion(this.motion);
     this.env?.dispose();
-    this.env = buildEnvironment(this.renderer, style.lamp, style.room);
+    this.env = buildEnvironment(this.renderer, style);
     this.scene.environment = this.env;
-    this.scene.background = new THREE.Color(style.room).multiplyScalar(0.35);
-    const lamp = new THREE.Color(style.lamp);
-    this.spot.color.copy(lamp);
+    this.spot.color.set(style.lamp);
     this.spot.intensity = 20 * style.lampPower;
-    for (const f of this.fills) {
-      f.color.copy(lamp);
-      f.intensity = 1.4 * style.lampPower;
-    }
-    this.hemi.color.copy(lamp);
+    this.hemi.color.set(style.lamp);
     this.hemi.groundColor.set(style.room);
   }
 
@@ -238,6 +260,13 @@ export class TableView {
 
   setEffectsEnabled(on: boolean): void {
     this.fx.enabled = on;
+    this.effects = on;
+    this.backdrop.setMotion(this.motion);
+  }
+
+  /** Whether ambient movement (dust, breathing markers) may run: effects on and not on low. */
+  private get motion(): boolean {
+    return this.effects && this.quality !== 'low';
   }
 
   setTilt(on: boolean): void {
@@ -286,17 +315,44 @@ export class TableView {
       this.camera.position.set(0, dist, 0);
       this.camera.up.set(this.portrait ? 1 : 0, 0, this.portrait ? 0 : -1);
     }
-    this.camera.lookAt(0, this.tilt && !this.portrait ? -0.05 : 0, 0);
+    this.tmp.set(0, this.tilt && !this.portrait ? -0.05 : 0, 0);
     if (this.focus) {
       const f = this.focus;
       this.camera.position.set(f.x, dist / f.zoom, f.z + (this.tilt ? dist * 0.3 / f.zoom : 0));
-      this.camera.lookAt(f.x, 0, f.z);
+      this.tmp.set(f.x, 0, f.z);
     }
+    this.camera.lookAt(this.tmp);
     const cx = rect.x + rect.w / 2;
     const cy = rect.y + rect.h / 2;
     this.camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
     this.camera.updateProjectionMatrix();
-    this.fx.particles.setScale((h * this.renderer.getPixelRatio()) / (2 * tanHalf));
+    this.camera.updateMatrixWorld();
+    const pointScale = (h * this.renderer.getPixelRatio()) / (2 * tanHalf);
+    this.fx.particles.setScale(pointScale);
+    this.guide.setPixel((2 * tanHalf * this.camera.position.distanceTo(this.tmp)) / h);
+    this.orient(pointScale);
+  }
+
+  /**
+   * Turns the lighting with the view. The lamp hangs up and to the left of the screen, the
+   * reflections turn to match, and the backdrop's shadow leans down-screen — so a portrait phone,
+   * with the table on its side, is lit exactly like a landscape one.
+   */
+  private orient(pointScale: number): void {
+    const e = this.camera.matrixWorld.elements;
+    // Screen-left and screen-up, flattened onto the table.
+    const lx = -e[0];
+    const lz = -e[2];
+    const ll = Math.hypot(lx, lz) || 1;
+    const ux = e[4];
+    const uz = e[6];
+    const ul = Math.hypot(ux, uz) || 1;
+    this.spot.position.set(((lx / ll) * LAMP_LEFT + (ux / ul) * LAMP_UP), LAMP_HEIGHT, (lz / ll) * LAMP_LEFT + (uz / ul) * LAMP_UP);
+    // The environment is authored for landscape, where screen-left is -x.
+    this.scene.environmentRotation.y = -Math.atan2(lz / ll, -lx / ll);
+    this.down.set(-ux / ul, -uz / ul);
+    this.renderer.getDrawingBufferSize(this.buffer);
+    this.backdrop.setView(this.buffer.x, this.buffer.y, this.down, pointScale);
   }
 
   /** Moves the camera in close over a table point (table units), or back out with null. */
@@ -404,7 +460,6 @@ export class TableView {
       }
       this.onShotEvent?.(ev);
     }
-    const tmp = new THREE.Vector3();
     for (const b of player.balls) {
       if (this.drops.some((d) => d.id === b.id)) continue;
       if (b.pocketed) {
@@ -417,8 +472,8 @@ export class TableView {
       this.balls.place(b.id, wx, wz, p.z * S, true);
       this.balls.spin(b.id, b.angVel, dt * player.speed);
       const speed = Math.hypot(b.vel.x, b.vel.y);
-      tmp.set(wx, R, wz);
-      this.fx.track(b.id, tmp, speed, b.id === CUE_BALL_ID);
+      this.at.set(wx, R, wz);
+      this.fx.track(b.id, this.at, speed, b.id === CUE_BALL_ID);
     }
     if (player.orbs) this.syncOrbs(player.orbs);
     if (player.done) {
@@ -520,15 +575,14 @@ export class TableView {
       return;
     }
     const gap = 0.006 + Math.max(0, shown.power) * 0.17;
-    const dir = { x: Math.cos(shown.angle), z: Math.sin(shown.angle) };
     const tilt = 0.085 + shown.elevation;
     const back = R + gap;
-    const tip = new THREE.Vector3(
-      toWorldX(shown.from.x) - dir.x * back * Math.cos(tilt),
+    this.tip.set(
+      toWorldX(shown.from.x) - Math.cos(shown.angle) * back * Math.cos(tilt),
       R + Math.sin(tilt) * back * 0.9 + shown.elevation * 0.01,
-      toWorldZ(shown.from.y) - dir.z * back * Math.cos(tilt)
+      toWorldZ(shown.from.y) - Math.sin(shown.angle) * back * Math.cos(tilt)
     );
-    this.cue.pose(tip, shown.angle, tilt);
+    this.cue.pose(this.tip, shown.angle, tilt);
     this.cue.visible = true;
   }
 
@@ -536,17 +590,17 @@ export class TableView {
     this.guide.update(preview, length);
   }
 
-  /** Rings under the balls that may legally be hit first. */
+  /** Marks the balls that may legally be hit first, with a glow under each. */
   setTargets(ids: number[], balls: Ball[]): void {
     let i = 0;
     for (const id of ids) {
       const b = balls.find((x) => x.id === id && !x.pocketed);
       if (!b || i >= this.targets.length) continue;
-      const m = this.targets[i++];
-      m.position.set(toWorldX(b.pos.x), 0.0011, toWorldZ(b.pos.y));
+      const m = this.targets[i++].mesh;
+      m.position.set(toWorldX(b.pos.x), 0.0006, toWorldZ(b.pos.y));
       m.visible = true;
     }
-    for (; i < this.targets.length; i++) this.targets[i].visible = false;
+    for (; i < this.targets.length; i++) this.targets[i].mesh.visible = false;
   }
 
   /** The cue ball in hand, following the pointer. */
@@ -554,14 +608,16 @@ export class TableView {
     this.ghost.visible = pos !== null;
     if (!pos) return;
     this.ghost.position.set(toWorldX(pos.x), R, toWorldZ(pos.y));
-    this.ghostMat.color.set(valid ? '#ffffff' : '#ff5a4a');
+    const color = valid ? '#ffffff' : CORAL;
+    this.ghostBall.color.set(color);
+    this.ghostRing.setColor(color);
   }
 
   /** Pocket selection for calling a shot: `selectable` lights them all, `chosen` picks one. */
   setPockets(selectable: boolean, chosen: number | null): void {
     this.pocketMarks.forEach((m, i) => {
-      m.visible = selectable || chosen === i;
-      m.material = chosen === i ? this.pocketChosenMat : this.pocketMat;
+      m.chosen.mesh.visible = chosen === i;
+      m.offer.mesh.visible = selectable && chosen !== i;
     });
   }
 
@@ -636,6 +692,15 @@ export class TableView {
 
   // ================================================================ loop
 
+  /** Markers breathe slowly when motion is allowed, and hold still otherwise. */
+  private breathe(): void {
+    const wave = this.motion ? 0.5 + 0.5 * Math.sin(this.time * 2.2) : 1;
+    const glow = 0.8 + 0.2 * wave;
+    for (const t of this.targets) t.opacity = glow;
+    const offer = 0.6 + 0.4 * wave;
+    for (const m of this.pocketMarks) m.offer.opacity = offer;
+  }
+
   kick(amount = 0.25): void {
     this.shake = Math.max(this.shake, amount);
   }
@@ -649,11 +714,12 @@ export class TableView {
 
     if (this.player) this.stepPlayback(dt);
     if (this.drops.length) this.stepDrops(dt);
+    this.balls.settle(dt);
     this.stepCue(dt);
     this.stepOrbs(dt);
     this.fx.update(dt);
-    this.targetMat.opacity = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(this.time * 4));
-    this.pocketMat.opacity = 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(this.time * 5));
+    this.backdrop.update(dt);
+    this.breathe();
     this.onFrame?.(dt);
 
     if (this.shake > 0) {
@@ -678,6 +744,16 @@ export class TableView {
     this.guide.dispose();
     this.fx.dispose();
     this.env?.dispose();
+    this.backdrop.dispose();
+    for (const t of this.targets) t.dispose();
+    this.ghostBall.dispose();
+    (this.ghost.children[0] as THREE.Mesh).geometry.dispose();
+    this.ghostRing.dispose();
+    for (const m of this.pocketMarks) {
+      m.offer.dispose();
+      m.chosen.dispose();
+    }
+    this.syncOrbs([]);
     for (const t of this.orbSprites.values()) t.dispose();
     this.renderer.dispose();
     this.canvas.remove();

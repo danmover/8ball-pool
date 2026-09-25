@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CORNER_MOUTH, CUSHIONS, POCKETS, SIDE_MOUTH, TABLE_LENGTH, type TableStyle } from '@8ball/shared';
 import { CUSHION_DEPTH, CUSHION_HEIGHT, HALF_L, HALF_W, RAIL_HEIGHT, RAIL_WIDTH, S, toWorldX, toWorldZ } from './coords';
-import { paintCloth, paintFloor, paintRail, paintGlow, shadeHex } from './textures';
+import { paintCloth, paintRail, paintGlow, shadeHex } from './textures';
 
 /**
  * The table, built from the same geometry the physics uses.
@@ -357,22 +357,8 @@ export function buildTable(style: TableStyle, quality: 'low' | 'medium' | 'high'
     }
   }
 
-  // ---------------------------------------------------------------- the room
-  const floorTex = keep(paintFloor(style.room, style.lamp));
-  const floor = new THREE.Mesh(
-    keep(flatten(new THREE.PlaneGeometry(9, 6))),
-    keep(new THREE.MeshBasicMaterial({ map: floorTex }))
-  );
-  floor.position.y = -0.6;
-  group.add(floor);
-
+  // The floor and the table's shadow on it belong to the backdrop (backdrop.ts).
   const glowTex = keep(paintGlow(128));
-  const shadow = new THREE.Mesh(
-    keep(flatten(new THREE.PlaneGeometry(outerX * 2.9, outerZ * 3.2))),
-    keep(new THREE.MeshBasicMaterial({ color: '#000000', alphaMap: glowTex, transparent: true, opacity: 0.85, depthWrite: false }))
-  );
-  shadow.position.y = -0.595;
-  group.add(shadow);
 
   if (style.neon) {
     const neonMat = keep(new THREE.MeshBasicMaterial({ color: style.neon, toneMapped: false }));

@@ -88,6 +88,10 @@
 .hud-players.is-duel .pcard-right {
   justify-self: end;
 }
+/* Keep each card inside its column so a long name ellipsizes instead of sliding under the score. */
+.hud-players.is-duel .pcard {
+  max-width: min(420px, 100%);
+}
 .hud-players.is-group {
   flex-direction: column;
   align-items: flex-start;
@@ -187,6 +191,43 @@
   color: var(--seat);
   background: color-mix(in srgb, var(--seat) 15%, transparent);
 }
+/* An unbroken visit: a flickering flame and the count, like a lit match. */
+.streak {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 7px 1px 4px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, rgba(255, 140, 30, 0.2), rgba(255, 70, 30, 0.1));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 154, 26, 0.4),
+    0 0 12px rgba(255, 110, 30, 0.25);
+  animation: pop-in 0.3s var(--spring);
+}
+.streak-flame {
+  width: 12px;
+  height: 15px;
+  transform-origin: 50% 90%;
+  filter: drop-shadow(0 0 4px rgba(255, 120, 30, 0.8));
+  animation: flame-flicker 0.8s ease-in-out infinite alternate;
+}
+.streak b {
+  font-size: 12px;
+  font-weight: 900;
+  color: #ffc46b;
+}
+@keyframes flame-flicker {
+  0% {
+    transform: scale(1, 1) rotate(-3deg);
+  }
+  50% {
+    transform: scale(0.93, 1.07) rotate(2deg);
+  }
+  100% {
+    transform: scale(1.04, 0.95) rotate(-1deg);
+  }
+}
 .pcard-detail {
   display: flex;
   align-items: center;
@@ -197,6 +238,55 @@
   display: flex;
   align-items: center;
   gap: 2px;
+}
+/* A potted ball leaves an empty socket behind, so the row keeps its length. */
+.chip-socket {
+  flex: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* The avatar with the shot clock run round it. */
+.clock-av {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.clock-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.clock-ring circle {
+  fill: none;
+  stroke-width: 3;
+}
+.cr-track {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+.clock-av.is-turn .cr-track {
+  stroke: color-mix(in srgb, var(--seat) 25%, transparent);
+}
+.cr-fill {
+  stroke: var(--seat);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px var(--seat));
+  transition: stroke-dashoffset 0.25s linear;
+}
+.clock-av.is-low .cr-fill {
+  stroke: #ff4f62;
+  filter: drop-shadow(0 0 5px #ff4f62);
+  animation: clock-low 0.5s ease-in-out infinite alternate;
+}
+@keyframes clock-low {
+  to {
+    opacity: 0.55;
+  }
 }
 .card-sub {
   font-size: 12.5px;
@@ -294,6 +384,37 @@
   font-weight: 700;
   color: var(--text-3);
 }
+/* Frames won, each side in its seat colour either side of a short bar. */
+.ms-score {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+.ms-score b {
+  min-width: 0.7em;
+  text-shadow: 0 0 14px color-mix(in srgb, currentColor 55%, transparent);
+}
+.ms-score i {
+  width: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-3);
+}
+/* A trick shot's brief (or practice's one-line how-to): quieter, and allowed to wrap. */
+.ms-brief {
+  max-width: 34ch;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+.solo-status .ms-brief {
+  padding-left: 14px;
+  box-shadow: inset 1px 0 0 var(--line-2);
+  text-align: left;
+}
 .ms-lowest {
   display: flex;
   align-items: center;
@@ -355,53 +476,103 @@
   cursor: ns-resize;
   touch-action: none;
 }
+.pb-well {
+  position: absolute;
+  inset: 0;
+}
+/* The charge fills in behind the tip as the cue is drawn back. */
 .pb-fill {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
+  height: calc(var(--p) * 100%);
   background: linear-gradient(180deg, rgba(47, 227, 163, 0.85), rgba(255, 196, 68, 0.9) 60%, rgba(255, 99, 82, 0.95));
-  transition: height 0.05s linear;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--cue-glow) 40%, transparent);
+}
+.pb-ticks span {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: calc(var(--t) * 100%);
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
 }
 .pb-cue {
   position: absolute;
   left: 50%;
-  top: 6%;
-  width: 12px;
-  height: 78%;
-  margin-left: -6px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #b88a50, #f5d9a0 45%, #b88a50);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
-  transition: transform 0.05s linear;
+  top: 5%;
+  width: 22px;
+  height: 90%;
+  margin-left: -11px;
+  transform: translateY(calc(var(--p) * 72%));
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.65));
 }
-.pb-cue::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
+.cue-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.powerbar.is-hot .pb-cue {
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 8px var(--cue-glow));
+}
+
+/* Portrait: the bar lies along the bottom and the cue is pulled sideways. */
+.powerbar.is-h {
+  flex-direction: row;
+}
+.powerbar.is-h.is-rev {
+  flex-direction: row-reverse;
+}
+.powerbar.is-h .pb-track {
+  width: min(64vw, 320px);
+  height: 44px;
+  cursor: ew-resize;
+}
+.powerbar.is-h .pb-fill {
+  top: 0;
   bottom: 0;
-  height: 32%;
-  border-radius: 0 0 6px 6px;
-  background: linear-gradient(90deg, #1a1210, #3a2a20 45%, #1a1210);
+  left: 0;
+  right: auto;
+  width: calc(var(--p) * 100%);
+  height: auto;
+  background: linear-gradient(90deg, rgba(47, 227, 163, 0.85), rgba(255, 196, 68, 0.9) 60%, rgba(255, 99, 82, 0.95));
 }
-.pb-tip {
-  position: absolute;
-  top: -4px;
-  left: 1px;
-  right: 1px;
-  height: 8px;
-  border-radius: 4px 4px 1px 1px;
-  background: #3a6fd8;
+.powerbar.is-h.is-rev .pb-fill {
+  left: auto;
+  right: 0;
+  background: linear-gradient(270deg, rgba(47, 227, 163, 0.85), rgba(255, 196, 68, 0.9) 60%, rgba(255, 99, 82, 0.95));
 }
-.pb-ticks span {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.1);
+.powerbar.is-h .pb-ticks span {
+  top: 10px;
+  bottom: 10px;
+  left: calc(var(--t) * 100%);
+  right: auto;
+  width: 1px;
+  height: auto;
+}
+.powerbar.is-h.is-rev .pb-ticks span {
+  left: auto;
+  right: calc(var(--t) * 100%);
+}
+.powerbar.is-h .pb-cue {
+  top: 50%;
+  left: 5%;
+  width: 90%;
+  height: 20px;
+  margin: -10px 0 0;
+  transform: translateX(calc(var(--p) * 72%));
+}
+.powerbar.is-h.is-rev .pb-cue {
+  transform: translateX(calc(var(--p) * -72%));
 }
 .pb-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  white-space: nowrap;
   min-width: 56px;
   text-align: center;
   font-weight: 900;
@@ -435,33 +606,67 @@
 .br-tube {
   position: relative;
   display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  gap: 1px;
+  flex-direction: column;
   width: 44px;
   height: min(56vh, 520px);
-  padding: 6px 0;
   border-radius: 24px;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 30%, rgba(255, 255, 255, 0.02) 70%, rgba(255, 255, 255, 0.08)),
-    rgba(6, 10, 16, 0.75);
+    radial-gradient(120% 40% at 50% 100%, rgba(255, 196, 68, 0.07), transparent 70%),
+    rgba(6, 10, 16, 0.78);
   box-shadow:
     inset 0 0 0 1px var(--line-2),
-    inset 0 0 18px rgba(0, 0, 0, 0.6),
-    0 10px 30px rgba(0, 0, 0, 0.4);
+    inset 0 0 18px rgba(0, 0, 0, 0.7),
+    0 10px 30px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(8px);
   overflow: hidden;
 }
-.br-tube::after {
+/* Where the balls drop in: a dark hole in a brass ring, like the pocket's drop. */
+.br-mouth {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  height: 14px;
+  margin: 7px 7px 3px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 65%, #000 0 50%, #140e05 80%);
+  box-shadow:
+    0 0 0 2px var(--gold-lo),
+    0 0 0 3px rgba(0, 0, 0, 0.6),
+    0 4px 8px rgba(0, 0, 0, 0.8);
+}
+/* First potted rests at the far end; later ones stack towards the mouth. */
+.br-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 0 6px;
+}
+.br-glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.13), transparent 24%, transparent 72%, rgba(255, 255, 255, 0.07) 86%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+/* The glass's long highlight. */
+.br-glass::before {
   content: '';
   position: absolute;
   left: 7px;
-  top: 10px;
-  bottom: 10px;
-  width: 5px;
+  top: 30px;
+  bottom: 14px;
+  width: 4px;
   border-radius: 4px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.05));
-  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04));
+}
+.ball-return.is-empty .br-mouth {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--gold-lo) 60%, transparent),
+    0 0 0 3px rgba(0, 0, 0, 0.6);
 }
 .br-ball {
   display: block;
@@ -482,20 +687,32 @@
     transform: translateY(0) rotate(0);
   }
 }
+/* Lying down, the mouth is at the right-hand end and the balls roll left. */
 .ball-return.is-h .br-tube {
-  flex-direction: row;
+  flex-direction: row-reverse;
   width: min(92vw, 520px);
   height: 34px;
-  padding: 0 8px;
-  justify-content: flex-start;
 }
-.ball-return.is-h .br-tube::after {
-  left: 12px;
-  right: 12px;
+.ball-return.is-h .br-mouth {
+  width: 12px;
+  height: auto;
+  margin: 6px 8px 6px 4px;
+}
+.ball-return.is-h .br-stack {
+  flex-direction: row;
+  padding: 0 2px 0 5px;
+}
+.ball-return.is-h .br-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), transparent 30%, transparent 70%, rgba(255, 255, 255, 0.06));
+}
+.ball-return.is-h .br-glass::before {
+  left: 16px;
+  right: 30px;
   top: 5px;
   bottom: auto;
   width: auto;
-  height: 4px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04));
 }
 .ball-return.is-h .br-ball {
   animation-name: br-roll;
@@ -526,7 +743,9 @@
     0 12px 34px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(14px);
 }
-.dock-spin {
+.dock-spin,
+.dock-type {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -534,9 +753,27 @@
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.05);
   box-shadow: inset 0 0 0 1px var(--line);
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 }
 .dock-spin.is-on {
   box-shadow: inset 0 0 0 2px var(--gold);
+}
+/* Shot type: the cue's angle as an icon; lit gold when it isn't a level cue. */
+.dock-type {
+  min-height: 48px;
+  padding: 0 12px 0 10px;
+  gap: 7px;
+  color: var(--text-2);
+}
+.dock-type.is-on {
+  color: var(--gold);
+  background: rgba(255, 196, 68, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 68, 0.55);
+}
+.dock-type.is-on .dock-cap {
+  color: var(--gold);
 }
 .dock-cap {
   font-size: 13px;
@@ -561,20 +798,47 @@
   opacity: 0.3;
   pointer-events: none;
 }
+/* The knurled drum: ridges that slide as it turns, shaded dark at both ends so it reads round. */
 .fa-ridges {
   position: absolute;
   inset: 4px;
   border-radius: 10px;
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.6), transparent 25%, transparent 75%, rgba(0, 0, 0, 0.6)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 2px, transparent 2px 9px);
+    linear-gradient(90deg, rgba(0, 0, 0, 0.7), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.7)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 45%, rgba(0, 0, 0, 0.25)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0 2px, transparent 2px 9px);
 }
-.fa-icon {
+/* The fixed index mark the drum turns under. */
+.fa-notch {
   position: absolute;
   left: 50%;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(255, 196, 68, 0.7);
+}
+.fine-aim.is-v {
+  width: 44px;
+  height: 104px;
+  cursor: ns-resize;
+}
+.fine-aim.is-v .fa-ridges {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.7), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.7)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07), transparent 45%, rgba(0, 0, 0, 0.25)),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0 2px, transparent 2px 9px);
+}
+.fine-aim.is-v .fa-notch {
+  left: 2px;
+  right: 2px;
   top: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--text-2);
+  bottom: auto;
+  width: auto;
+  height: 2px;
+  margin: -1px 0 0;
 }
 .dock-powers {
   display: flex;
@@ -642,14 +906,76 @@
   box-shadow: 0 0 10px var(--sky);
   animation: pulse 1s infinite;
 }
+.wait-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dock-emote {
   flex: none;
+}
+
+/* Short landscape: the dock stands on end beside the ball return. */
+.dock.is-v {
+  flex-direction: column;
+  gap: 6px;
+  max-width: none;
+  max-height: 100%;
+  padding: 7px 6px;
+}
+/* The wheel takes whatever height the buttons leave it. */
+.dock.is-v .fine-aim {
+  flex: 0 1 104px;
+  min-height: 52px;
+  height: auto;
+}
+.dock.is-v .icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.dock.is-v .dock-spin,
+.dock.is-v .dock-type {
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 4px 4px 3px;
+}
+.dock.is-v .dock-cap {
+  font-size: 10.5px;
+}
+.dock.is-v .dock-powers,
+.dock.is-v .dock-tools {
+  flex-direction: column;
+}
+.dock.is-v .dock-power {
+  justify-content: center;
+  padding: 0;
+  width: 44px;
+}
+.dock.is-v .dp-name,
+.dock.is-v .dock-hint {
+  display: none;
+}
+.dock.is-v .dock-wait {
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px 0 4px;
+}
+/* Waiting text runs up the column, read with the head tilted left. */
+.dock.is-v .wait-text {
+  max-height: 34vh;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 12.5px;
 }
 
 .spin-picker {
   position: absolute;
   left: 50%;
-  bottom: calc(86px + var(--safe-bottom));
+  bottom: calc(var(--hud-bottom-h, 86px) + 4px);
   transform: translateX(-50%);
   width: min(94vw, 360px);
   padding: 14px;
@@ -666,21 +992,57 @@
   justify-content: space-between;
   font-weight: 800;
 }
+/* The cue ball face beside what the tip is doing to it. */
+.sp-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .sp-pad {
-  width: min(58vw, 210px);
-  height: min(58vw, 210px);
-  margin: 0 auto;
+  flex: none;
+  width: min(44vw, 176px);
+  height: min(44vw, 176px);
+  border-radius: 50%;
   cursor: grab;
   touch-action: none;
   filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+  transition: filter 0.2s;
+}
+.sp-pad:active {
+  cursor: grabbing;
+}
+.sp-pad svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sp-pad.is-danger {
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 80, 60, 0.55));
+}
+.sp-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .sp-labels {
   display: flex;
-  justify-content: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 1px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-2);
+}
+.sp-labels span:first-child {
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--text);
+}
+.sp-labels .warn {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
 }
 .sp-presets,
 .sp-types {
@@ -704,6 +1066,9 @@
   align-items: center;
   gap: 2px;
 }
+.sp-side .sp-presets {
+  grid-template-columns: 1fr;
+}
 .sp-types small {
   font-size: 10.5px;
   font-weight: 600;
@@ -718,7 +1083,7 @@
 .emote-panel {
   position: absolute;
   right: 16px;
-  bottom: calc(86px + var(--safe-bottom));
+  bottom: calc(var(--hud-bottom-h, 86px) + 4px);
   width: min(92vw, 340px);
   padding: 12px;
   display: flex;
@@ -1320,7 +1685,7 @@
 .table-screen.is-portrait .hud-left {
   display: none;
 }
-.table-screen.is-portrait .pb-track {
+.table-screen.is-portrait .powerbar:not(.is-h) .pb-track {
   width: 46px;
   height: min(44vh, 300px);
 }
@@ -1351,6 +1716,74 @@
 .table-screen.is-portrait .dp-name {
   display: none;
 }
+/* Solo on a narrow screen: the name keeps its room, and the status stacks and wraps instead. */
+.hud-players.is-solo .pcard {
+  flex-shrink: 0;
+  max-width: 55%;
+}
+.hud-players.is-solo .solo-status {
+  min-width: 0;
+}
+.table-screen.is-portrait .solo-status:not(.is-timed) {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 6px 12px;
+  text-align: right;
+}
+.table-screen.is-portrait .solo-status .ms-brief {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding-left: 0;
+  box-shadow: none;
+  font-size: 11.5px;
+  text-align: right;
+}
+.table-screen.is-portrait .solo-status.is-timed {
+  gap: 10px;
+  padding: 6px 12px;
+}
+.table-screen.is-portrait .solo-time {
+  font-size: 21px;
+  min-width: 78px;
+}
+
+.table-screen.is-short .hud-left,
+.table-screen.is-short .hud-right {
+  gap: 8px;
+}
+.table-screen.is-short .match-status {
+  gap: 0;
+  padding: 4px 12px 5px;
+}
+.table-screen.is-short .ms-mode {
+  font-size: 10px;
+}
+.table-screen.is-short .ms-score {
+  font-size: 18px;
+}
+.table-screen.is-short .ms-detail {
+  font-size: 11.5px;
+}
+.table-screen.is-short .spin-picker {
+  width: min(94vw, 320px);
+  padding: 10px 12px;
+  gap: 8px;
+}
+.table-screen.is-short .sp-pad {
+  width: 124px;
+  height: 124px;
+}
+.table-screen.is-short .sp-types small {
+  display: none;
+}
+@media (max-height: 380px) {
+  .dock.is-v .dock-cap {
+    display: none;
+  }
+}
 
 @media (max-height: 520px) {
   .hud-top {
@@ -1358,10 +1791,6 @@
   }
   .pcard {
     padding: 4px 10px 4px 4px;
-  }
-  .pcard .avatar {
-    width: 38px !important;
-    height: 38px !important;
   }
   .pcard-detail {
     display: none;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ballColor, type BallSetStyle, type CueStyle } from '@8ball/shared';
+import { ballColor, type BallSetStyle } from '@8ball/shared';
 
 /**
  * Every texture in the game is painted here, at runtime, from the catalogue's numbers — there are
@@ -89,7 +89,7 @@ function toTexture(c: HTMLCanvasElement, srgb = true): THREE.CanvasTexture {
 export interface BallTextures {
   map: THREE.Texture;
   emissive?: THREE.Texture;
-  /** Grey mask: white where metal (gold finish). */
+  /** Grey mask: white where metal (gold and chrome finishes). */
   metal?: THREE.Texture;
   rough?: THREE.Texture;
 }
@@ -102,7 +102,7 @@ function numberSprite(n: number, ink: string, size: number): ImageData {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const digits = String(n).length;
-  ctx.font = `800 ${Math.round(size * (digits > 1 ? 0.56 : 0.66))}px ${getComputedStyle(document.documentElement).getPropertyValue('--font') || 'sans-serif'}`;
+  ctx.font = `900 ${Math.round(size * (digits > 1 ? 0.6 : 0.72))}px ${getComputedStyle(document.documentElement).getPropertyValue('--font') || 'sans-serif'}`;
   ctx.fillText(String(n), size / 2, size / 2 + size * 0.04);
   // An underline on 6 and 9 so they can't be misread upside down.
   if (n === 6 || n === 9) ctx.fillRect(size * 0.36, size * 0.8, size * 0.28, size * 0.05);
@@ -124,7 +124,7 @@ export function paintBall(set: BallSetStyle, id: number, width: number): BallTex
   const data = img.data;
   const emissiveCanvas = set.finish === 'neon' ? canvas(width, height) : null;
   const eData = emissiveCanvas ? emissiveCanvas[1].createImageData(width, height) : null;
-  const metalCanvas = set.finish === 'gold' ? canvas(width, height) : null;
+  const metalCanvas = set.finish === 'gold' || set.finish === 'chrome' ? canvas(width, height) : null;
   const mData = metalCanvas ? metalCanvas[1].createImageData(width, height) : null;
 
   const isCue = id === 0;
@@ -132,7 +132,7 @@ export function paintBall(set: BallSetStyle, id: number, width: number): BallTex
   const color = hexToRgb(ballColor(set, id));
   const base = hexToRgb(set.base);
   const ink = set.ink;
-  const discAngle = isCue ? 0 : 0.36; // angular radius of the number disc
+  const discAngle = isCue ? 0 : 0.47; // angular radius of the number disc: big enough to read from the full view
   const band = 0.56; // stripe half-width in latitude (radians)
   const spriteSize = 128;
   const sprite = isCue ? null : numberSprite(id, ink, spriteSize);
@@ -166,7 +166,7 @@ export function paintBall(set: BallSetStyle, id: number, width: number): BallTex
 
       let rgb: RGB;
       let glow = 0;
-      let metal = 0;
+      let metal = set.finish === 'chrome' ? 1 : 0;
 
       // Body colour.
       if (isCue) rgb = hexToRgb(set.cue);
@@ -212,7 +212,7 @@ export function paintBall(set: BallSetStyle, id: number, width: number): BallTex
           const edge = Math.min(1, Math.max(0, (discAngle + 0.02 - ang) / 0.02));
           const disc: RGB = set.finish === 'neon' ? [250, 250, 250] : set.finish === 'gold' ? hexToRgb('#fff1c4') : base;
           rgb = mix(rgb, disc, edge);
-          if (set.finish === 'gold') metal *= 1 - edge;
+          if (metalCanvas) metal *= 1 - edge;
           if (set.finish === 'neon') glow = Math.max(glow, edge * 0.25);
           // Gnomonic projection onto the tangent plane at the disc centre: straight lines stay
           // straight, so the digits keep their shape.
@@ -342,186 +342,6 @@ export function paintRail(body: string, grain: string, finish: 'wood' | 'lacquer
   const t = toTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
-}
-
-// ------------------------------------------------------------------ cues
-
-/**
- * A cue's livery, painted along its length: `v` runs tip (0) to butt (1), `u` around the shaft.
- * The same painter handles every design; the style decides what goes in each section.
- */
-export function paintCue(style: CueStyle): { map: THREE.Texture; emissive: THREE.Texture | null } {
-  const w = 128;
-  const h = 1024;
-  const [c, ctx] = canvas(w, h);
-  const [ec, ectx] = canvas(w, h);
-  ectx.fillStyle = '#000';
-  ectx.fillRect(0, 0, w, h);
-  const at = (v: number) => Math.round(v * h);
-  const band = (v0: number, v1: number, fill: string | CanvasGradient | CanvasPattern) => {
-    ctx.fillStyle = fill;
-    ctx.fillRect(0, at(v0), w, at(v1) - at(v0));
-  };
-  const glowBand = (v0: number, v1: number) => {
-    if (!style.glow) return;
-    ectx.fillStyle = style.glow;
-    ectx.fillRect(0, at(v0), w, at(v1) - at(v0));
-  };
-
-  // Tip and ferrule.
-  band(0, 0.006, '#3a6fd8');
-  band(0.006, 0.022, '#f4f1e8');
-
-  // Shaft: a long gradient toward the joint.
-  const shaft = ctx.createLinearGradient(0, at(0.022), 0, at(0.49));
-  shaft.addColorStop(0, style.shaft);
-  shaft.addColorStop(1, shadeHex(style.shaft, style.pattern === 'plain' ? -0.12 : -0.05));
-  band(0.022, 0.49, shaft);
-
-  // Joint collar.
-  band(0.49, 0.5, style.accent);
-  band(0.5, 0.505, '#111');
-  band(0.505, 0.515, style.accent);
-  glowBand(0.49, 0.515);
-
-  // Forearm.
-  band(0.515, 0.76, style.butt);
-  const fore = (v0: number, v1: number) => [at(v0), at(v1)] as const;
-  const [f0, f1] = fore(0.515, 0.76);
-  switch (style.pattern) {
-    case 'points': {
-      ctx.fillStyle = style.accent;
-      for (let k = 0; k < 4; k++) {
-        const x0 = (k / 4) * w;
-        ctx.beginPath();
-        ctx.moveTo(x0, f1);
-        ctx.lineTo(x0 + w / 8, f0 + (f1 - f0) * 0.1);
-        ctx.lineTo(x0 + w / 4, f1);
-        ctx.fill();
-      }
-      ctx.fillStyle = style.shaft;
-      for (let k = 0; k < 4; k++) {
-        const x0 = (k / 4) * w;
-        ctx.beginPath();
-        ctx.moveTo(x0 + w * 0.03, f1);
-        ctx.lineTo(x0 + w / 8, f0 + (f1 - f0) * 0.3);
-        ctx.lineTo(x0 + w / 4 - w * 0.03, f1);
-        ctx.fill();
-      }
-      break;
-    }
-    case 'rings':
-      for (let k = 0; k < 7; k++) {
-        const v = 0.53 + k * 0.032;
-        band(v, v + 0.008, style.accent);
-        glowBand(v, v + 0.008);
-      }
-      break;
-    case 'carbon': {
-      for (let y = f0; y < f1; y += 4) {
-        for (let x = 0; x < w; x += 4) {
-          ctx.fillStyle = ((x + y) / 4) % 2 === 0 ? '#2a2d33' : '#16181c';
-          ctx.fillRect(x, y, 4, 4);
-        }
-      }
-      band(0.74, 0.748, style.accent);
-      break;
-    }
-    case 'flame': {
-      const g = ctx.createLinearGradient(0, f1, 0, f0);
-      g.addColorStop(0, '#ffd23a');
-      g.addColorStop(0.35, '#ff7a1a');
-      g.addColorStop(0.7, '#b31a0a');
-      g.addColorStop(1, style.butt);
-      ctx.fillStyle = g;
-      ectx.fillStyle = 'rgba(255,90,20,0.9)';
-      for (let k = 0; k < 6; k++) {
-        const x0 = (k / 6) * w;
-        const tall = 0.45 + ((k * 37) % 5) * 0.1;
-        for (const target of [ctx, ectx]) {
-          target.beginPath();
-          target.moveTo(x0, f1);
-          target.quadraticCurveTo(x0 + w / 24, f1 - (f1 - f0) * tall * 0.6, x0 + w / 12, f1 - (f1 - f0) * tall);
-          target.quadraticCurveTo(x0 + w / 8, f1 - (f1 - f0) * tall * 0.5, x0 + w / 6, f1);
-          target.fill();
-        }
-      }
-      break;
-    }
-    case 'ice': {
-      const g = ctx.createLinearGradient(0, f0, 0, f1);
-      g.addColorStop(0, '#e9f8ff');
-      g.addColorStop(1, style.butt);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, f0, w, f1 - f0);
-      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-      ctx.lineWidth = 1.5;
-      for (let k = 0; k < 14; k++) {
-        const x = ((k * 53) % w) + 2;
-        const y = f0 + ((k * 97) % (f1 - f0));
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 10, y + 26);
-        ctx.lineTo(x + 3, y + 44);
-        ctx.stroke();
-      }
-      glowBand(0.515, 0.52);
-      break;
-    }
-    case 'nebula': {
-      const img = ctx.getImageData(0, f0, w, f1 - f0);
-      const deep = hexToRgb(style.butt);
-      const hi = hexToRgb(style.accent);
-      for (let y = 0; y < f1 - f0; y++) {
-        for (let x = 0; x < w; x++) {
-          const a = (x / w) * Math.PI * 2;
-          const n = fbm(Math.cos(a) * 1.5, Math.sin(a) * 1.5, y * 0.012, 5, 42);
-          let rgb = mix(deep, hi, Math.pow(n, 2.2) * 1.4);
-          if (hash3(x, y, 0, 77) > 0.994) rgb = [255, 255, 255];
-          const i = (y * w + x) * 4;
-          img.data[i] = rgb[0];
-          img.data[i + 1] = rgb[1];
-          img.data[i + 2] = rgb[2];
-        }
-      }
-      ctx.putImageData(img, 0, f0);
-      ectx.globalAlpha = 0.35;
-      ectx.drawImage(c, 0, f0, w, f1 - f0, 0, f0, w, f1 - f0);
-      ectx.globalAlpha = 1;
-      break;
-    }
-    case 'gold': {
-      const g = ctx.createLinearGradient(0, 0, w, 0);
-      g.addColorStop(0, '#8a5e18');
-      g.addColorStop(0.5, '#ffe7a0');
-      g.addColorStop(1, '#8a5e18');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, f0, w, f1 - f0);
-      band(0.6, 0.605, '#fff5cc');
-      band(0.7, 0.705, '#fff5cc');
-      break;
-    }
-    default:
-      band(0.74, 0.745, style.accent);
-  }
-
-  // Wrap.
-  band(0.76, 0.93, style.wrap);
-  for (let y = at(0.76); y < at(0.93); y += 3) {
-    ctx.fillStyle = `rgba(255,255,255,${0.03 + ((y / 3) % 2) * 0.03})`;
-    ctx.fillRect(0, y, w, 1);
-  }
-  band(0.76, 0.765, style.accent);
-  band(0.925, 0.93, style.accent);
-
-  // Butt sleeve and bumper.
-  band(0.93, 0.99, style.butt);
-  band(0.955, 0.96, style.accent);
-  glowBand(0.955, 0.96);
-  band(0.99, 1, '#0b0b0b');
-
-  const map = toTexture(c);
-  return { map, emissive: style.glow ? toTexture(ec) : null };
 }
 
 export function shadeHex(hex: string, amount: number): string {

@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
-import { ballColor, ballSetStyle, type Avatar as AvatarData, type Rarity } from '@8ball/shared';
+import { ballColor, ballSetStyle, type Avatar as AvatarData, type BallSetStyle, type Rarity } from '@8ball/shared';
 import { Icon, type IconName } from './Icon';
 import { uiBack, uiConfirm, uiTap, unlockAudio } from '../audio/sfx';
 import { haptic } from '../state/settings';
@@ -215,40 +215,199 @@ export function Avatar({
   );
 }
 
+function hexRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.replace(/./g, (c) => c + c) : h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** `a` blended toward `b` by `t`, as a CSS colour. */
+function mixHex(a: string, b: string, t: number): string {
+  const x = hexRgb(a);
+  const y = hexRgb(b);
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`;
+}
+
+/** Stable 0..1 values per ball, so a marble's veins or a planet's craters never reshuffle. */
+function ballRand(id: number, k: number): number {
+  const s = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453;
+  return s - Math.floor(s);
+}
+
 /**
- * A pool ball as SVG, in any set's colours. Used everywhere a ball appears in the interface —
- * the ball return, player cards, the lobby — so they all match the balls on the table.
+ * A belt around the ball seen from a little above: both edges sag toward the viewer, which is
+ * most of what makes a flat circle read as a sphere. `h` is the half-height in icon units.
+ */
+function beltPath(h: number): string {
+  const y = 21.4;
+  return `M-1 ${y - h - 1.6}Q20 ${y - h + 1.6} 41 ${y - h - 1.6}L41 ${y + h - 1.6}Q20 ${y + h + 1.6} -1 ${y + h - 1.6}Z`;
+}
+
+/** The finish-specific surface of one ball, painted inside the body group. */
+function BallSurface({ style, id, uid }: { style: BallSetStyle; id: number; uid: string }): JSX.Element {
+  const finish = style.finish;
+  const color = ballColor(style, id);
+  const cue = id === 0;
+  const stripe = id >= 9;
+  // Where the ball's own colour lives: a stripe's belt, a glow or gold ball's band, or everywhere.
+  const belt = cue ? 0 : stripe ? 9.6 : finish === 'neon' ? 4.6 : finish === 'gold' && id !== 8 ? 6.2 : 0;
+  const shell = cue ? style.cue : belt ? style.base : color;
+  const metal = (c: string) => (finish === 'chrome' ? `url(#${uid}m${c === color ? 'c' : 'b'})` : finish === 'gold' && c !== style.base && !cue ? `url(#${uid}au)` : c);
+  const veins = [0, 1, 2].map((k) => {
+    const x0 = ballRand(id, k) * 40;
+    const x1 = ballRand(id, k + 3) * 40;
+    return `M${x0} -2C${x0 + 14 - ballRand(id, k + 6) * 28} 12 ${x1 - 10 + ballRand(id, k + 9) * 20} 28 ${x1} 42`;
+  });
+  return (
+    <>
+      {finish === 'chrome' && (
+        <defs>
+          {[
+            ['c', color],
+            ['b', cue ? style.cue : style.base],
+          ].map(([k, c]) => (
+            <linearGradient id={`${uid}m${k}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color={mixHex(c, '#ffffff', 0.85)} />
+              <stop offset="0.4" stop-color={mixHex(c, '#ffffff', 0.18)} />
+              <stop offset="0.5" stop-color={mixHex(c, '#000000', 0.6)} />
+              <stop offset="0.58" stop-color={mixHex(c, '#000000', 0.25)} />
+              <stop offset="1" stop-color={mixHex(c, '#ffffff', 0.6)} />
+            </linearGradient>
+          ))}
+        </defs>
+      )}
+      {finish === 'gold' && (
+        <defs>
+          <linearGradient id={`${uid}au`} x1="0" y1="0" x2="0.3" y2="1">
+            <stop offset="0" stop-color="#fff4c8" />
+            <stop offset="0.32" stop-color={color} />
+            <stop offset="0.55" stop-color="#8f6118" />
+            <stop offset="0.72" stop-color={color} />
+            <stop offset="1" stop-color="#fff0b0" />
+          </linearGradient>
+        </defs>
+      )}
+      <rect x="-1" y="-1" width="42" height="42" fill={metal(shell)} />
+      {belt > 0 && <path d={beltPath(belt)} fill={metal(color)} />}
+      {finish === 'marble' && !cue && (
+        <g fill="none" stroke-linecap="round">
+          <ellipse cx={8 + ballRand(id, 12) * 24} cy={10 + ballRand(id, 13) * 20} rx="9" ry="5" fill="#000" opacity="0.14" />
+          {veins.map((d, k) => (
+            <path d={d} stroke={id === 8 ? '#9a9aa4' : '#fffdf6'} stroke-width={k === 0 ? 1.3 : 0.7} opacity={k === 0 ? 0.55 : 0.35} />
+          ))}
+        </g>
+      )}
+      {finish === 'planet' && stripe && (
+        <clipPath id={`${uid}belt`}>
+          <path d={beltPath(belt)} />
+        </clipPath>
+      )}
+      {finish === 'planet' && !cue && (
+        <g clip-path={stripe ? `url(#${uid}belt)` : undefined}>
+          {[
+            [6.5, 1.8, 0.3],
+            [13.5, 2.6, -0.3],
+            [28.5, 2.3, 0.35],
+            [34.5, 1.6, -0.25],
+          ].map(([y, h, t]) => (
+            <path d={`M-1 ${y - h - 1.2}Q20 ${y - h + 1.2} 41 ${y - h - 1.2}L41 ${y + h - 1.2}Q20 ${y + h + 1.2} -1 ${y + h - 1.2}Z`} fill={t > 0 ? mixHex(color, '#fff6e0', t) : mixHex(color, '#000000', -t)} />
+          ))}
+        </g>
+      )}
+      {finish === 'planet' && cue && (
+        <g>
+          {[
+            [13, 26, 3.4],
+            [27, 13, 2.6],
+            [28, 28, 1.9],
+            [11, 12, 1.4],
+          ].map(([x, y, r]) => (
+            <>
+              <circle cx={x} cy={y} r={r} fill="#000" opacity="0.14" />
+              <path d={`M${x - r} ${y}a${r} ${r} 0 0 0 ${r * 2} 0`} fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5" />
+            </>
+          ))}
+        </g>
+      )}
+      {cue && style.cueDots && (
+        <g fill={style.cueDots}>
+          <circle cx="20" cy="21.6" r="2.4" />
+          <ellipse cx="20" cy="3.4" rx="2.2" ry="0.9" />
+        </g>
+      )}
+      {!cue && (
+        <>
+          <circle cx="20" cy="21.4" r="8.6" fill={finish === 'neon' ? '#f4f4f4' : finish === 'gold' ? '#fff1c4' : style.base} />
+          <circle cx="20" cy="21.4" r="8.6" fill="none" stroke="#000" stroke-opacity="0.14" stroke-width="0.8" />
+          <text
+            x="20"
+            y={id > 9 ? 25.2 : 25.8}
+            text-anchor="middle"
+            font-size={id > 9 ? 10.6 : 12.4}
+            font-weight="800"
+            letter-spacing={id > 9 ? -0.6 : 0}
+            fill={finish === 'neon' ? '#111' : style.ink}
+            font-family="Outfit Variable, Outfit, sans-serif"
+          >
+            {id}
+          </text>
+        </>
+      )}
+    </>
+  );
+}
+
+/**
+ * A pool ball as SVG, in any set's colours and finish. Used wherever a ball appears in the
+ * interface — the ball return, the player cards, the dock — so they all match the table.
+ *
+ * The painted surface sits in its own `.ball-body` group under a fixed layer of shading and
+ * highlights, so a ball can be rolled (rotate the body) while the lamp stays where it is.
  */
 export function BallIcon({ id, size = 22, set = 'balls.classic', dim }: { id: number; size?: number; set?: string; dim?: boolean }): JSX.Element {
   const style = ballSetStyle(set);
-  const color = ballColor(style, id);
-  const stripe = id >= 9;
-  const base = id === 0 ? style.cue : stripe ? style.base : color;
-  const gid = `bg${id}`;
+  const finish = style.finish;
+  const uid = `bi${useId().replace(/\W/g, '')}`;
+  const soft = finish === 'satin' || finish === 'planet';
+  const glow = finish === 'neon' && id !== 0 ? ballColor(style, id) : null;
   return (
-    <svg class={`ball-icon ${dim ? 'is-dim' : ''}`} width={size} height={size} viewBox="0 0 40 40" aria-label={id === 0 ? 'cue ball' : `${id} ball`}>
+    <svg
+      class={`ball-icon ${dim ? 'is-dim' : ''}`}
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      aria-label={id === 0 ? 'cue ball' : `${id} ball`}
+      style={glow ? { filter: `drop-shadow(0 0 ${Math.max(1.5, size * 0.1)}px ${glow}) drop-shadow(0 1px 1.5px rgba(0,0,0,0.45))` } : undefined}
+    >
       <defs>
-        <radialGradient id={`${gid}s`} cx="36%" cy="30%" r="70%">
-          <stop offset="0" stop-color="#fff" stop-opacity="0.85" />
-          <stop offset="0.25" stop-color="#fff" stop-opacity="0.12" />
-          <stop offset="0.7" stop-color="#000" stop-opacity="0" />
-          <stop offset="1" stop-color="#000" stop-opacity="0.45" />
-        </radialGradient>
-        <clipPath id={`${gid}c`}>
+        <clipPath id={`${uid}c`}>
           <circle cx="20" cy="20" r="19" />
         </clipPath>
+        <radialGradient id={`${uid}s`} cx="38%" cy="32%" r="68%">
+          <stop offset="0.55" stop-color="#000" stop-opacity="0" />
+          <stop offset="0.86" stop-color="#000" stop-opacity={soft ? 0.16 : 0.24} />
+          <stop offset="1" stop-color="#000" stop-opacity={soft ? 0.42 : 0.55} />
+        </radialGradient>
+        <radialGradient id={`${uid}g`} cx="33%" cy="27%" r="34%">
+          <stop offset="0" stop-color="#fff" stop-opacity={soft ? 0.5 : 0.42} />
+          <stop offset="1" stop-color="#fff" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id={`${uid}r`} x1="0" y1="1" x2="0.75" y2="0.25">
+          <stop offset="0" stop-color="#fff" stop-opacity="0.6" />
+          <stop offset="0.45" stop-color="#fff" stop-opacity="0" />
+        </linearGradient>
       </defs>
-      <g clip-path={`url(#${gid}c)`}>
-        <rect width="40" height="40" fill={base} />
-        {stripe && <rect y="11" width="40" height="18" fill={color} />}
-        {id !== 0 && <circle cx="20" cy="20" r="8.2" fill={style.finish === 'neon' ? '#f4f4f4' : style.base} />}
-        {id !== 0 && (
-          <text x="20" y="24.3" text-anchor="middle" font-size={id > 9 ? 10 : 11.5} font-weight="800" fill={style.finish === 'neon' ? '#111' : style.ink} font-family="Outfit Variable, sans-serif">
-            {id}
-          </text>
-        )}
-        <circle cx="20" cy="20" r="19" fill={`url(#${gid}s)`} />
+      <g clip-path={`url(#${uid}c)`}>
+        <g class="ball-body">
+          <BallSurface style={style} id={id} uid={uid} />
+        </g>
+        <circle cx="20" cy="20" r="19" fill={`url(#${uid}s)`} />
+        <circle cx="20" cy="20" r="19" fill={`url(#${uid}g)`} />
+        <circle cx="20" cy="20" r="18.2" fill="none" stroke={`url(#${uid}r)`} stroke-width="1.5" />
+        {!soft && <ellipse cx="13.4" cy="11.2" rx="5.2" ry="2.9" transform="rotate(-38 13.4 11.2)" fill="#fff" opacity="0.92" />}
+        <ellipse cx="28" cy="30.4" rx="2.4" ry="1.1" transform="rotate(-38 28 30.4)" fill="#fff" opacity={soft ? 0.22 : 0.4} />
       </g>
+      <circle cx="20" cy="20" r="19.1" fill="none" stroke="#000" stroke-opacity="0.5" stroke-width="0.9" />
     </svg>
   );
 }

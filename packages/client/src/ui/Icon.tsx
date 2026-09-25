@@ -53,6 +53,11 @@ const PATHS: Record<string, string> = {
   info: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 16v-4M12 8h.01',
   edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
   swap: 'M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16',
+  /** Shot types, drawn as the cue ball's path: level, curving round, and hopping over. */
+  shotLevel: 'M2 15h13M19.5 15a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM2 19h20',
+  shotSwerve: 'M3 16c5 0 6-9 12-9M19 7a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM2 20h20',
+  shotJump: 'M3 18C6 6 13 5 16 11M19 14a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM2 20h20',
+  chevronDown: 'M6 9l6 6 6-6',
 };
 
 export type IconName = keyof typeof PATHS;

@@ -31,7 +31,7 @@ import { profile, recordMatch, recordSolo, type RewardSummary } from '../../stat
 import * as sfx from '../../audio/sfx';
 import { stopMusic } from '../../audio/music';
 import { IconButton, toast } from '../../ui/kit';
-import { BallReturn, Dock, EmotePanel, MatchStatus, PlayerCard, PowerBar, SoloStatus, SpinPicker, useTicker } from './hud';
+import { BallReturn, Dock, EmotePanel, MatchStatus, PlayerCard, PowerBar, SEAT_COLORS, SoloStatus, SpinPicker, useTicker, type HudLayout } from './hud';
 import { Bubbles, Intermission, Notices, Results, type Bubble, type ShownNotice } from './overlays';
 import { TableMenu } from './TableMenu';
 
@@ -56,7 +56,8 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [rewards, setRewards] = useState<RewardSummary | null>(null);
-  const [portrait, setPortrait] = useState(false);
+  const [layout, setLayout] = useState<HudLayout>('wide');
+  const portrait = layout === 'tall';
   const tally = useRef<ShotTally>(emptyTally());
   const lastState = useRef<GameState | null>(null);
 
@@ -119,7 +120,9 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
     [client]
   );
 
-  // HUD insets frame the table in whatever space the overlays leave.
+  // HUD insets frame the table in whatever space the overlays leave. A portrait screen stacks
+  // the controls under the table; a short landscape one moves them to the sides, where there is
+  // room to spare, so the table keeps as much height as it can.
   useEffect(() => {
     const measure = () => {
       const view = viewRef.current;
@@ -131,13 +134,16 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
       const left = q('.hud-left');
       const right = q('.hud-right');
       const bottom = q('.hud-bottom');
-      setPortrait(box.height > box.width * 1.05);
-      view.setInsets({
+      setLayout(box.height > box.width * 1.05 ? 'tall' : box.height < 540 ? 'short' : 'wide');
+      const insets = {
         top: top ? top.bottom - box.top + 6 : 0,
-        left: left && left.width > 0 ? left.right - box.left + 6 : 8,
-        right: right && right.width > 0 ? box.right - right.left + 6 : 8,
-        bottom: bottom ? box.bottom - bottom.top + 6 : 0,
-      });
+        left: left && left.width > 0 ? left.right - box.left + 8 : 8,
+        right: right && right.width > 0 ? box.right - right.left + 8 : 8,
+        bottom: bottom && bottom.height > 0 ? box.bottom - bottom.top + 6 : 8,
+      };
+      view.setInsets(insets);
+      // Pop-over panels open just above whatever sits under the table.
+      hud.style.setProperty('--hud-bottom-h', `${Math.round(insets.bottom)}px`);
     };
     const ro = new ResizeObserver(measure);
     if (hudRef.current) {
@@ -150,7 +156,7 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
       ro.disconnect();
       clearTimeout(t);
     };
-  }, [room?.phase, !!game, portrait]);
+  }, [room?.phase, !!game, layout]);
 
   // ---------------------------------------------------------------- messages from the table
   useEffect(() => {
@@ -530,11 +536,30 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
       mine={mine.includes(seatIndex(seat))}
       compact={!twoSides}
       side={twoSides ? (k === 0 ? 'left' : 'right') : 'left'}
+      layout={layout}
     />
   ));
+  const duelScore = twoSides
+    ? {
+        wins: players.map((seat) => room.match?.wins[seatIndex(seat)] ?? 0) as [number, number],
+        colors: players.map((seat) => SEAT_COLORS[seatIndex(seat) % SEAT_COLORS.length]) as [string, string],
+      }
+    : null;
+
+  // The controls, placed per layout: the power cue on the strong-hand side, the ball return
+  // opposite, the dock under the table (or stood on end beside it on a short screen).
+  const cue = cueStyle(room.seats[seatIndex(shooter)]?.loadout.cue);
+  const power = (horizontal: boolean) => <PowerBar controls={controls} enabled={showPower} horizontal={horizontal} reverse={horizontal && leftHanded} cue={cue} />;
+  const ballReturn = (horizontal: boolean) => <BallReturn potted={potted} set={room.balls} horizontal={horizontal} />;
+  const dock =
+    !room.displayMode || mine.length > 0 ? (
+      <Dock client={client} controls={controls} game={game} room={room} layout={layout} onEmote={() => setEmoteOpen((o) => !o)} onSpin={() => setSpinOpen((o) => !o)} spinOpen={spinOpen} />
+    ) : null;
+  const sideA = layout === 'short' && leftHanded ? <>{dock}{ballReturn(false)}</> : leftHanded ? ballReturn(false) : power(false);
+  const sideB = layout === 'short' && !leftHanded ? <>{ballReturn(false)}{dock}</> : leftHanded ? power(false) : ballReturn(false);
 
   return (
-    <div class={`table-screen ${portrait ? 'is-portrait' : ''} ${leftHanded ? 'is-lefty' : ''} ${myTurn ? 'is-my-turn' : ''}`} onPointerDown={unlock}>
+    <div class={`table-screen is-${layout} ${portrait ? 'is-portrait' : ''} ${leftHanded ? 'is-lefty' : ''} ${myTurn ? 'is-my-turn' : ''}`} onPointerDown={unlock}>
       <div ref={hostRef} class="table-host" />
       <div ref={hudRef} class="hud">
         <div class="hud-top">
@@ -546,7 +571,7 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
           ) : twoSides ? (
             <div class="hud-players is-duel">
               {cards[0]}
-              <MatchStatus room={room} game={game} />
+              <MatchStatus room={room} game={game} score={duelScore} />
               {cards[1]}
             </div>
           ) : (
@@ -561,21 +586,24 @@ export function TableScreen({ session, onLeave }: { session: ActiveSession; onLe
           </div>
         </div>
 
-        <div class="hud-left">{!portrait && (leftHanded ? <BallReturn potted={potted} set={room.balls} horizontal={false} /> : <PowerBar controls={controls} enabled={showPower} horizontal={false} />)}</div>
-        <div class="hud-right">
-          {portrait ? <PowerBar controls={controls} enabled={showPower} horizontal={false} /> : leftHanded ? <PowerBar controls={controls} enabled={showPower} horizontal={false} /> : <BallReturn potted={potted} set={room.balls} horizontal={false} />}
-        </div>
+        <div class="hud-left">{!portrait && sideA}</div>
+        <div class="hud-right">{!portrait && sideB}</div>
 
         <div class="hud-bottom">
-          {portrait && <BallReturn potted={potted} set={room.balls} horizontal />}
-          {!room.displayMode || mine.length > 0 ? (
-            <Dock client={client} controls={controls} game={game} room={room} onEmote={() => setEmoteOpen((o) => !o)} onSpin={() => setSpinOpen((o) => !o)} spinOpen={spinOpen} />
-          ) : null}
+          {portrait ? (
+            <>
+              {ballReturn(true)}
+              {dock}
+              {power(true)}
+            </>
+          ) : (
+            layout === 'wide' && dock
+          )}
         </div>
 
         <Notices items={notices} />
         <Bubbles items={bubbles} room={room} />
-        {spinOpen && myTurn && <SpinPicker controls={controls} onClose={() => setSpinOpen(false)} />}
+        {spinOpen && myTurn && <SpinPicker controls={controls} set={room.balls} onClose={() => setSpinOpen(false)} />}
         {emoteOpen && <EmotePanel onPick={(id) => client.send({ t: 'emote', id })} onClose={() => setEmoteOpen(false)} />}
         {client.status.value === 'host-away' && <div class="net-banner">The host lost connection — waiting for them to come back…</div>}
         {client.status.value === 'reconnecting' && <div class="net-banner">Reconnecting…</div>}
