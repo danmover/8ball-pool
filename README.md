@@ -2,8 +2,8 @@
 
 A browser-based 8-ball pool game. One screen ("host table") shows the table; up to two players
 join over the internet from their phones and shoot from there — the host can play too, right from
-the big screen. Built with a custom physics engine, PixiJS rendering, and Socket.IO for real-time
-sync.
+the big screen. Built with a custom deterministic physics engine, Three.js rendering, and a small
+WebSocket relay that just forwards messages — the host's browser runs the table.
 
 ## How it works
 
@@ -107,8 +107,21 @@ npm start        # serves the built client and the game server from one Node pro
 
 ## Deploying
 
-The server serves the built client as static files from the same process, so it deploys as a
-single Node web service — no separate static host or CORS setup needed. `render.yaml` is included
+### Cloudflare (free, recommended)
+
+`packages/worker` serves the built client as static assets and runs the relay as Durable Objects
+from one Worker, all within Cloudflare's free plan, with no sleep or cold starts. Idle rooms
+hibernate and cost nothing.
+
+```bash
+npx --prefix packages/worker wrangler login   # once per machine
+npm run deploy                                # build, then publish to https://8ball-pool.<you>.workers.dev
+```
+
+### Any Node host
+
+The Node server serves the built client as static files from the same process, so it also deploys
+as a single Node web service — no separate static host or CORS setup needed. `render.yaml` is included
 for [Render](https://render.com): connect the repo, and it will run `npm install && npm run build`
 then `npm start`, exposing `/healthz` for the health check. Railway, Fly.io, or any other Node
 hosting service work the same way (build command `npm run build`, start command `npm start`,
@@ -130,5 +143,5 @@ respecting `$PORT`).
 
 `npm audit` flags a moderate advisory in `esbuild`/`vite`'s dev server (GHSA-67mh-4wv8-2f99) — it
 only affects the local Vite dev server accepting requests from other sites while `npm run dev` is
-running, not the production build or the Express/Socket.IO server. Fixing it requires a breaking
+running, not the production build or the relay. Fixing it requires a breaking
 Vite 8 upgrade, so it's left as-is for now.

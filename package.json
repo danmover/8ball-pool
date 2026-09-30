@@ -13,6 +13,7 @@
     "dev:client": "npm run dev -w @8ball/client",
     "build": "npm run build -w @8ball/shared && npm run build -w @8ball/client && npm run build -w @8ball/server",
     "start": "node packages/server/dist/index.js",
+    "deploy": "npm run build && npm ci --prefix packages/worker && npm run deploy --prefix packages/worker",
     "test": "npm run test -w @8ball/shared && npm run test -w @8ball/server && npm run test -w @8ball/client"
   },
   "devDependencies": {
